@@ -1,0 +1,3 @@
+CREATE DATABASE auth_db;
+CREATE DATABASE ledger_db;
+CREATE DATABASE fraud_db;
