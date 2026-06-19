@@ -1,0 +1,40 @@
+sequenceDiagram
+    autonumber
+    participant Client
+    participant Auth as Authorization Service
+    participant Redis
+    participant Fraud as Fraud Service
+    participant DB as Auth DB
+    participant Outbox as Outbox Publisher
+    participant Kafka
+    participant Ledger as Ledger Service
+
+    Client->>Auth: POST /authorizations\n(Idempotency-Key, accountId, amount)
+    Auth->>Redis: Optional idempotency/cache lookup
+    Redis-->>Auth: Cache miss or prior result
+
+    Auth->>DB: Load account + authorization state
+    DB-->>Auth: Account details
+
+    Auth->>Fraud: Risk check request
+    Fraud-->>Auth: APPROVE
+
+    Auth->>DB: Begin transaction
+    Auth->>DB: Check available balance
+    Auth->>DB: Reserve funds\n(available -= amount, reserved += amount)
+    Auth->>DB: Insert authorization(status=AUTHORIZED)
+    Auth->>DB: Insert outbox event
+    Auth->>DB: Commit transaction
+    DB-->>Auth: Success
+
+    Auth-->>Client: 201 AUTHORIZED
+
+    Outbox->>DB: Poll unsent outbox events
+    DB-->>Outbox: AuthorizationCreated event
+    Outbox->>Kafka: Publish authorization event
+    Outbox->>DB: Mark outbox event as sent
+
+    Kafka-->>Ledger: Consume authorization event
+    Ledger->>Ledger: Idempotency/dedup check
+    Ledger->>Ledger: Write immutable ledger entry / projection
+    Ledger-->>Kafka: Ack
