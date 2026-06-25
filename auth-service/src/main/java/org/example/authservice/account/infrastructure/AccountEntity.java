@@ -23,19 +23,23 @@ import org.hibernate.annotations.UpdateTimestamp;
  * <p>This is a persistence-layer representation of an account. Business logic should not live here;
  * use the {@link org.example.authservice.account.domain.Account} domain model instead.
  *
- * <p>{@code updatedAt} is automatically refreshed by Hibernate via {@link org.hibernate.annotations.UpdateTimestamp}
- * on every flush. {@code version} is used for optimistic locking to prevent lost updates.
+ * <p>{@code updatedAt} is automatically refreshed by Hibernate via {@link
+ * org.hibernate.annotations.UpdateTimestamp} on every flush. {@code version} is used for optimistic
+ * locking to prevent lost updates.
  */
 @Entity
 @Table(name = "account")
 @Getter
 @Setter
-@NoArgsConstructor(access = AccessLevel.PROTECTED) // JPA requires a no-arg constructor; protected prevents direct instantiation
+@NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class AccountEntity {
 
   @Id
   @Column(name = "account_id", nullable = false, updatable = false)
   private UUID id;
+
+  /** Optimistic locking version incremented by Hibernate on each UPDATE. */
+  @Version private Long version;
 
   @Column(name = "account_status", nullable = false)
   @Enumerated(EnumType.STRING) // stored as text (e.g. "ACTIVE"), not ordinal, for DB readability
@@ -49,9 +53,6 @@ public class AccountEntity {
 
   @Column(name = "reserved_balance", nullable = false)
   private BigDecimal reservedBalance;
-
-  /** Optimistic locking version incremented by Hibernate on each UPDATE. */
-  @Version private Long version;
 
   @Column(name = "created_at", nullable = false)
   private OffsetDateTime createdAt;

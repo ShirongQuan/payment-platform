@@ -11,9 +11,9 @@ import org.springframework.web.context.request.WebRequest;
 /**
  * Global exception handler for the auth-service.
  *
- * <p>Translates domain and validation exceptions into RFC 7807 {@link ProblemDetail} responses
- * with appropriate HTTP status codes. Each handler adds context-specific properties
- * (e.g. the offending currency code or account ID) to help API consumers diagnose errors.
+ * <p>Translates domain and validation exceptions into RFC 7807 {@link ProblemDetail} responses with
+ * appropriate HTTP status codes. Each handler adds context-specific properties (e.g. the offending
+ * currency code or account ID) to help API consumers diagnose errors.
  */
 @RestControllerAdvice
 public class AuthExceptionHandler {
@@ -23,11 +23,12 @@ public class AuthExceptionHandler {
   public ProblemDetail handleInvalidCurrencyException(
       InvalidCurrencyException e, WebRequest request) {
     ProblemDetail pd = ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, e.getMessage());
-    pd.setTitle("Invalid currency");
+    pd.setTitle(e.getErrorCode().getDefaultMessage());
     if (request instanceof ServletWebRequest servletWebRequest) {
       pd.setInstance(URI.create(servletWebRequest.getRequest().getRequestURI()));
     }
     pd.setProperty("currencyCode", e.getCurrencyCode());
+    pd.setProperty("errorCode", e.getErrorCode().name());
     return pd;
   }
 
@@ -36,12 +37,13 @@ public class AuthExceptionHandler {
   public ProblemDetail handleCurrencyMismatchException(
       CurrencyMismatchException e, WebRequest request) {
     ProblemDetail pd = ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, e.getMessage());
-    pd.setTitle("Currency mismatch");
+    pd.setTitle(e.getErrorCode().getDefaultMessage());
     if (request instanceof ServletWebRequest servletWebRequest) {
       pd.setInstance(URI.create(servletWebRequest.getRequest().getRequestURI()));
     }
     pd.setProperty("expectedCurrency", e.getExpected());
     pd.setProperty("providedCurrency", e.getProvided());
+    pd.setProperty("errorCode", e.getErrorCode().name());
     return pd;
   }
 
@@ -50,12 +52,13 @@ public class AuthExceptionHandler {
   public ProblemDetail handleInsufficientFundException(
       InsufficientFundException e, WebRequest request) {
     ProblemDetail pd = ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, e.getMessage());
-    pd.setTitle("Insufficient fund");
+    pd.setTitle(e.getErrorCode().getDefaultMessage());
     if (request instanceof ServletWebRequest servletWebRequest) {
       pd.setInstance(URI.create(servletWebRequest.getRequest().getRequestURI()));
     }
     pd.setProperty("availableAmount", e.getAvailableAmount());
     pd.setProperty("requestedAmount", e.getRequestedAmount());
+    pd.setProperty("errorCode", e.getErrorCode().name());
     return pd;
   }
 
@@ -64,11 +67,37 @@ public class AuthExceptionHandler {
   public ProblemDetail handleAccountNotFoundException(
       AccountNotFoundException e, WebRequest request) {
     ProblemDetail pd = ProblemDetail.forStatusAndDetail(HttpStatus.NOT_FOUND, e.getMessage());
-    pd.setTitle("Account not found");
+    pd.setTitle(e.getErrorCode().getDefaultMessage());
     if (request instanceof ServletWebRequest servletWebRequest) {
       pd.setInstance(URI.create(servletWebRequest.getRequest().getRequestURI()));
     }
     pd.setProperty("accountId", e.getAccountId());
+    pd.setProperty("errorCode", e.getErrorCode().name());
+    return pd;
+  }
+
+  @ExceptionHandler(AuthorisationNotFoundException.class)
+  public ProblemDetail handleAuthorisationNotFoundException(
+      AuthorisationNotFoundException e, WebRequest request) {
+    ProblemDetail pd = ProblemDetail.forStatusAndDetail(HttpStatus.NOT_FOUND, e.getMessage());
+    pd.setTitle(e.getErrorCode().getDefaultMessage());
+    if (request instanceof ServletWebRequest servletWebRequest) {
+      pd.setInstance(URI.create(servletWebRequest.getRequest().getRequestURI()));
+    }
+    pd.setProperty("authorisationId", e.getAuthorisationId());
+    pd.setProperty("errorCode", e.getErrorCode().name());
+    return pd;
+  }
+
+  @ExceptionHandler(IdempotencyConflictException.class)
+  public ProblemDetail handleIdempotencyConflictException(
+      IdempotencyConflictException e, WebRequest request) {
+    ProblemDetail pd = ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, e.getMessage());
+    pd.setTitle(e.getErrorCode().getDefaultMessage());
+    if (request instanceof ServletWebRequest servletWebRequest) {
+      pd.setInstance(URI.create(servletWebRequest.getRequest().getRequestURI()));
+    }
+    pd.setProperty("errorCode", e.getErrorCode().name());
     return pd;
   }
 }

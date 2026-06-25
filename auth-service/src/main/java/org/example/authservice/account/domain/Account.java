@@ -1,12 +1,15 @@
 package org.example.authservice.account.domain;
 
+import static org.example.authservice.common.validation.ValidationHelpers.normalizeAndValidateCurrency;
+import static org.example.authservice.common.validation.ValidationHelpers.requireNonNegativeAmount;
+import static org.example.authservice.common.validation.ValidationHelpers.validateAmount;
+
 import java.math.BigDecimal;
 import java.time.OffsetDateTime;
-import java.util.Currency;
-import java.util.Locale;
 import java.util.Objects;
 import java.util.UUID;
 import lombok.Getter;
+import org.example.authservice.common.exception.CurrencyMismatchException;
 import org.example.authservice.common.exception.InsufficientFundException;
 import org.example.authservice.common.exception.InvalidCurrencyException;
 
@@ -62,31 +65,10 @@ public class Account {
     this.id = Objects.requireNonNull(id, "id cannot be null");
     this.currencyCode = normalizeAndValidateCurrency(currencyCode);
     this.status = Objects.requireNonNull(status, "status cannot be null");
-    this.availableBalance = requireNonNegative(availableBalance, "availableBalance");
-    this.reservedBalance = requireNonNegative(reservedBalance, "reservedBalance");
+    this.availableBalance = requireNonNegativeAmount(availableBalance, "availableBalance");
+    this.reservedBalance = requireNonNegativeAmount(reservedBalance, "reservedBalance");
     this.createdAt = Objects.requireNonNull(createdAt);
     this.updatedAt = Objects.requireNonNull(updatedAt);
-  }
-
-  /** Asserts that a BigDecimal field is non-null and not negative. */
-  private BigDecimal requireNonNegative(BigDecimal amount, String field) {
-    Objects.requireNonNull(amount, field + " cannot be null");
-    if (amount.signum() < 0) {
-      throw new IllegalArgumentException(field + " cannot be negative");
-    }
-    return amount;
-  }
-
-  /** Trims, uppercases, and validates the currency code against Java's ISO 4217 registry. */
-  private String normalizeAndValidateCurrency(String currencyCode) {
-    Objects.requireNonNull(currencyCode);
-    String normalized = currencyCode.trim().toUpperCase(Locale.ROOT);
-    try {
-      Currency.getInstance(normalized);
-      return normalized;
-    } catch (IllegalArgumentException e) {
-      throw new InvalidCurrencyException(currencyCode);
-    }
   }
 
   /**
@@ -95,7 +77,8 @@ public class Account {
    * @param amount must be positive and non-null
    * @throws IllegalArgumentException if amount is zero or negative
    */
-  public void deposit(BigDecimal amount) {
+  public void deposit(BigDecimal amount, String currencyCode) {
+    validateCurrency(currencyCode);
     validateAmount(amount);
     this.availableBalance = this.availableBalance.add(amount);
   }
@@ -104,10 +87,11 @@ public class Account {
    * Moves the given amount from available balance to reserved balance (e.g. for a pending payment).
    *
    * @param amount must be positive and non-null
-   * @throws IllegalArgumentException    if amount is zero or negative
-   * @throws InsufficientFundException   if available balance is less than the requested amount
+   * @throws IllegalArgumentException if amount is zero or negative
+   * @throws InsufficientFundException if available balance is less than the requested amount
    */
-  public void reserve(BigDecimal amount) {
+  public void reserve(BigDecimal amount, String currencyCode) {
+    validateCurrency(currencyCode);
     validateAmount(amount);
     if (availableBalance.compareTo(amount) < 0) {
       throw new InsufficientFundException(availableBalance, amount);
@@ -116,11 +100,10 @@ public class Account {
     reservedBalance = reservedBalance.add(amount);
   }
 
-  /** Validates that an amount is non-null and strictly positive. */
-  private void validateAmount(BigDecimal amount) {
-    Objects.requireNonNull(amount);
-    if (amount.signum() <= 0) {
-      throw new IllegalArgumentException("Amount must be positive");
+  private void validateCurrency(String currencyCode) {
+    String normalizedCurrency = normalizeAndValidateCurrency(currencyCode);
+    if (!(this.currencyCode.equals(normalizedCurrency))) {
+      throw new CurrencyMismatchException(this.currencyCode, currencyCode);
     }
   }
 }

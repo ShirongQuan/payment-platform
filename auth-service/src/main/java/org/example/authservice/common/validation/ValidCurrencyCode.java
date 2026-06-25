@@ -1,4 +1,4 @@
-package org.example.authservice.account.validation;
+package org.example.authservice.common.validation;
 
 import jakarta.validation.Constraint;
 import jakarta.validation.Payload;
@@ -9,8 +9,8 @@ import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
 
 /**
- * Custom constraint annotation that validates a String field or parameter as an ISO 4217
- * currency code.
+ * Custom constraint annotation that validates a String field or parameter as an ISO 4217 currency
+ * code.
  *
  * <p>Usage: annotate any {@code String} field or parameter with {@code @ValidCurrencyCode}.
  * Validation is delegated to {@link CurrencyCodeValidator}.

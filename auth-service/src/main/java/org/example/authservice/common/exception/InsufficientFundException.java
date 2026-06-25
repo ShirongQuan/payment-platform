@@ -5,7 +5,7 @@ import lombok.Getter;
 
 /** Thrown when a reserve or debit operation exceeds the account's available balance. Maps to HTTP 400. */
 @Getter
-public class InsufficientFundException extends RuntimeException {
+public class InsufficientFundException extends RuntimeException implements CodedException {
 
   private final BigDecimal availableAmount;
   private final BigDecimal requestedAmount;
@@ -16,5 +16,10 @@ public class InsufficientFundException extends RuntimeException {
             "Insufficient fund. Available %s, requested %s", availableAmount, requestedAmount));
     this.availableAmount = availableAmount;
     this.requestedAmount = requestedAmount;
+  }
+
+  @Override
+  public ErrorCode getErrorCode() {
+    return ErrorCode.INSUFFICIENT_FUNDS;
   }
 }
