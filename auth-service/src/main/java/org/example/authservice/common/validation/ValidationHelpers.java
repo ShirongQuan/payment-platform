@@ -21,7 +21,7 @@ public final class ValidationHelpers {
 
   /** Trims, uppercases, and validates the currency code against Java's ISO 4217 registry. */
   public static String normalizeAndValidateCurrency(String currencyCode) {
-    Objects.requireNonNull(currencyCode);
+    Objects.requireNonNull(currencyCode, "currencyCode cannot be null");
     String normalized = currencyCode.trim().toUpperCase(Locale.ROOT);
     try {
       Currency.getInstance(normalized);

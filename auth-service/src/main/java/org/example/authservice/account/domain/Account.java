@@ -100,7 +100,7 @@ public class Account {
     reservedBalance = reservedBalance.add(amount);
   }
 
-  private void validateCurrency(String currencyCode) {
+  void validateCurrency(String currencyCode) {
     String normalizedCurrency = normalizeAndValidateCurrency(currencyCode);
     if (!(this.currencyCode.equals(normalizedCurrency))) {
       throw new CurrencyMismatchException(this.currencyCode, currencyCode);

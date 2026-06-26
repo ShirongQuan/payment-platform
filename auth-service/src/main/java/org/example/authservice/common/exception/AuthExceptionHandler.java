@@ -72,6 +72,7 @@ public class AuthExceptionHandler {
       pd.setInstance(URI.create(servletWebRequest.getRequest().getRequestURI()));
     }
     pd.setProperty("accountId", e.getAccountId());
+    pd.setTitle("Account not found");
     pd.setProperty("errorCode", e.getErrorCode().name());
     return pd;
   }
