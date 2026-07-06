@@ -3,7 +3,7 @@ package org.example.authservice.authorisation.api;
 import java.math.BigDecimal;
 import java.time.OffsetDateTime;
 import java.util.UUID;
-import org.example.authservice.authorisation.AuthorisationStatus;
+import org.example.authservice.authorisation.domain.AuthorisationStatus;
 
 public record AuthorisationResponse(
     UUID id,

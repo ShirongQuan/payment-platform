@@ -15,7 +15,7 @@ import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
-import org.example.authservice.authorisation.AuthorisationStatus;
+import org.example.authservice.authorisation.domain.AuthorisationStatus;
 import org.hibernate.annotations.UpdateTimestamp;
 
 @Entity

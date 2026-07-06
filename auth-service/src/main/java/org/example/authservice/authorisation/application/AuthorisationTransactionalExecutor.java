@@ -6,10 +6,10 @@ import org.example.authservice.account.domain.Account;
 import org.example.authservice.account.infrastructure.AccountEntity;
 import org.example.authservice.account.infrastructure.AccountMapper;
 import org.example.authservice.account.infrastructure.AccountRepository;
-import org.example.authservice.authorisation.AuthorisationStatus;
 import org.example.authservice.authorisation.api.AuthorisationRequest;
 import org.example.authservice.authorisation.api.AuthorisationResponse;
 import org.example.authservice.authorisation.domain.Authorisation;
+import org.example.authservice.authorisation.domain.AuthorisationStatus;
 import org.example.authservice.authorisation.infrastructure.AuthorisationEntity;
 import org.example.authservice.authorisation.infrastructure.AuthorisationMapper;
 import org.example.authservice.authorisation.infrastructure.AuthorisationRepository;
@@ -58,6 +58,7 @@ public class AuthorisationTransactionalExecutor {
 
       accountEntity.setAvailableBalance(account.getAvailableBalance());
       accountEntity.setReservedBalance(account.getReservedBalance());
+      // send sql to trigger DB constraint validation earlier
       accountRepository.flush();
 
       authorisation =
@@ -70,6 +71,7 @@ public class AuthorisationTransactionalExecutor {
               AuthorisationStatus.AUTHORISED,
               "");
     } catch (InsufficientFundException ife) {
+      // in this case, Account in DB will remain intact and the Authorisation will persist
       authorisation =
           new Authorisation(
               request.accountId(),
@@ -84,7 +86,8 @@ public class AuthorisationTransactionalExecutor {
     try {
       authorisationRepository.saveAndFlush(AuthorisationMapper.toEntity(authorisation));
     } catch (DataIntegrityViolationException e) {
-      // Fail fast so all side effects in this transaction are rolled back.
+      // Fail-fast signal of concurrent idempotency race, so the whole transaction rolls back
+      // consistently.
       throw new ConcurrentIdempotencyRaceException(e);
     }
 
@@ -128,4 +131,3 @@ public class AuthorisationTransactionalExecutor {
         && Objects.equals(entity.getMerchantReference(), request.merchantReference());
   }
 }
-

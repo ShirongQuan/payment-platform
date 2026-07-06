@@ -1,4 +1,4 @@
-package org.example.authservice.authorisation;
+package org.example.authservice.authorisation.domain;
 
 public enum AuthorisationStatus {
   AUTHORISED,

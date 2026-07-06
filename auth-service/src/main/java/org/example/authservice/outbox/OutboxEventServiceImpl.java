@@ -1,11 +1,13 @@
 package org.example.authservice.outbox;
 
 import java.time.ZonedDateTime;
+import java.util.Map;
 import java.util.UUID;
 import org.example.authservice.authorisation.domain.Authorisation;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
+import tools.jackson.core.type.TypeReference;
 import tools.jackson.databind.ObjectMapper;
 
 @Service
@@ -50,7 +52,7 @@ public class OutboxEventServiceImpl implements OutboxEventService {
                       + authorisation.getStatus());
         };
     outboxEvent.setEventType(eventType);
-    outboxEvent.setPayload(objectMapper.valueToTree(payload));
+    outboxEvent.setPayload(objectMapper.convertValue(payload, new TypeReference<>() {}));
     outboxEvent.setStatus(OutboxEventStatus.PENDING);
     outboxEvent.setRetryCount(0);
     outboxEvent.setLastError(null);

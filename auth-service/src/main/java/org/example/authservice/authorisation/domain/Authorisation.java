@@ -9,7 +9,6 @@ import java.time.OffsetDateTime;
 import java.util.Objects;
 import java.util.UUID;
 import lombok.Getter;
-import org.example.authservice.authorisation.AuthorisationStatus;
 
 @Getter
 public class Authorisation {

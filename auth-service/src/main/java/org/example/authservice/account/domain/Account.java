@@ -78,6 +78,7 @@ public class Account {
    * @throws IllegalArgumentException if amount is zero or negative
    */
   public void deposit(BigDecimal amount, String currencyCode) {
+    // TODO: validate account status
     validateCurrency(currencyCode);
     validateAmount(amount);
     this.availableBalance = this.availableBalance.add(amount);
@@ -91,6 +92,7 @@ public class Account {
    * @throws InsufficientFundException if available balance is less than the requested amount
    */
   public void reserve(BigDecimal amount, String currencyCode) {
+    // TODO: validate account status
     validateCurrency(currencyCode);
     validateAmount(amount);
     if (availableBalance.compareTo(amount) < 0) {

@@ -7,6 +7,7 @@ import jakarta.persistence.Enumerated;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import java.time.ZonedDateTime;
+import java.util.Map;
 import java.util.UUID;
 import lombok.AccessLevel;
 import lombok.Getter;
@@ -14,7 +15,6 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
-import tools.jackson.databind.JsonNode;
 
 @Entity
 @Table(name = "outbox_events")
@@ -38,7 +38,7 @@ public class OutboxEventEntity {
 
   @Column(name = "payload", columnDefinition = "jsonb", nullable = false, updatable = false)
   @JdbcTypeCode(SqlTypes.JSON)
-  private JsonNode payload;
+  private Map<String, Object> payload;
 
   @Column(nullable = false)
   @Enumerated(EnumType.STRING)
