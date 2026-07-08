@@ -49,15 +49,17 @@ create table authorisation (
 
 create table outbox_events (
     event_id uuid primary key,
+    version bigint not null default 0,
     aggregate_type varchar(20) not null,
     aggregate_id uuid not null,
     event_type varchar(30) not null,
     payload jsonb not null,
     status varchar(30) not null,
-    retry_count int default 0,
-    last_error varchar(30),
+    retry_count int not null default 0,
+    last_error varchar(100),
     created_at timestamp with time zone not null,
     published_at timestamp with time zone,
+    next_attempt_at timestamp with time zone not null,
     idempotency_key varchar(30) not null,
     correlation_id uuid,  -- TODO not null,  generate the correlation_id in the app and save to the table
 
@@ -65,6 +67,5 @@ create table outbox_events (
 
 );
 
-
     -- Speeds up outbox polling by status and creation time
-    create index if not exists idx_outbox_events_status_created_at on outbox_events (status, created_at);
+    create index if not exists idx_outbox_event_claim on outbox_events (status, next_attempt_at, created_at);

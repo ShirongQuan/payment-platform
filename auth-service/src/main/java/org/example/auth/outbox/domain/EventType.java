@@ -1,0 +1,8 @@
+package org.example.auth.outbox.domain;
+
+public enum EventType {
+  AUTHORISATION_AUTHORISED,
+  AUTHORISATION_DECLINED,
+  AUTHORISATION_CAPTURED,
+  AUTHORISATION_REVERSED
+}

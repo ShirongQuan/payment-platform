@@ -15,6 +15,33 @@ spring:
       hibernate:
         format_sql: true
 
+  kafka:
+    bootstrap-servers: localhost:9092
+    producer:
+      acks: all
+      retries: 5
+      properties:
+        enable.idempotence: true
+      key-serializer: org.apache.kafka.common.serialization.UUIDSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+
+outbox:
+  kafka:
+    topics:
+      - key: outbox-events
+        name: outboxEvents
+        partitions: 3
+        replicas: 1
+      - key: outbox-dlq
+        name: outboxEvents.dlq
+        partitions: 3
+        replicas: 1
+  publisher:
+    batch-size: 10
+    delay-ms: 10000ms  # 10 Seconds
+    claim-lease: 30s
+
+
 server:
   port: 9000
 
@@ -41,5 +68,7 @@ springdoc:
 
 logging:
   level:
-    org.hibernate.SQL: DEBUG
-    org.hibernate.orm.jdbc.bind: TRACE
+    root: WARN
+    org.example.auth: DEBUG
+    org.hibernate.SQL: WARN
+    org.hibernate.orm.jdbc.bind: WARN
