@@ -1,31 +1,16 @@
 package org.example.auth.outbox.configuration;
 
-import java.util.Map;
-import java.util.UUID;
 import org.apache.kafka.clients.admin.NewTopic;
-import org.springframework.boot.kafka.autoconfigure.KafkaProperties;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.kafka.config.TopicBuilder;
-import org.springframework.kafka.core.DefaultKafkaProducerFactory;
 import org.springframework.kafka.core.KafkaAdmin;
-import org.springframework.kafka.core.KafkaTemplate;
-import org.springframework.kafka.core.ProducerFactory;
 
+// create Kafka topics only when property set to true, e.g.: in local environment
 @Configuration
+@ConditionalOnProperty(name = "outbox.kafka.manage-topics", havingValue = "true")
 public class KafkaTopicConfig {
-
-  @Bean
-  public ProducerFactory<UUID, Map<String, Object>> outboxEventProducerFactory(
-      KafkaProperties kafkaProperties) {
-    return new DefaultKafkaProducerFactory<>(kafkaProperties.buildProducerProperties());
-  }
-
-  @Bean
-  KafkaTemplate<UUID, Map<String, Object>> outboxEventKafkaTemplate(
-      ProducerFactory<UUID, Map<String, Object>> outboxEventProducerFactory) {
-    return new KafkaTemplate<>(outboxEventProducerFactory);
-  }
 
   @Bean
   public KafkaAdmin.NewTopics outboxEventsTopic(OutboxKafkaProperties properties) {

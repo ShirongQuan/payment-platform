@@ -27,6 +27,7 @@ spring:
 
 outbox:
   kafka:
+    manage-topics: true
     topics:
       - key: outbox-events
         name: outboxEvents

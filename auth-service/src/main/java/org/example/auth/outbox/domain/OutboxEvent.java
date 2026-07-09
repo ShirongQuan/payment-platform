@@ -90,34 +90,4 @@ public class OutboxEvent {
         idempotencyKey,
         correlationId);
   }
-
-  public void increaseRetryCount() {
-    this.retryCount++;
-  }
-
-  public void setLastError(String lastError) {
-    Objects.requireNonNull(lastError, "lastError cannot be null");
-    if (lastError.isBlank()) {
-      throw new IllegalArgumentException("lastError cannot be blank");
-    }
-    this.lastError = lastError;
-  }
-
-  public void markFailed() {
-    this.status = OutboxEventStatus.FAILED;
-  }
-
-  public void markPublished() {
-    this.status = OutboxEventStatus.PUBLISHED;
-    this.publishedAt = OffsetDateTime.now();
-  }
-
-  public void setNextAttemptAt(OffsetDateTime nextAttemptAt) {
-    Objects.requireNonNull(nextAttemptAt, "nextAttemptAt time cannot be null");
-    if (nextAttemptAt.isBefore(this.nextAttemptAt)) {
-      throw new IllegalArgumentException(
-          "nextAttemptAt time cannot be earlier than the current nextAttemptAt time");
-    }
-    this.nextAttemptAt = nextAttemptAt;
-  }
 }
