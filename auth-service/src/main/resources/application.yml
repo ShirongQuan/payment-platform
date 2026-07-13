@@ -27,16 +27,8 @@ spring:
 
 outbox:
   kafka:
-    manage-topics: true
-    topics:
-      - key: outbox-events
-        name: outboxEvents
-        partitions: 3
-        replicas: 1
-      - key: outbox-dlq
-        name: outboxEvents.dlq
-        partitions: 3
-        replicas: 1
+    topic:
+      name: auth.events
   publisher:
     batch-size: 10
     delay-ms: 10000ms  # 10 Seconds

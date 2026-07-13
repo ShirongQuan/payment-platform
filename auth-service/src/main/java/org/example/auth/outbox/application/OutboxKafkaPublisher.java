@@ -31,8 +31,7 @@ public class OutboxKafkaPublisher {
     UUID key = event.getAggregateId();
 
     ProducerRecord<UUID, Map<String, Object>> record =
-        new ProducerRecord<>(
-            outboxKafkaProperties.topicName("outbox-events"), key, event.getPayload());
+        new ProducerRecord<>(outboxKafkaProperties.name(), key, event.getPayload());
 
     record
         .headers()

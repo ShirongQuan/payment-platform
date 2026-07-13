@@ -14,7 +14,7 @@ services:
       - postgres_data:/var/lib/postgresql/data
       - ./../postgres/init:/docker-entrypoint-initdb.d
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d postgres"]
+      test: [ "CMD-SHELL", "pg_isready -U postgres -d postgres" ]
       interval: 10s
       timeout: 5s
       retries: 10
@@ -38,7 +38,7 @@ services:
       - ./../pdadmin/servers.json:/pgadmin4/servers.json:ro
       - ./../pdadmin/pgpass:/pgpass:ro
     healthcheck:
-      test: ["CMD-SHELL", "python3 -c \"import urllib.request; urllib.request.urlopen('http://localhost/misc/ping', timeout=3)\""]
+      test: [ "CMD-SHELL", "python3 -c \"import urllib.request; urllib.request.urlopen('http://localhost/misc/ping', timeout=3)\"" ]
       interval: 15s
       timeout: 5s
       retries: 10
@@ -54,7 +54,7 @@ services:
     volumes:
       - redis_data:/data
     healthcheck:
-      test: ["CMD", "redis-cli", "PING"]
+      test: [ "CMD", "redis-cli", "PING" ]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -72,7 +72,7 @@ services:
     depends_on:
       - redis
     healthcheck:
-      test: ["CMD-SHELL", "wget -q -O /dev/null http://localhost:9090/-/healthy"]
+      test: [ "CMD-SHELL", "wget -q -O /dev/null http://localhost:9090/-/healthy" ]
       interval: 15s
       timeout: 5s
       retries: 10
@@ -97,7 +97,7 @@ services:
     depends_on:
       - prometheus
     healthcheck:
-      test: ["CMD-SHELL", "wget -q -O /dev/null http://localhost:3000/api/health"]
+      test: [ "CMD-SHELL", "wget -q -O /dev/null http://localhost:3000/api/health" ]
       interval: 15s
       timeout: 5s
       retries: 10
@@ -129,7 +129,7 @@ services:
       KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 2
       KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
     healthcheck:
-      test: ["CMD-SHELL", "nc -z localhost 9092 && nc -z localhost 19092"]
+      test: [ "CMD-SHELL", "nc -z localhost 9092 && nc -z localhost 19092" ]
       interval: 15s
       timeout: 5s
       retries: 15
@@ -159,7 +159,7 @@ services:
       KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 2
       KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
     healthcheck:
-      test: ["CMD-SHELL", "nc -z localhost 9092 && nc -z localhost 19092"]
+      test: [ "CMD-SHELL", "nc -z localhost 9092 && nc -z localhost 19092" ]
       interval: 15s
       timeout: 5s
       retries: 15
@@ -189,7 +189,7 @@ services:
       KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 2
       KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
     healthcheck:
-      test: ["CMD-SHELL", "nc -z localhost 9092 && nc -z localhost 19092"]
+      test: [ "CMD-SHELL", "nc -z localhost 9092 && nc -z localhost 19092" ]
       interval: 15s
       timeout: 5s
       retries: 15
@@ -208,11 +208,25 @@ services:
       KAFKA_CLUSTERS_0_NAME: local-cluster
       KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka-1:9092,kafka-2:9092,kafka-3:9092
     healthcheck:
-      test: ["CMD-SHELL", "wget -q -O /dev/null http://localhost:8080/"]
+      test: [ "CMD-SHELL", "wget -q -O /dev/null http://localhost:8080/" ]
       interval: 15s
       timeout: 5s
       retries: 10
       start_period: 30s
+
+  kafka-topic-init:
+    image: apache/kafka:4.3.0
+    container_name: kafka-topic-init
+    depends_on:
+      kafka-1:
+        condition: service_healthy
+      kafka-2:
+        condition: service_healthy
+      kafka-3:
+        condition: service_healthy
+    volumes:
+      - ./../kafka/create-topics.sh:/create-topics.sh:ro
+    entrypoint: [ "/bin/sh", "/create-topics.sh" ]
 
 volumes:
   postgres_data:

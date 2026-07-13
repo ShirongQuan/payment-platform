@@ -3,7 +3,6 @@ package org.example.auth.outbox.application;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -45,14 +44,14 @@ class OutboxKafkaPublisherTest {
     CompletableFuture<SendResult<UUID, Map<String, Object>>> future =
         CompletableFuture.completedFuture(sendResult);
 
-    when(outboxKafkaProperties.topicName("outbox-events")).thenReturn("outboxEvents");
+    when(outboxKafkaProperties.name()).thenReturn("outboxEvents");
     when(kafkaTemplate.send(any(ProducerRecord.class))).thenReturn(future);
 
     CompletableFuture<SendResult<UUID, Map<String, Object>>> returned =
         outboxKafkaPublisher.publishAsync(event);
 
     assertThat(returned).isSameAs(future);
-    verify(outboxKafkaProperties).topicName("outbox-events");
+    verify(outboxKafkaProperties).name();
 
     ArgumentCaptor<ProducerRecord<UUID, Map<String, Object>>> recordCaptor =
         ArgumentCaptor.forClass(ProducerRecord.class);
@@ -79,7 +78,7 @@ class OutboxKafkaPublisherTest {
     CompletableFuture<SendResult<UUID, Map<String, Object>>> failedFuture =
         CompletableFuture.failedFuture(sendFailure);
 
-    when(outboxKafkaProperties.topicName("outbox-events")).thenReturn("outboxEvents");
+    when(outboxKafkaProperties.name()).thenReturn("outboxEvents");
     when(kafkaTemplate.send(any(ProducerRecord.class))).thenReturn(failedFuture);
 
     CompletableFuture<SendResult<UUID, Map<String, Object>>> returned =
@@ -87,7 +86,7 @@ class OutboxKafkaPublisherTest {
 
     assertThat(returned).isSameAs(failedFuture);
     assertThatThrownBy(returned::join).hasCause(sendFailure);
-    verify(outboxKafkaProperties).topicName(eq("outbox-events"));
+    verify(outboxKafkaProperties).name();
   }
 
   private static OutboxEvent sampleEvent() {
@@ -109,4 +108,3 @@ class OutboxKafkaPublisherTest {
     assertThat(new String(header.value(), StandardCharsets.UTF_8)).isEqualTo(expectedValue);
   }
 }
-

@@ -57,7 +57,9 @@ public class OutboxEventServiceImpl implements OutboxEventService {
             authorisation.getCurrencyCode(),
             authorisation.getStatus(),
             authorisation.getFailureReason(),
-            authorisation.getCreatedAt());
+            authorisation.getCreatedAt(),
+            authorisation.getMerchantReference(),
+            authorisation.getIdempotencyKey());
 
     EventType eventType =
         switch (authorisation.getStatus()) {
