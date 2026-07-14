@@ -1,4 +1,4 @@
-package org.example.ledger.infrastructure;
+package org.example.ledger.infrastructure.persistence;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;

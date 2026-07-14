@@ -1,4 +1,4 @@
-package org.example.ledger.application;
+package org.example.ledger.infrastructure.messaging;
 
 import java.nio.charset.StandardCharsets;
 import java.time.OffsetDateTime;

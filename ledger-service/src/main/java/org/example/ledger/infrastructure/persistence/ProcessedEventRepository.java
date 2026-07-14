@@ -1,4 +1,4 @@
-package org.example.ledger.infrastructure;
+package org.example.ledger.infrastructure.persistence;
 
 import java.time.OffsetDateTime;
 import java.util.UUID;

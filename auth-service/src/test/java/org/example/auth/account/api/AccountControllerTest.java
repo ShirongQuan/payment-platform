@@ -30,7 +30,7 @@ class AccountControllerTest {
 
   @Autowired private MockMvc mockMvc;
 
-  @MockitoBean AccountService accountService;
+  @MockitoBean private AccountService accountService;
 
   @Test
   void shouldNotCreateAccountWithInvalidCurrency() throws Exception {

@@ -1,4 +1,4 @@
-package org.example.ledger.infrastructure;
+package org.example.ledger.domain;
 
 import java.math.BigDecimal;
 import java.time.OffsetDateTime;

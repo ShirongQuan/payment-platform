@@ -1,8 +1,9 @@
-package org.example.ledger.application;
+package org.example.ledger.infrastructure.messaging;
 
 import java.util.UUID;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.example.ledger.application.command.LedgerEventProcessor;
 import org.example.ledger.domain.EventMetadata;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Component;

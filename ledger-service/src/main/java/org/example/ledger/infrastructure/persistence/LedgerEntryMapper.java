@@ -1,8 +1,10 @@
-package org.example.ledger.infrastructure;
+package org.example.ledger.infrastructure.persistence;
 
 import java.time.OffsetDateTime;
 import java.util.Map;
 import java.util.UUID;
+import org.example.ledger.api.AuthenticationResponse;
+import org.example.ledger.domain.AuthorisationAuthorisedPayload;
 import org.example.ledger.domain.EventMetadata;
 import org.example.ledger.domain.EventType;
 import org.springframework.stereotype.Component;
@@ -43,5 +45,17 @@ public class LedgerEntryMapper {
         metadata.occurredAt(),
         OffsetDateTime.now(),
         payloadJson);
+  }
+
+  public AuthenticationResponse toAuthorisationResponse(LedgerEntryEntity entity) {
+    return new AuthenticationResponse(
+        entity.getAuthorisationId(),
+        entity.getAccountId(),
+        entity.getMerchantReference(),
+        entity.getAmount(),
+        entity.getCurrencyCode(),
+        entity.getEntryStatus(),
+        entity.getCreatedAt(),
+        entity.getEventId());
   }
 }

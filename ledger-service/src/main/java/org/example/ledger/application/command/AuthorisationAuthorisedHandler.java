@@ -1,14 +1,14 @@
-package org.example.ledger.application;
+package org.example.ledger.application.command;
 
 import java.time.OffsetDateTime;
 import java.util.Map;
+import org.example.ledger.domain.AuthorisationAuthorisedPayload;
 import org.example.ledger.domain.EventMetadata;
 import org.example.ledger.domain.EventType;
-import org.example.ledger.infrastructure.AuthorisationAuthorisedPayload;
-import org.example.ledger.infrastructure.LedgerEntryMapper;
-import org.example.ledger.infrastructure.LedgerEntryRepository;
-import org.example.ledger.infrastructure.LedgerEventLogRepository;
-import org.example.ledger.infrastructure.ProcessedEventRepository;
+import org.example.ledger.infrastructure.persistence.LedgerEntryMapper;
+import org.example.ledger.infrastructure.persistence.LedgerEntryRepository;
+import org.example.ledger.infrastructure.persistence.LedgerEventLogRepository;
+import org.example.ledger.infrastructure.persistence.ProcessedEventRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import tools.jackson.core.type.TypeReference;

@@ -1,6 +1,4 @@
-package org.example.ledger.application;
-
-import static org.example.ledger.domain.EventType.AUTHORISATION_AUTHORISED;
+package org.example.ledger.application.command;
 
 import org.example.ledger.domain.EventMetadata;
 import org.example.ledger.domain.EventType;
