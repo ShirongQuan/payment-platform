@@ -10,8 +10,11 @@ import org.example.auth.account.domain.Account;
 import org.example.auth.account.domain.AccountStatus;
 import org.example.auth.common.exception.InvalidCurrencyException;
 import org.junit.jupiter.api.Test;
+import org.mapstruct.factory.Mappers;
 
 class AccountMapperTest {
+
+  private static final AccountMapper mapper = Mappers.getMapper(AccountMapper.class);
 
   @Test
   void shouldMapDomainAccountToEntity() {
@@ -28,7 +31,7 @@ class AccountMapperTest {
             createdAt,
             updatedAt);
 
-    AccountEntity entity = AccountMapper.toEntity(account);
+    AccountEntity entity = mapper.toEntity(account);
 
     assertThat(entity.getId()).isEqualTo(id);
     assertThat(entity.getStatus()).isEqualTo(AccountStatus.ACTIVE);
@@ -54,7 +57,7 @@ class AccountMapperTest {
     entity.setCreatedAt(createdAt);
     entity.setUpdatedAt(updatedAt);
 
-    Account account = AccountMapper.toAccount(entity);
+    Account account = mapper.toAccount(entity);
 
     assertThat(account.getId()).isEqualTo(id);
     assertThat(account.getStatus()).isEqualTo(AccountStatus.ACTIVE);
@@ -76,7 +79,7 @@ class AccountMapperTest {
     entity.setCreatedAt(OffsetDateTime.now().minusDays(1));
     entity.setUpdatedAt(OffsetDateTime.now());
 
-    assertThatThrownBy(() -> AccountMapper.toAccount(entity))
+    assertThatThrownBy(() -> mapper.toAccount(entity))
         .isInstanceOf(InvalidCurrencyException.class)
         .hasMessageContaining("Invalid currencyCode abc");
   }

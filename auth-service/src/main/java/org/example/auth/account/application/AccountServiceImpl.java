@@ -28,9 +28,11 @@ import org.springframework.transaction.annotation.Transactional;
 public class AccountServiceImpl implements AccountService {
 
   private final AccountRepository accountRepository;
+  private final AccountMapper accountMapper;
 
-  public AccountServiceImpl(AccountRepository accountRepository) {
+  public AccountServiceImpl(AccountRepository accountRepository, AccountMapper accountMapper) {
     this.accountRepository = accountRepository;
+    this.accountMapper = accountMapper;
   }
 
   /**
@@ -42,7 +44,7 @@ public class AccountServiceImpl implements AccountService {
   public AccountResponse createAccount(CreateAccountRequest createAccountRequest) {
     Account account = new Account(createAccountRequest.currencyCode());
 
-    accountRepository.save(AccountMapper.toEntity(account));
+    accountRepository.save(accountMapper.toEntity(account));
 
     return new AccountResponse(
         account.getId(),
@@ -94,7 +96,7 @@ public class AccountServiceImpl implements AccountService {
             .orElseThrow(() -> new AccountNotFoundException(accountId));
 
     // Convert to business object for domain logic
-    Account account = AccountMapper.toAccount(entity);
+    Account account = accountMapper.toAccount(entity);
 
     // Execute business logic
     account.deposit(depositRequest.amount(), depositRequest.currencyCode());

@@ -26,14 +26,20 @@ public class AuthorisationTransactionalExecutor {
   private final AccountRepository accountRepository;
   private final AuthorisationRepository authorisationRepository;
   private final OutboxEventService outboxEventService;
+  private final AccountMapper accountMapper;
+  private final AuthorisationMapper authorisationMapper;
 
   public AuthorisationTransactionalExecutor(
       AccountRepository accountRepository,
       AuthorisationRepository authorisationRepository,
-      OutboxEventService outboxEventService) {
+      OutboxEventService outboxEventService,
+      AccountMapper accountMapper,
+      AuthorisationMapper authorisationMapper) {
     this.accountRepository = accountRepository;
     this.authorisationRepository = authorisationRepository;
     this.outboxEventService = outboxEventService;
+    this.accountMapper = accountMapper;
+    this.authorisationMapper = authorisationMapper;
   }
 
   @Transactional(rollbackFor = Exception.class)
@@ -53,7 +59,7 @@ public class AuthorisationTransactionalExecutor {
           accountRepository
               .findById(request.accountId())
               .orElseThrow(() -> new AccountNotFoundException(request.accountId()));
-      Account account = AccountMapper.toAccount(accountEntity);
+      Account account = accountMapper.toAccount(accountEntity);
       account.reserve(request.amount(), normalizedCurrency);
 
       accountEntity.setAvailableBalance(account.getAvailableBalance());
@@ -84,7 +90,7 @@ public class AuthorisationTransactionalExecutor {
     }
 
     try {
-      authorisationRepository.saveAndFlush(AuthorisationMapper.toEntity(authorisation));
+      authorisationRepository.saveAndFlush(authorisationMapper.toEntity(authorisation));
     } catch (DataIntegrityViolationException e) {
       // Fail-fast signal of concurrent idempotency race, so the whole transaction rolls back
       // consistently.

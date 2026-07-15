@@ -1,24 +1,19 @@
 package org.example.auth.authorisation.infrastructure;
 
 import org.example.auth.authorisation.domain.Authorisation;
+import org.mapstruct.Mapper;
+import org.mapstruct.Mapping;
 
-public class AuthorisationMapper {
-  public static AuthorisationEntity toEntity(Authorisation authorisation) {
-    AuthorisationEntity entity = new AuthorisationEntity();
-    entity.setId(authorisation.getId());
-    entity.setAccountId(authorisation.getAccountId());
-    entity.setIdempotencyKey(authorisation.getIdempotencyKey());
-    entity.setAmount(authorisation.getAmount());
-    entity.setCurrencyCode(authorisation.getCurrencyCode());
-    entity.setMerchantReference(authorisation.getMerchantReference());
-    entity.setStatus(authorisation.getStatus());
-    entity.setFailureReason(authorisation.getFailureReason());
-    entity.setCreatedAt(authorisation.getCreatedAt());
-    entity.setUpdatedAt(authorisation.getUpdatedAt());
-    return entity;
-  }
+@Mapper(componentModel = "spring")
+public interface AuthorisationMapper {
 
-  public static Authorisation toAuthorisation(AuthorisationEntity entity) {
+  @Mapping(target = "version", ignore = true)
+  AuthorisationEntity toEntity(Authorisation authorisation);
+
+  default Authorisation toAuthorisation(AuthorisationEntity entity) {
+    if (entity == null) {
+      return null;
+    }
     return new Authorisation(
         entity.getId(),
         entity.getAccountId(),

@@ -30,18 +30,21 @@ public class OutboxEventServiceImpl implements OutboxEventService {
   private final OutboxBackoffPolicy backoffPolicy;
   private final OutboxPublisherProperties outboxPublisherProperties;
   private final ObjectMapper objectMapper;
+  private final OutboxEventMapper outboxEventMapper;
 
   public OutboxEventServiceImpl(
       OutboxEventRepository outboxEventRepository,
       OutboxKafkaPublisher outboxKafkaPublisher,
       OutboxBackoffPolicy backoffPolicy,
       OutboxPublisherProperties outboxPublisherProperties,
-      ObjectMapper objectMapper) {
+      ObjectMapper objectMapper,
+      OutboxEventMapper outboxEventMapper) {
     this.outboxEventRepository = outboxEventRepository;
     this.outboxKafkaPublisher = outboxKafkaPublisher;
     this.backoffPolicy = backoffPolicy;
     this.outboxPublisherProperties = outboxPublisherProperties;
     this.objectMapper = objectMapper;
+    this.outboxEventMapper = outboxEventMapper;
   }
 
   // TODO: improve thread safety
@@ -83,7 +86,7 @@ public class OutboxEventServiceImpl implements OutboxEventService {
             authorisation.getIdempotencyKey(),
             UUID.randomUUID()); // TODO: correlation ID
 
-    outboxEventRepository.save(OutboxEventMapper.toEntity(outboxEvent));
+    outboxEventRepository.save(outboxEventMapper.toEntity(outboxEvent));
   }
 
   @Override
@@ -121,7 +124,7 @@ public class OutboxEventServiceImpl implements OutboxEventService {
     }
 
     outboxKafkaPublisher
-        .publishAsync(OutboxEventMapper.toDomain(event))
+        .publishAsync(outboxEventMapper.toDomain(event))
         .whenComplete(
             (result, throwable) -> {
               if (throwable == null) {

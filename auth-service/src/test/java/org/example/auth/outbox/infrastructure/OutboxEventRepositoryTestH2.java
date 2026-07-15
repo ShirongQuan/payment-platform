@@ -2,6 +2,7 @@ package org.example.auth.outbox.infrastructure;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import jakarta.persistence.EntityManager;
 import java.time.OffsetDateTime;
 import java.util.Map;
 import java.util.UUID;
@@ -10,7 +11,7 @@ import org.example.auth.outbox.domain.EventType;
 import org.example.auth.outbox.domain.OutboxEvent;
 import org.example.auth.outbox.domain.OutboxEventStatus;
 import org.junit.jupiter.api.Test;
-import jakarta.persistence.EntityManager;
+import org.mapstruct.factory.Mappers;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
 import org.springframework.test.context.jdbc.Sql;
@@ -26,6 +27,9 @@ class OutboxEventRepositoryTestH2 {
 
   @Autowired private OutboxEventRepository repository;
   @Autowired private EntityManager entityManager;
+
+  private static final OutboxEventMapper outboxEventMapper =
+      Mappers.getMapper(OutboxEventMapper.class);
 
   @Test
   void reclaimStalePublishingShouldReclaimOnlyExpiredPublishing() {
@@ -73,16 +77,10 @@ class OutboxEventRepositoryTestH2 {
     OffsetDateTime now = OffsetDateTime.parse("2026-07-08T11:00:00Z");
     OffsetDateTime claimUntil = now.plusSeconds(30);
 
-    UUID newId = persistEvent(OutboxEventStatus.NEW, 0, null, now.minusMinutes(1), null, null, null);
+    UUID newId =
+        persistEvent(OutboxEventStatus.NEW, 0, null, now.minusMinutes(1), null, null, null);
     UUID failedId =
-        persistEvent(
-            OutboxEventStatus.FAILED,
-            3,
-            "failed",
-            now.minusMinutes(1),
-            null,
-            null,
-            null);
+        persistEvent(OutboxEventStatus.FAILED, 3, "failed", now.minusMinutes(1), null, null, null);
 
     int claimedNew =
         repository.claimNewEvent(
@@ -209,8 +207,7 @@ class OutboxEventRepositoryTestH2 {
             "idem-" + id.toString().substring(0, 8),
             UUID.randomUUID());
 
-    repository.saveAndFlush(OutboxEventMapper.toEntity(event));
+    repository.saveAndFlush(outboxEventMapper.toEntity(event));
     return id;
   }
 }
-

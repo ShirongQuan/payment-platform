@@ -18,12 +18,14 @@ import java.util.Optional;
 import java.util.UUID;
 import org.example.auth.account.domain.AccountStatus;
 import org.example.auth.account.infrastructure.AccountEntity;
+import org.example.auth.account.infrastructure.AccountMapper;
 import org.example.auth.account.infrastructure.AccountRepository;
 import org.example.auth.authorisation.api.AuthorisationRequest;
 import org.example.auth.authorisation.api.AuthorisationResponse;
 import org.example.auth.authorisation.domain.Authorisation;
 import org.example.auth.authorisation.domain.AuthorisationStatus;
 import org.example.auth.authorisation.infrastructure.AuthorisationEntity;
+import org.example.auth.authorisation.infrastructure.AuthorisationMapper;
 import org.example.auth.authorisation.infrastructure.AuthorisationRepository;
 import org.example.auth.common.exception.AccountNotFoundException;
 import org.example.auth.common.exception.IdempotencyConflictException;
@@ -33,7 +35,9 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.mapstruct.factory.Mappers;
 import org.springframework.dao.DataIntegrityViolationException;
 
 @ExtendWith(MockitoExtension.class)
@@ -44,6 +48,8 @@ class AuthorisationTransactionalExecutorTest {
   @Mock private AuthorisationRepository authorisationRepository;
 
   @Mock private OutboxEventService outboxEventService;
+  @Spy private AccountMapper accountMapper = Mappers.getMapper(AccountMapper.class);
+  @Spy private AuthorisationMapper authorisationMapper = Mappers.getMapper(AuthorisationMapper.class);
 
   @InjectMocks private AuthorisationTransactionalExecutor executor;
 
@@ -121,9 +127,14 @@ class AuthorisationTransactionalExecutorTest {
     when(authorisationRepository.findByAccountIdAndIdempotencyKey(accountId, "key"))
         .thenReturn(Optional.empty());
 
-    AccountEntity accountEntity = this.mockExistingAccountEntity(new BigDecimal("5.00"));
-    when(accountEntity.getId()).thenReturn(accountId);
-    when(accountEntity.getCurrencyCode()).thenReturn("USD");
+    AccountEntity accountEntity = this.mockExistingAccountEntity();
+    accountEntity.setId(accountId);
+    accountEntity.setCurrencyCode("USD");
+    accountEntity.setStatus(AccountStatus.ACTIVE);
+    accountEntity.setAvailableBalance(new BigDecimal("5.00"));
+    accountEntity.setReservedBalance(BigDecimal.ZERO);
+    accountEntity.setCreatedAt(OffsetDateTime.now().minusDays(1));
+    accountEntity.setUpdatedAt(OffsetDateTime.now());
     when(accountRepository.findById(accountId)).thenReturn(Optional.of(accountEntity));
 
     AuthorisationResponse response = executor.authoriseInTransaction(request, "USD");
@@ -137,8 +148,8 @@ class AuthorisationTransactionalExecutorTest {
     assertThat(entityCaptor.getValue().getStatus()).isEqualTo(AuthorisationStatus.DECLINED);
     assertThat(entityCaptor.getValue().getFailureReason()).isEqualTo("Insufficient funds");
 
-    verify(accountEntity, never()).setAvailableBalance(any(BigDecimal.class));
-    verify(accountEntity, never()).setReservedBalance(any(BigDecimal.class));
+    assertThat(accountEntity.getAvailableBalance()).isEqualByComparingTo("5.00");
+    assertThat(accountEntity.getReservedBalance()).isEqualByComparingTo("0.00");
     verify(accountRepository, never()).flush();
     verify(outboxEventService, times(1)).enqueueAuthorisation(any(Authorisation.class));
   }
@@ -152,9 +163,14 @@ class AuthorisationTransactionalExecutorTest {
     when(authorisationRepository.findByAccountIdAndIdempotencyKey(accountId, "key"))
         .thenReturn(Optional.empty());
 
-    AccountEntity accountEntity = this.mockExistingAccountEntity(new BigDecimal("1000.00"));
-    when(accountEntity.getId()).thenReturn(accountId);
-    when(accountEntity.getCurrencyCode()).thenReturn("USD");
+    AccountEntity accountEntity = this.mockExistingAccountEntity();
+    accountEntity.setId(accountId);
+    accountEntity.setCurrencyCode("USD");
+    accountEntity.setStatus(AccountStatus.ACTIVE);
+    accountEntity.setAvailableBalance(new BigDecimal("1000.00"));
+    accountEntity.setReservedBalance(BigDecimal.ZERO);
+    accountEntity.setCreatedAt(OffsetDateTime.now().minusDays(1));
+    accountEntity.setUpdatedAt(OffsetDateTime.now());
     when(accountRepository.findById(accountId)).thenReturn(Optional.of(accountEntity));
 
     DataIntegrityViolationException cause = new DataIntegrityViolationException("duplicate key");
@@ -166,12 +182,8 @@ class AuthorisationTransactionalExecutorTest {
             () -> executor.authoriseInTransaction(request, "USD"));
     assertThat(ex.getCause()).isEqualTo(cause);
 
-    verify(accountEntity)
-        .setAvailableBalance(
-            argThat(bd -> bd != null && bd.compareTo(new BigDecimal("990.00")) == 0));
-    verify(accountEntity)
-        .setReservedBalance(
-            argThat(bd -> bd != null && bd.compareTo(new BigDecimal("10.00")) == 0));
+    assertThat(accountEntity.getAvailableBalance()).isEqualByComparingTo("990.00");
+    assertThat(accountEntity.getReservedBalance()).isEqualByComparingTo("10.00");
     verify(accountRepository).flush();
     verify(outboxEventService, never()).enqueueAuthorisation(any(Authorisation.class));
   }
@@ -182,24 +194,28 @@ class AuthorisationTransactionalExecutorTest {
             any(UUID.class), any(String.class)))
         .thenReturn(Optional.empty());
 
-    AccountEntity accountEntity = this.mockExistingAccountEntity(BigDecimal.valueOf(1000.0));
-    when(accountRepository.findById(eq(accountEntity.getId())))
+    UUID accountId = UUID.randomUUID();
+    AccountEntity accountEntity = this.mockExistingAccountEntity();
+    accountEntity.setId(accountId);
+    accountEntity.setCurrencyCode("GBP");
+    accountEntity.setStatus(AccountStatus.ACTIVE);
+    accountEntity.setAvailableBalance(BigDecimal.valueOf(1000.0));
+    accountEntity.setReservedBalance(BigDecimal.ZERO);
+    accountEntity.setCreatedAt(OffsetDateTime.now().minusDays(1));
+    accountEntity.setUpdatedAt(OffsetDateTime.now());
+    when(accountRepository.findById(eq(accountId)))
         .thenReturn(Optional.of(accountEntity));
 
     AuthorisationRequest request =
-        new AuthorisationRequest(accountEntity.getId(), "key", BigDecimal.TEN, "gbp", "reference");
+        new AuthorisationRequest(accountId, "key", BigDecimal.TEN, "gbp", "reference");
     AuthorisationResponse authResponse = executor.authoriseInTransaction(request, "gbp");
 
     assertThat(authResponse).isNotNull();
-    assertThat(authResponse.accountId()).isEqualTo(accountEntity.getId());
+    assertThat(authResponse.accountId()).isEqualTo(accountId);
     assertThat(authResponse.status()).isEqualTo(AuthorisationStatus.AUTHORISED);
 
-    verify(accountEntity, times(1))
-        .setAvailableBalance(
-            argThat(bd -> bd != null && bd.compareTo(new BigDecimal("990.00")) == 0));
-    verify(accountEntity, times(1))
-        .setReservedBalance(
-            argThat(bd -> bd != null && bd.compareTo(new BigDecimal("10.00")) == 0));
+    assertThat(accountEntity.getAvailableBalance()).isEqualByComparingTo("990.00");
+    assertThat(accountEntity.getReservedBalance()).isEqualByComparingTo("10.00");
     verify(accountRepository, times(1)).flush();
 
     verify(authorisationRepository, times(1)).saveAndFlush(any(AuthorisationEntity.class));
@@ -222,16 +238,9 @@ class AuthorisationTransactionalExecutorTest {
     return entity;
   }
 
-  private AccountEntity mockExistingAccountEntity(BigDecimal balance) {
-    AccountEntity accountEntity = mock(AccountEntity.class);
-    when(accountEntity.getId()).thenReturn(UUID.randomUUID());
-    when(accountEntity.getCurrencyCode()).thenReturn("GBP");
-    when(accountEntity.getAvailableBalance()).thenReturn(balance);
-    when(accountEntity.getReservedBalance()).thenReturn(BigDecimal.ZERO);
-    when(accountEntity.getStatus()).thenReturn(AccountStatus.ACTIVE);
-    when(accountEntity.getUpdatedAt()).thenReturn(OffsetDateTime.now().minusDays(2));
-    when(accountEntity.getCreatedAt()).thenReturn(OffsetDateTime.now().minusDays(3));
-
-    return accountEntity;
+  private AccountEntity mockExistingAccountEntity() {
+    return new TestAccountEntity();
   }
+
+  private static class TestAccountEntity extends AccountEntity {}
 }

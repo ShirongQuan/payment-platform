@@ -11,6 +11,7 @@ import org.example.auth.outbox.domain.EventType;
 import org.example.auth.outbox.domain.OutboxEvent;
 import org.example.auth.outbox.domain.OutboxEventStatus;
 import org.junit.jupiter.api.Test;
+import org.mapstruct.factory.Mappers;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
 import org.springframework.boot.jdbc.test.autoconfigure.AutoConfigureTestDatabase;
@@ -26,6 +27,9 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
 @Sql(scripts = "classpath:outbox_repository_schema.sql")
 class OutboxEventRepositoryTest {
+
+  private static final OutboxEventMapper outboxEventMapper =
+      Mappers.getMapper(OutboxEventMapper.class);
 
   @Container
   static PostgreSQLContainer<?> postgres =
@@ -222,7 +226,7 @@ class OutboxEventRepositoryTest {
             "idem-" + id.toString().substring(0, 8),
             UUID.randomUUID());
 
-    repository.saveAndFlush(OutboxEventMapper.toEntity(event));
+    repository.saveAndFlush(outboxEventMapper.toEntity(event));
     return id;
   }
 }

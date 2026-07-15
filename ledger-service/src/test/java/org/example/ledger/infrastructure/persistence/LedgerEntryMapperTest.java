@@ -11,10 +11,11 @@ import org.example.ledger.domain.AuthorisationAuthorisedPayload;
 import org.example.ledger.domain.EventMetadata;
 import org.example.ledger.domain.EventType;
 import org.junit.jupiter.api.Test;
+import org.mapstruct.factory.Mappers;
 
 class LedgerEntryMapperTest {
 
-  private final LedgerEntryMapper mapper = new LedgerEntryMapper();
+  private final LedgerEntryMapper mapper = Mappers.getMapper(LedgerEntryMapper.class);
 
   @Test
   void shouldConvertToEventLogEntity() {
@@ -101,7 +102,7 @@ class LedgerEntryMapperTest {
     assertThat(response.amount()).isEqualByComparingTo("10.00");
     assertThat(response.currencyCode()).isEqualTo("GBP");
     assertThat(response.status()).isEqualTo("AUTHORISED");
-    assertThat(response.created()).isEqualTo(createdAt);
+    assertThat(response.createdAt()).isEqualTo(createdAt);
     assertThat(response.sourceEventId()).isEqualTo(eventId);
   }
 

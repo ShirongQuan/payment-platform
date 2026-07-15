@@ -11,5 +11,5 @@ public record AuthenticationResponse(
     BigDecimal amount,
     String currencyCode,
     String status,
-    OffsetDateTime created,
+    OffsetDateTime createdAt,
     UUID sourceEventId) {}

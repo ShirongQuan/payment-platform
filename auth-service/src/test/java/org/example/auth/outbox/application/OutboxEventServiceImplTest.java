@@ -24,12 +24,15 @@ import org.example.auth.outbox.domain.EventType;
 import org.example.auth.outbox.domain.OutboxEvent;
 import org.example.auth.outbox.domain.OutboxEventStatus;
 import org.example.auth.outbox.infrastructure.OutboxEventEntity;
+import org.example.auth.outbox.infrastructure.OutboxEventMapper;
 import org.example.auth.outbox.infrastructure.OutboxEventRepository;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.mapstruct.factory.Mappers;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.kafka.support.SendResult;
 import tools.jackson.core.type.TypeReference;
@@ -47,6 +50,8 @@ class OutboxEventServiceImplTest {
   @Mock private OutboxPublisherProperties outboxPublisherProperties;
 
   @Mock private ObjectMapper objectMapper;
+
+  @Spy private OutboxEventMapper outboxEventMapper = Mappers.getMapper(OutboxEventMapper.class);
 
   @InjectMocks private OutboxEventServiceImpl service;
 
@@ -312,4 +317,5 @@ class OutboxEventServiceImplTest {
     }
     return entity;
   }
+
 }

@@ -16,6 +16,7 @@ import org.example.auth.account.api.AccountResponse;
 import org.example.auth.account.api.CreateAccountRequest;
 import org.example.auth.account.api.DepositRequest;
 import org.example.auth.account.domain.AccountStatus;
+import org.example.auth.account.infrastructure.AccountMapper;
 import org.example.auth.account.infrastructure.AccountEntity;
 import org.example.auth.account.infrastructure.AccountRepository;
 import org.example.auth.common.exception.AccountNotFoundException;
@@ -26,12 +27,15 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.mapstruct.factory.Mappers;
 
 @ExtendWith(MockitoExtension.class)
 class AccountServiceImplTest {
 
   @Mock private AccountRepository accountRepository;
+  @Spy private AccountMapper accountMapper = Mappers.getMapper(AccountMapper.class);
 
   @InjectMocks AccountServiceImpl accountService;
 
