@@ -2,14 +2,13 @@ package org.example.auth.outbox.application;
 
 import java.time.OffsetDateTime;
 import java.util.List;
-import java.util.UUID;
 import lombok.extern.slf4j.Slf4j;
 import org.example.auth.authorisation.domain.Authorisation;
+import org.example.auth.authorisation.infrastructure.AuthorisationEventEntity;
 import org.example.auth.outbox.configuration.OutboxBackoffPolicy;
 import org.example.auth.outbox.configuration.OutboxPublisherProperties;
 import org.example.auth.outbox.domain.AggregateType;
 import org.example.auth.outbox.domain.AuthorisationCreatedPayload;
-import org.example.auth.outbox.domain.EventType;
 import org.example.auth.outbox.domain.OutboxEvent;
 import org.example.auth.outbox.domain.OutboxEventStatus;
 import org.example.auth.outbox.infrastructure.OutboxEventEntity;
@@ -51,7 +50,8 @@ public class OutboxEventServiceImpl implements OutboxEventService {
   // Enforce being called inside a transaction.
   @Transactional(propagation = Propagation.MANDATORY)
   @Override
-  public void enqueueAuthorisation(Authorisation authorisation) {
+  public void enqueueAuthorisation(
+      Authorisation authorisation, AuthorisationEventEntity authorisationEventEntity) {
     AuthorisationCreatedPayload payload =
         new AuthorisationCreatedPayload(
             authorisation.getId(),
@@ -59,32 +59,19 @@ public class OutboxEventServiceImpl implements OutboxEventService {
             authorisation.getAmount(),
             authorisation.getCurrencyCode(),
             authorisation.getStatus(),
-            authorisation.getFailureReason(),
             authorisation.getCreatedAt(),
-            authorisation.getMerchantReference(),
-            authorisation.getIdempotencyKey());
+            authorisation.getMerchantReference());
 
-    EventType eventType =
-        switch (authorisation.getStatus()) {
-          case DECLINED -> EventType.AUTHORISATION_DECLINED;
-          case AUTHORISED -> EventType.AUTHORISATION_AUTHORISED;
-          case CAPTURED -> EventType.AUTHORISATION_CAPTURED;
-          case REVERSED -> EventType.AUTHORISATION_REVERSED;
-          default ->
-              throw new IllegalStateException(
-                  "Unsupported authorisation status for outbox event: "
-                      + authorisation.getStatus());
-        };
     OutboxEvent outboxEvent =
         new OutboxEvent(
-            UUID.randomUUID(),
+            authorisationEventEntity.getEventId(),
             AggregateType.AUTHORISATION,
             authorisation.getId(),
-            eventType,
+            authorisationEventEntity.getEventType(),
             objectMapper.convertValue(payload, new TypeReference<>() {}),
             OffsetDateTime.now(),
-            authorisation.getIdempotencyKey(),
-            UUID.randomUUID()); // TODO: correlation ID
+            authorisationEventEntity.getIdempotencyKey(),
+            authorisationEventEntity.getCorrelationId());
 
     outboxEventRepository.save(outboxEventMapper.toEntity(outboxEvent));
   }

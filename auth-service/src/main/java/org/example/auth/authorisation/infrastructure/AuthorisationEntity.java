@@ -35,10 +35,6 @@ public class AuthorisationEntity {
   @Column(name = "account_id", nullable = false)
   private UUID accountId;
 
-  @Column(name = "idempotency_key", nullable = false, updatable = false)
-  @Size(max = 20)
-  private String idempotencyKey;
-
   @Column(nullable = false)
   private BigDecimal amount;
 
@@ -53,9 +49,6 @@ public class AuthorisationEntity {
   @Enumerated(EnumType.STRING)
   private AuthorisationStatus status;
 
-  @Column(name = "failure_reason", nullable = false)
-  @Size(max = 30)
-  private String failureReason;
 
   @Column(name = "created_at", nullable = false)
   private OffsetDateTime createdAt;

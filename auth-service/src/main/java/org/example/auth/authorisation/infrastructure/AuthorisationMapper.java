@@ -17,12 +17,10 @@ public interface AuthorisationMapper {
     return new Authorisation(
         entity.getId(),
         entity.getAccountId(),
-        entity.getIdempotencyKey(),
         entity.getAmount(),
         entity.getCurrencyCode(),
         entity.getMerchantReference(),
         entity.getStatus(),
-        entity.getFailureReason(),
         entity.getCreatedAt(),
         entity.getUpdatedAt());
   }

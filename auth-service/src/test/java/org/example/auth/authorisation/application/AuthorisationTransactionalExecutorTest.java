@@ -4,7 +4,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -25,6 +24,8 @@ import org.example.auth.authorisation.api.AuthorisationResponse;
 import org.example.auth.authorisation.domain.Authorisation;
 import org.example.auth.authorisation.domain.AuthorisationStatus;
 import org.example.auth.authorisation.infrastructure.AuthorisationEntity;
+import org.example.auth.authorisation.infrastructure.AuthorisationEventEntity;
+import org.example.auth.authorisation.infrastructure.AuthorisationEventRepository;
 import org.example.auth.authorisation.infrastructure.AuthorisationMapper;
 import org.example.auth.authorisation.infrastructure.AuthorisationRepository;
 import org.example.auth.common.exception.AccountNotFoundException;
@@ -32,12 +33,12 @@ import org.example.auth.common.exception.IdempotencyConflictException;
 import org.example.auth.outbox.application.OutboxEventService;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mapstruct.factory.Mappers;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.mapstruct.factory.Mappers;
 import org.springframework.dao.DataIntegrityViolationException;
 
 @ExtendWith(MockitoExtension.class)
@@ -47,9 +48,13 @@ class AuthorisationTransactionalExecutorTest {
 
   @Mock private AuthorisationRepository authorisationRepository;
 
+  @Mock private AuthorisationEventRepository authorisationEventRepository;
+
   @Mock private OutboxEventService outboxEventService;
   @Spy private AccountMapper accountMapper = Mappers.getMapper(AccountMapper.class);
-  @Spy private AuthorisationMapper authorisationMapper = Mappers.getMapper(AuthorisationMapper.class);
+
+  @Spy
+  private AuthorisationMapper authorisationMapper = Mappers.getMapper(AuthorisationMapper.class);
 
   @InjectMocks private AuthorisationTransactionalExecutor executor;
 
@@ -75,7 +80,8 @@ class AuthorisationTransactionalExecutorTest {
 
     verify(accountRepository, never()).findById(any(UUID.class));
     verify(authorisationRepository, never()).saveAndFlush(any(AuthorisationEntity.class));
-    verify(outboxEventService, never()).enqueueAuthorisation(any(Authorisation.class));
+    verify(outboxEventService, never())
+        .enqueueAuthorisation(any(Authorisation.class), any(AuthorisationEventEntity.class));
   }
 
   @Test
@@ -96,7 +102,8 @@ class AuthorisationTransactionalExecutorTest {
 
     verify(accountRepository, never()).findById(any(UUID.class));
     verify(authorisationRepository, never()).saveAndFlush(any(AuthorisationEntity.class));
-    verify(outboxEventService, never()).enqueueAuthorisation(any(Authorisation.class));
+    verify(outboxEventService, never())
+        .enqueueAuthorisation(any(Authorisation.class), any(AuthorisationEventEntity.class));
   }
 
   @Test
@@ -115,16 +122,18 @@ class AuthorisationTransactionalExecutorTest {
     assertThat(exception.getAccountId()).isEqualTo(accountId);
 
     verify(authorisationRepository, never()).saveAndFlush(any(AuthorisationEntity.class));
-    verify(outboxEventService, never()).enqueueAuthorisation(any(Authorisation.class));
+    verify(outboxEventService, never())
+        .enqueueAuthorisation(any(Authorisation.class), any(AuthorisationEventEntity.class));
   }
 
   @Test
   void shouldPersistDeclinedAuthIfInsufficientFunds() {
     UUID accountId = UUID.randomUUID();
+    String idempotencyKey = "key";
     AuthorisationRequest request =
-        new AuthorisationRequest(accountId, "key", BigDecimal.TEN, "USD", "reference");
+        new AuthorisationRequest(accountId, idempotencyKey, BigDecimal.TEN, "USD", "reference");
 
-    when(authorisationRepository.findByAccountIdAndIdempotencyKey(accountId, "key"))
+    when(authorisationRepository.findByAccountIdAndIdempotencyKey(accountId, idempotencyKey))
         .thenReturn(Optional.empty());
 
     AccountEntity accountEntity = this.mockExistingAccountEntity();
@@ -140,18 +149,24 @@ class AuthorisationTransactionalExecutorTest {
     AuthorisationResponse response = executor.authoriseInTransaction(request, "USD");
 
     assertThat(response.status()).isEqualTo(AuthorisationStatus.DECLINED);
-    assertThat(response.failureReason()).isEqualTo("Insufficient funds");
 
     ArgumentCaptor<AuthorisationEntity> entityCaptor =
         ArgumentCaptor.forClass(AuthorisationEntity.class);
     verify(authorisationRepository).saveAndFlush(entityCaptor.capture());
     assertThat(entityCaptor.getValue().getStatus()).isEqualTo(AuthorisationStatus.DECLINED);
-    assertThat(entityCaptor.getValue().getFailureReason()).isEqualTo("Insufficient funds");
+
+    ArgumentCaptor<AuthorisationEventEntity> eventCaptor =
+        ArgumentCaptor.forClass(AuthorisationEventEntity.class);
+    verify(authorisationEventRepository).saveAndFlush(eventCaptor.capture());
+    assertThat(eventCaptor.getValue().getCurrencyCode()).isEqualTo("USD");
+    assertThat(eventCaptor.getValue().getCorrelationId()).isNotNull();
+    assertThat(eventCaptor.getValue().getCorrelationId()).isInstanceOf(UUID.class);
 
     assertThat(accountEntity.getAvailableBalance()).isEqualByComparingTo("5.00");
     assertThat(accountEntity.getReservedBalance()).isEqualByComparingTo("0.00");
     verify(accountRepository, never()).flush();
-    verify(outboxEventService, times(1)).enqueueAuthorisation(any(Authorisation.class));
+    verify(outboxEventService, times(1))
+        .enqueueAuthorisation(any(Authorisation.class), any(AuthorisationEventEntity.class));
   }
 
   @Test
@@ -185,7 +200,8 @@ class AuthorisationTransactionalExecutorTest {
     assertThat(accountEntity.getAvailableBalance()).isEqualByComparingTo("990.00");
     assertThat(accountEntity.getReservedBalance()).isEqualByComparingTo("10.00");
     verify(accountRepository).flush();
-    verify(outboxEventService, never()).enqueueAuthorisation(any(Authorisation.class));
+    verify(outboxEventService, never())
+        .enqueueAuthorisation(any(Authorisation.class), any(AuthorisationEventEntity.class));
   }
 
   @Test
@@ -203,8 +219,7 @@ class AuthorisationTransactionalExecutorTest {
     accountEntity.setReservedBalance(BigDecimal.ZERO);
     accountEntity.setCreatedAt(OffsetDateTime.now().minusDays(1));
     accountEntity.setUpdatedAt(OffsetDateTime.now());
-    when(accountRepository.findById(eq(accountId)))
-        .thenReturn(Optional.of(accountEntity));
+    when(accountRepository.findById(eq(accountId))).thenReturn(Optional.of(accountEntity));
 
     AuthorisationRequest request =
         new AuthorisationRequest(accountId, "key", BigDecimal.TEN, "gbp", "reference");
@@ -219,7 +234,14 @@ class AuthorisationTransactionalExecutorTest {
     verify(accountRepository, times(1)).flush();
 
     verify(authorisationRepository, times(1)).saveAndFlush(any(AuthorisationEntity.class));
-    verify(outboxEventService, times(1)).enqueueAuthorisation(any(Authorisation.class));
+    ArgumentCaptor<AuthorisationEventEntity> eventCaptor =
+        ArgumentCaptor.forClass(AuthorisationEventEntity.class);
+    verify(authorisationEventRepository).saveAndFlush(eventCaptor.capture());
+    assertThat(eventCaptor.getValue().getCurrencyCode()).isEqualTo("gbp");
+    assertThat(eventCaptor.getValue().getCorrelationId()).isNotNull();
+    assertThat(eventCaptor.getValue().getCorrelationId()).isInstanceOf(UUID.class);
+    verify(outboxEventService, times(1))
+        .enqueueAuthorisation(any(Authorisation.class), any(AuthorisationEventEntity.class));
   }
 
   private AuthorisationEntity existingAuthorisationEntity(UUID accountId, String idempotencyKey) {
@@ -227,12 +249,10 @@ class AuthorisationTransactionalExecutorTest {
     AuthorisationEntity entity = mock(AuthorisationEntity.class);
     when(entity.getId()).thenReturn(UUID.randomUUID());
     when(entity.getAccountId()).thenReturn(accountId);
-    when(entity.getIdempotencyKey()).thenReturn(idempotencyKey);
     when(entity.getAmount()).thenReturn(BigDecimal.TEN);
     when(entity.getCurrencyCode()).thenReturn("USD");
     when(entity.getMerchantReference()).thenReturn("reference");
     when(entity.getStatus()).thenReturn(AuthorisationStatus.AUTHORISED);
-    when(entity.getFailureReason()).thenReturn("");
     when(entity.getCreatedAt()).thenReturn(now);
     when(entity.getUpdatedAt()).thenReturn(now);
     return entity;

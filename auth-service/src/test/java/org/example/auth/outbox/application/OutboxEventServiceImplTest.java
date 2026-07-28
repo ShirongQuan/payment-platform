@@ -6,6 +6,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import java.math.BigDecimal;
 import java.time.OffsetDateTime;
@@ -16,6 +17,7 @@ import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import org.example.auth.authorisation.domain.Authorisation;
 import org.example.auth.authorisation.domain.AuthorisationStatus;
+import org.example.auth.authorisation.infrastructure.AuthorisationEventEntity;
 import org.example.auth.outbox.configuration.OutboxBackoffPolicy;
 import org.example.auth.outbox.configuration.OutboxPublisherProperties;
 import org.example.auth.outbox.domain.AggregateType;
@@ -28,11 +30,12 @@ import org.example.auth.outbox.infrastructure.OutboxEventMapper;
 import org.example.auth.outbox.infrastructure.OutboxEventRepository;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mapstruct.factory.Mappers;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.Spy;
+import org.mockito.ArgumentCaptor;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.mapstruct.factory.Mappers;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.kafka.support.SendResult;
 import tools.jackson.core.type.TypeReference;
@@ -58,22 +61,41 @@ class OutboxEventServiceImplTest {
   @Test
   void shouldEnqueueAuthorisation() {
     UUID accountId = UUID.randomUUID();
+    UUID eventId = UUID.randomUUID();
+    UUID correctionId = UUID.randomUUID();
+    String idempotencyKey = "key";
+
     Authorisation authorisation =
         new Authorisation(
+            accountId, BigDecimal.TEN, "GBP", "reference", AuthorisationStatus.AUTHORISED);
+
+    AuthorisationEventEntity authorisationEventEntity =
+        new AuthorisationEventEntity(
+            eventId,
+            authorisation.getId(),
             accountId,
-            "key",
+            EventType.AUTHORISATION_AUTHORISED,
+            idempotencyKey,
             BigDecimal.TEN,
             "GBP",
-            "reference",
-            AuthorisationStatus.AUTHORISED,
-            "");
+            "",
+            correctionId,
+            OffsetDateTime.now());
 
     when(objectMapper.convertValue(
             any(AuthorisationCreatedPayload.class), any(TypeReference.class)))
         .thenReturn(new HashMap<String, Object>());
 
-    service.enqueueAuthorisation(authorisation);
-    verify(outboxEventRepository, times(1)).save(any(OutboxEventEntity.class));
+    service.enqueueAuthorisation(authorisation, authorisationEventEntity);
+
+    ArgumentCaptor<OutboxEventEntity> savedEventCaptor = ArgumentCaptor.forClass(OutboxEventEntity.class);
+    verify(outboxEventRepository, times(1)).save(savedEventCaptor.capture());
+
+    OutboxEventEntity savedEntity = savedEventCaptor.getValue();
+    assertEquals(eventId, savedEntity.getId());
+    assertEquals(authorisationEventEntity.getEventType(), savedEntity.getEventType());
+    assertEquals(idempotencyKey, savedEntity.getIdempotencyKey());
+    assertEquals(correctionId, savedEntity.getCorrelationId());
   }
 
   @Test
@@ -143,7 +165,8 @@ class OutboxEventServiceImplTest {
         .reclaimStalePublishing(
             any(OffsetDateTime.class), eq(OutboxEventStatus.NEW), eq(OutboxEventStatus.PUBLISHING));
     verify(outboxEventRepository, times(1))
-        .findNextBatch(eq(OutboxEventStatus.NEW), any(OffsetDateTime.class), any(PageRequest.class));
+        .findNextBatch(
+            eq(OutboxEventStatus.NEW), any(OffsetDateTime.class), any(PageRequest.class));
     verify(outboxEventRepository, times(0))
         .claimNewEvent(
             any(UUID.class),
@@ -188,7 +211,8 @@ class OutboxEventServiceImplTest {
             any(String.class),
             any(OutboxEventStatus.class));
     verify(outboxEventRepository, times(0))
-        .markFailed(any(UUID.class), any(Integer.class), any(String.class), any(OutboxEventStatus.class));
+        .markFailed(
+            any(UUID.class), any(Integer.class), any(String.class), any(OutboxEventStatus.class));
   }
 
   @Test
@@ -226,7 +250,8 @@ class OutboxEventServiceImplTest {
             any(String.class),
             eq(OutboxEventStatus.NEW));
     verify(outboxEventRepository, times(0))
-        .markFailed(any(UUID.class), any(Integer.class), any(String.class), any(OutboxEventStatus.class));
+        .markFailed(
+            any(UUID.class), any(Integer.class), any(String.class), any(OutboxEventStatus.class));
     verify(outboxEventRepository, times(0))
         .markPublished(any(UUID.class), any(OffsetDateTime.class), any(OutboxEventStatus.class));
   }
@@ -317,5 +342,4 @@ class OutboxEventServiceImplTest {
     }
     return entity;
   }
-
 }

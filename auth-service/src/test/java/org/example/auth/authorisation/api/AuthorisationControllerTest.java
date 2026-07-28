@@ -54,7 +54,6 @@ class AuthorisationControllerTest {
                 "GBP",
                 "reference",
                 AuthorisationStatus.AUTHORISED,
-                "",
                 createdAt,
                 updatedAt));
 
@@ -77,12 +76,10 @@ class AuthorisationControllerTest {
         .andExpect(jsonPath("$").isNotEmpty())
         .andExpect(jsonPath("$.id").value(authorisationId.toString()))
         .andExpect(jsonPath("$.accountId").value(accountId.toString()))
-        .andExpect(jsonPath("$.idempotencyKey").value("key"))
         .andExpect(jsonPath("$.amount").value(10.00))
         .andExpect(jsonPath("$.currencyCode").value("GBP"))
         .andExpect(jsonPath("$.merchantReference").value("reference"))
         .andExpect(jsonPath("$.status").value(AuthorisationStatus.AUTHORISED.name()))
-        .andExpect(jsonPath("$.failureReason").value(""))
         .andExpect(jsonPath("$.createdAt").isNotEmpty())
         .andExpect(jsonPath("$.updatedAt").isNotEmpty());
 
@@ -257,7 +254,6 @@ class AuthorisationControllerTest {
                 "GBP",
                 "reference",
                 AuthorisationStatus.AUTHORISED,
-                "",
                 OffsetDateTime.now().minusDays(2),
                 OffsetDateTime.now().minusDays(1)));
 
@@ -267,12 +263,10 @@ class AuthorisationControllerTest {
         .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
         .andExpect(jsonPath("$.id").value(authorisationId.toString()))
         .andExpect(jsonPath("$.accountId").value(accountId.toString()))
-        .andExpect(jsonPath("$.idempotencyKey").value("key"))
         .andExpect(jsonPath("$.amount").value(10.00))
         .andExpect(jsonPath("$.currencyCode").value("GBP"))
         .andExpect(jsonPath("$.merchantReference").value("reference"))
-        .andExpect(jsonPath("$.status").value(AuthorisationStatus.AUTHORISED.name()))
-        .andExpect(jsonPath("$.failureReason").value(""));
+        .andExpect(jsonPath("$.status").value(AuthorisationStatus.AUTHORISED.name()));
   }
 
   @Test

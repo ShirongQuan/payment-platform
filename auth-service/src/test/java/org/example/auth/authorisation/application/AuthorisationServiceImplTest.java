@@ -49,12 +49,11 @@ class AuthorisationServiceImplTest {
 
     AuthorisationResponse response = service.getAuthorisationById(existingEntity.getId());
     assertThat(response.accountId()).isEqualTo(accountId);
-    assertThat(response.idempotencyKey()).isEqualTo("key");
+    assertThat(response.idempotencyKey()).isNull();
     assertThat(response.amount()).isEqualByComparingTo(BigDecimal.TEN);
     assertThat(response.currencyCode()).isEqualTo("GBP");
     assertThat(response.merchantReference()).isEqualTo("");
     assertThat(response.status()).isEqualTo(AuthorisationStatus.AUTHORISED);
-    assertThat(response.failureReason()).isEqualTo("");
     assertThat(response.createdAt()).isNotNull();
     assertThat(response.updatedAt()).isNotNull();
   }
@@ -129,7 +128,6 @@ class AuthorisationServiceImplTest {
             "USD",
             "merchant-1",
             AuthorisationStatus.AUTHORISED,
-            "",
             OffsetDateTime.now(),
             OffsetDateTime.now());
 
@@ -159,7 +157,6 @@ class AuthorisationServiceImplTest {
             "USD",
             "merchant-1",
             AuthorisationStatus.AUTHORISED,
-            "",
             OffsetDateTime.now(),
             OffsetDateTime.now());
 
@@ -257,12 +254,10 @@ class AuthorisationServiceImplTest {
     AuthorisationEntity entity = mock(AuthorisationEntity.class);
     when(entity.getId()).thenReturn(UUID.randomUUID());
     when(entity.getAccountId()).thenReturn(accountId);
-    when(entity.getIdempotencyKey()).thenReturn(idempotencyKey);
     when(entity.getAmount()).thenReturn(amount);
     when(entity.getCurrencyCode()).thenReturn(currency);
     when(entity.getMerchantReference()).thenReturn(merchantReference);
     when(entity.getStatus()).thenReturn(AuthorisationStatus.AUTHORISED);
-    when(entity.getFailureReason()).thenReturn("");
     when(entity.getCreatedAt()).thenReturn(now);
     when(entity.getUpdatedAt()).thenReturn(now);
     return entity;

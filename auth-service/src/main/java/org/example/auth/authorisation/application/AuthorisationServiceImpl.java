@@ -49,7 +49,16 @@ public class AuthorisationServiceImpl implements AuthorisationService {
   private AuthorisationResponse validateAndBuildIdempotentResponse(
       AuthorisationEntity entity, AuthorisationRequest request, String normalizedCurrency) {
     if (isSameIdempotentRequest(entity, request, normalizedCurrency)) {
-      return toResponse(entity);
+      return new AuthorisationResponse(
+          entity.getId(),
+          entity.getAccountId(),
+          request.idempotencyKey(),
+          entity.getAmount(),
+          entity.getCurrencyCode(),
+          entity.getMerchantReference(),
+          entity.getStatus(),
+          entity.getCreatedAt(),
+          entity.getUpdatedAt());
     }
     throw new IdempotencyConflictException();
   }
@@ -59,20 +68,6 @@ public class AuthorisationServiceImpl implements AuthorisationService {
     return entity.getAmount().compareTo(request.amount()) == 0
         && entity.getCurrencyCode().equals(normalizedCurrency)
         && Objects.equals(entity.getMerchantReference(), request.merchantReference());
-  }
-
-  private AuthorisationResponse toResponse(AuthorisationEntity entity) {
-    return new AuthorisationResponse(
-        entity.getId(),
-        entity.getAccountId(),
-        entity.getIdempotencyKey(),
-        entity.getAmount(),
-        entity.getCurrencyCode(),
-        entity.getMerchantReference(),
-        entity.getStatus(),
-        entity.getFailureReason(),
-        entity.getCreatedAt(),
-        entity.getUpdatedAt());
   }
 
   @Override
@@ -85,12 +80,11 @@ public class AuthorisationServiceImpl implements AuthorisationService {
     return new AuthorisationResponse(
         authorisation.getId(),
         authorisation.getAccountId(),
-        authorisation.getIdempotencyKey(),
+        null,
         authorisation.getAmount(),
         authorisation.getCurrencyCode(),
         authorisation.getMerchantReference(),
         authorisation.getStatus(),
-        authorisation.getFailureReason(),
         authorisation.getCreatedAt(),
         authorisation.getUpdatedAt());
   }

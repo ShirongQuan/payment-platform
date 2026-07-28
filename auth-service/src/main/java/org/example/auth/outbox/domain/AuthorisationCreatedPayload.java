@@ -11,7 +11,5 @@ public record AuthorisationCreatedPayload(
     BigDecimal amount,
     String currencyCode,
     AuthorisationStatus status,
-    String failureReason,
     OffsetDateTime createdAt,
-    String merchantReference,
-    String idempotencyKey) {}
+    String merchantReference) {}

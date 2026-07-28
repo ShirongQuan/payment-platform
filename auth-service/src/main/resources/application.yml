@@ -10,7 +10,7 @@ spring:
   jpa:
     hibernate:
       ddl-auto: validate
-    show-sql: true
+    show-sql: false
     properties:
       hibernate:
         format_sql: true
@@ -62,6 +62,12 @@ springdoc:
 logging:
   level:
     root: WARN
-    org.example.auth: DEBUG
-    org.hibernate.SQL: WARN
-    org.hibernate.orm.jdbc.bind: WARN
+    org.example.auth: INFO
+    org:
+      example:
+        auth:
+          authorisation: DEBUG
+    org.hibernate.SQL: ERROR
+    org.hibernate.orm.jdbc.bind: ERROR
+    org.flywaydb: INFO
+    org.springframework.jdbc: INFO

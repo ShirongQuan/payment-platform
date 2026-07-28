@@ -13,6 +13,5 @@ public record AuthorisationResponse(
     String currencyCode,
     String merchantReference,
     AuthorisationStatus status,
-    String failureReason,
     OffsetDateTime createdAt,
     OffsetDateTime updatedAt) {}
