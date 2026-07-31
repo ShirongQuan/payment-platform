@@ -17,14 +17,18 @@ spring:
   kafka:
     bootstrap-servers: localhost:9092
     consumer:
+      # Shared consumer group for ledger projection workers.
       group-id: ledger-service
       auto-offset-reset: earliest
+      # Offset commits are controlled by the listener container.
       enable-auto-commit: false
       key-deserializer: org.apache.kafka.common.serialization.UUIDDeserializer
       value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
       properties:
+        # Consume only committed records from transactional producers.
         isolation.level: read_committed
     listener:
+      # Commit each record after handler completes.
       ack-mode: record
       missing-topics-fatal: false
 

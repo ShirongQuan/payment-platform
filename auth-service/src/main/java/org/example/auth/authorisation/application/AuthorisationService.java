@@ -8,6 +8,7 @@ import org.example.auth.authorisation.api.CaptureResponse;
 import org.example.auth.authorisation.api.ReverseRequest;
 import org.example.auth.authorisation.api.ReverseResponse;
 
+/** Application use-case contract for authorise/capture/reverse operations. */
 public interface AuthorisationService {
   AuthorisationResponse authorise(AuthorisationRequest request);
 

@@ -17,6 +17,7 @@ import tools.jackson.databind.ObjectMapper;
 
 @Slf4j
 @Service
+/** Applies AUTHORISATION_CAPTURED events into ledger projections with deduplication. */
 public class AuthorisationCapturedHandler {
 
   private final ProcessedEventRepository processedEventRepository;
@@ -40,6 +41,7 @@ public class AuthorisationCapturedHandler {
 
   @Transactional
   public void handle(EventMetadata metadata, String rawPayload) {
+    log.debug("Handling AUTHORISATION_CAPTURED event, eventId={}", metadata.eventId());
     int inserted =
         processedEventRepository.tryInsertProcessedEvent(
             metadata.eventId(), EventType.AUTHORISATION_CAPTURED.name(), OffsetDateTime.now());
@@ -47,12 +49,23 @@ public class AuthorisationCapturedHandler {
       log.debug("Event with id {} already exist, do nothing", metadata.eventId());
       return;
     }
-    Map<String, Object> payloadJson = objectMapper.readValue(rawPayload, new TypeReference<>() {});
-    AuthorisationCapturedPayload payload =
-        objectMapper.convertValue(payloadJson, AuthorisationCapturedPayload.class);
+    log.debug("Event marked as first-time processing, eventId={}", metadata.eventId());
+
+    Map<String, Object> payloadJson;
+    AuthorisationCapturedPayload payload;
+    try {
+      payloadJson = objectMapper.readValue(rawPayload, new TypeReference<>() {});
+      payload = objectMapper.convertValue(payloadJson, AuthorisationCapturedPayload.class);
+    } catch (RuntimeException e) {
+      log.error("Failed to parse AUTHORISATION_CAPTURED payload, eventId={}", metadata.eventId(), e);
+      throw new IllegalArgumentException(
+          "Invalid AUTHORISATION_CAPTURED payload for eventId=" + metadata.eventId(), e);
+    }
 
     ledgerEventLogRepository.save(ledgerEntryMapper.toEventLogEntity(metadata, payloadJson));
+    log.debug("Saved ledger event log row, eventId={}", metadata.eventId());
 
     ledgerEntryRepository.save(ledgerEntryMapper.toLedgerEntry(metadata, payload, payloadJson));
+    log.debug("Saved ledger entry row for captured event, eventId={}", metadata.eventId());
   }
 }

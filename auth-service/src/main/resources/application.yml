@@ -18,9 +18,11 @@ spring:
   kafka:
     bootstrap-servers: localhost:9092
     producer:
+      # Delivery guarantees for outbox-driven publishing.
       acks: all
       retries: 5
       properties:
+        # Prevent duplicate writes on producer retries.
         enable.idempotence: true
       key-serializer: org.apache.kafka.common.serialization.UUIDSerializer
       value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
@@ -30,8 +32,11 @@ outbox:
     topic:
       name: auth.events
   publisher:
+    # Max outbox events per scheduler cycle.
     batch-size: 10
+    # Delay between polling cycles.
     delay-ms: 10000ms  # 10 Seconds
+    # Lease window for in-flight publish claims.
     claim-lease: 30s
 
 

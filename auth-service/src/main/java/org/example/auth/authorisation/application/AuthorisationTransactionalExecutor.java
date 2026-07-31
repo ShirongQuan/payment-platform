@@ -7,6 +7,7 @@ import org.example.auth.authorisation.api.AuthorisationResponse;
 import org.example.auth.authorisation.api.CaptureRequest;
 import org.example.auth.authorisation.api.CaptureResponse;
 
+/** Transaction-scoped executor for authorisation lifecycle state transitions. */
 public interface AuthorisationTransactionalExecutor {
   CaptureResponse captureInTransaction(UUID authorisationId, CaptureRequest captureRequest);
 

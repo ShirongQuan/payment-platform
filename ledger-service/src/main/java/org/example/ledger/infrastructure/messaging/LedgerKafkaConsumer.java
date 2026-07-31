@@ -10,6 +10,7 @@ import org.springframework.stereotype.Component;
 
 @Slf4j
 @Component
+/** Kafka listener that converts headers/payload into domain metadata and routes events for processing. */
 public class LedgerKafkaConsumer {
   private final KafkaHeaderReader kafkaHeaderReader;
   private final LedgerEventProcessor ledgerEventProcessor;
@@ -22,13 +23,38 @@ public class LedgerKafkaConsumer {
 
   @KafkaListener(topics = "auth.events", groupId = "${spring.kafka.consumer.group-id}")
   public void onMessage(ConsumerRecord<UUID, String> record) {
+    log.debug(
+        "Received Kafka record, topic={}, partition={}, offset={}, key={}",
+        record.topic(),
+        record.partition(),
+        record.offset(),
+        record.key());
+    if (record.value() == null || record.value().isBlank()) {
+      log.warn(
+          "Received empty Kafka payload, topic={}, partition={}, offset={}",
+          record.topic(),
+          record.partition(),
+          record.offset());
+    }
 
-    EventMetadata eventMetadata = kafkaHeaderReader.read(record.headers());
-    String rawPayload = record.value();
-    log.debug("On message, eventType: {}", eventMetadata.eventType());
-    log.debug("Raw message {}", rawPayload);
-    log.debug("eventMetaData {}", eventMetadata.toString());
+    try {
+      EventMetadata eventMetadata = kafkaHeaderReader.read(record.headers());
+      String rawPayload = record.value();
+      log.debug("On message, eventType={}", eventMetadata.eventType());
+      log.debug("Raw message {}", rawPayload);
+      log.debug("eventMetaData {}", eventMetadata);
 
-    ledgerEventProcessor.process(eventMetadata, rawPayload);
+      ledgerEventProcessor.process(eventMetadata, rawPayload);
+      log.debug("Finished processing Kafka record, eventId={}", eventMetadata.eventId());
+    } catch (RuntimeException e) {
+      log.error(
+          "Kafka message processing failed, topic={}, partition={}, offset={}, key={}",
+          record.topic(),
+          record.partition(),
+          record.offset(),
+          record.key(),
+          e);
+      throw e;
+    }
   }
 }

@@ -1,4 +1,4 @@
--- create tables
+-- Initial auth-service schema: account balances, authorisation lifecycle, and transactional outbox.
 
 create table account (
     account_id uuid primary key,
@@ -80,12 +80,15 @@ create table authorisation_event (
     )
 );
 
+-- Enforces per-event-type idempotency per account (e.g. AUTHORISE vs CAPTURE use separate keys).
 create unique index  if not exists uq_authorisation_event_account_eventtype_idempotency
     on authorisation_event (account_id, event_type, idempotency_key);
 
+-- Allows replay/audit of repeated keys at different times; not a strict (account_id, idempotency_key) unique pair.
 create unique index  if not exists  uq_account_id_idempotency_created_at on authorisation_event
  (account_id, idempotency_key, created_at);
 
+-- Transactional outbox table used by async publisher to deliver domain events to Kafka.
 create table outbox_events (
     event_id uuid primary key,
     version bigint not null default 0,
@@ -93,6 +96,7 @@ create table outbox_events (
     aggregate_id uuid not null,
     event_type varchar(30) not null,
     payload jsonb not null,
+    -- State machine: NEW -> PUBLISHING -> PUBLISHED/FAILED.
     status varchar(30) not null,
     retry_count int not null default 0,
     last_error varchar(100),
@@ -100,6 +104,7 @@ create table outbox_events (
     published_at timestamp with time zone,
     next_attempt_at timestamp with time zone not null,
     idempotency_key varchar(30) not null,
+    -- Correlates events across services for tracing.
     correlation_id uuid,  -- TODO not null,  generate the correlation_id in the app and save to the table
     claimed_at timestamp with time zone,
     claim_until timestamp with time zone,

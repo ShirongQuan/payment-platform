@@ -17,6 +17,7 @@ import tools.jackson.databind.ObjectMapper;
 
 @Slf4j
 @Service
+/** Applies AUTHORISATION_AUTHORISED events into ledger projections with deduplication. */
 public class AuthorisationAuthorisedHandler {
 
   private final ProcessedEventRepository processedEventRepository;
@@ -40,6 +41,7 @@ public class AuthorisationAuthorisedHandler {
 
   @Transactional
   public void handle(EventMetadata metadata, String rawPayload) {
+    log.debug("Handling AUTHORISATION_AUTHORISED event, eventId={}", metadata.eventId());
     int inserted =
         processedEventRepository.tryInsertProcessedEvent(
             metadata.eventId(), EventType.AUTHORISATION_AUTHORISED.name(), OffsetDateTime.now());
@@ -47,6 +49,7 @@ public class AuthorisationAuthorisedHandler {
       log.debug("Event with id {} already exist, do nothing", metadata.eventId());
       return;
     }
+    log.debug("Event marked as first-time processing, eventId={}", metadata.eventId());
 
     Map<String, Object> payloadJson;
     AuthorisationAuthorisedPayload payload;
@@ -54,12 +57,15 @@ public class AuthorisationAuthorisedHandler {
       payloadJson = objectMapper.readValue(rawPayload, new TypeReference<>() {});
       payload = objectMapper.convertValue(payloadJson, AuthorisationAuthorisedPayload.class);
     } catch (RuntimeException e) {
+      log.error("Failed to parse AUTHORISATION_AUTHORISED payload, eventId={}", metadata.eventId(), e);
       throw new IllegalArgumentException(
           "Invalid AUTHORISATION_AUTHORISED payload for eventId=" + metadata.eventId(), e);
     }
 
     ledgerEventLogRepository.save(ledgerEntryMapper.toEventLogEntity(metadata, payloadJson));
+    log.debug("Saved ledger event log row, eventId={}", metadata.eventId());
 
     ledgerEntryRepository.save(ledgerEntryMapper.toLedgerEntry(metadata, payload, payloadJson));
+    log.debug("Saved ledger entry row for authorised event, eventId={}", metadata.eventId());
   }
 }

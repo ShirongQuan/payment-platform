@@ -3,6 +3,7 @@ package org.example.auth.authorisation.api;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotNull;
 import java.util.UUID;
+import lombok.extern.slf4j.Slf4j;
 import org.example.auth.authorisation.application.AuthorisationService;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -11,6 +12,8 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+/** REST endpoints for authorisation, capture, and reversal operations. */
+@Slf4j
 @RestController
 @RequestMapping("/authorisations")
 public class AuthorisationController {
@@ -22,11 +25,16 @@ public class AuthorisationController {
 
   @PostMapping
   public AuthorisationResponse authorise(@RequestBody @Valid AuthorisationRequest request) {
+    log.debug(
+        "Received authorise request, accountId={}, idempotencyKey={}",
+        request.accountId(),
+        request.idempotencyKey());
     return this.authorisationService.authorise(request);
   }
 
   @GetMapping("/{authorisationId}")
   public AuthorisationResponse getAuthorisationById(@PathVariable UUID authorisationId) {
+    log.debug("Received get authorisation request, authorisationId={}", authorisationId);
     return authorisationService.getAuthorisationById(authorisationId);
   }
 
@@ -34,6 +42,10 @@ public class AuthorisationController {
   public CaptureResponse capture(
       @PathVariable UUID authorisationId,
       @RequestBody @NotNull @Valid CaptureRequest captureRequest) {
+    log.debug(
+        "Received capture request, authorisationId={}, idempotencyKey={}",
+        authorisationId,
+        captureRequest.idempotencyKey());
     return authorisationService.capture(authorisationId, captureRequest);
   }
 
@@ -41,6 +53,10 @@ public class AuthorisationController {
   public ReverseResponse reverse(
       @PathVariable UUID authorisationId,
       @RequestBody @NotNull @Valid ReverseRequest reverseRequest) {
+    log.debug(
+        "Received reverse request, authorisationId={}, idempotencyKey={}",
+        authorisationId,
+        reverseRequest.idempotencyKey());
     return authorisationService.reverse(authorisationId, reverseRequest);
   }
 }

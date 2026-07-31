@@ -1,4 +1,4 @@
----- create tables
+-- Initial ledger schema: read-optimized projections + immutable event log + deduplication table.
 
 create table ledger_entries (
     entry_id uuid primary key,
@@ -20,6 +20,7 @@ create table ledger_entries (
     occurred_at timestamp with time zone not null,
     created_at timestamp with time zone not null default now(),
 
+    -- Stores original event payload to support audit/debug and future projection rebuilds.
     payload jsonb not null,
 
     constraint chk_ledger_entries_aggregate_type
@@ -64,6 +65,7 @@ create index if not exists idx_ledger_event_log_aggregate_occurred_at
 create index if not exists idx_ledger_event_log_event_type_occurred_at
     on ledger_event_log (event_type, occurred_at desc);
 
+-- Event-consumer deduplication guard: first insert wins, duplicates are ignored.
 create table processed_events (
     event_id uuid primary key,
     event_type varchar(30) not null,

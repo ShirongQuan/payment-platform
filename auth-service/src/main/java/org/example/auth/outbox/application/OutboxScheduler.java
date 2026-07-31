@@ -7,6 +7,7 @@ import org.springframework.stereotype.Component;
 
 @Slf4j
 @Component
+/** Triggers periodic outbox publication polling. */
 public class OutboxScheduler {
 
   private final OutboxEventService outboxEventService;
@@ -20,8 +21,11 @@ public class OutboxScheduler {
 
   @Scheduled(fixedDelayString = "${outbox.publisher.delay-ms:1000ms}")
   public void publishOutboxEvents() {
+    int batchSize = outboxPublisherProperties.batchSize();
+    log.debug("Running outbox publish scheduler, batchSize={}", batchSize);
     try {
-      outboxEventService.publishNextBatch(outboxPublisherProperties.batchSize());
+      outboxEventService.publishNextBatch(batchSize);
+      log.debug("Outbox publish scheduler completed, batchSize={}", batchSize);
     } catch (Exception e) {
       log.error("Outbox events batch publish failed", e);
     }

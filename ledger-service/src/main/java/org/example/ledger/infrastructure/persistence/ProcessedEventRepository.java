@@ -7,6 +7,12 @@ import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+/**
+ * Stores processed event ids to guarantee idempotent consumer behavior.
+ *
+ * <p>{@link #tryInsertProcessedEvent(UUID, String, OffsetDateTime)} returns {@code 1} only for the
+ * first successful insert and {@code 0} when the event id already exists.
+ */
 public interface ProcessedEventRepository extends JpaRepository<ProcessedEventEntity, UUID> {
 
   @Modifying

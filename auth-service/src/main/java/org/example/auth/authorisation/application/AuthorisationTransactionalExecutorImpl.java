@@ -35,6 +35,12 @@ import org.springframework.transaction.annotation.Transactional;
 
 @Slf4j
 @Service
+/**
+ * Transactional boundary for authorise/capture state transitions.
+ *
+ * <p>This component executes idempotency checks, account balance mutations, event persistence, and
+ * outbox enqueueing in one transaction so downstream consumers observe consistent business events.
+ */
 public class AuthorisationTransactionalExecutorImpl implements AuthorisationTransactionalExecutor {
   private final AccountRepository accountRepository;
   private final AuthorisationRepository authorisationRepository;
@@ -62,6 +68,12 @@ public class AuthorisationTransactionalExecutorImpl implements AuthorisationTran
   @Transactional(rollbackFor = Exception.class)
   public AuthorisationResponse authoriseInTransaction(
       AuthorisationRequest request, String normalizedCurrency) {
+    log.debug(
+        "Starting authorise transaction, accountId={}, idempotencyKey={}, amount={}, currency={}",
+        request.accountId(),
+        request.idempotencyKey(),
+        request.amount(),
+        normalizedCurrency);
     Optional<AuthorisationEntity> entityOpt =
         authorisationRepository.findByAccountIdAndIdempotencyKey(
             request.accountId(), request.idempotencyKey());
@@ -81,10 +93,20 @@ public class AuthorisationTransactionalExecutorImpl implements AuthorisationTran
               .findById(request.accountId())
               .orElseThrow(() -> new AccountNotFoundException(request.accountId()));
       Account account = accountMapper.toAccount(accountEntity);
+      log.debug(
+          "Loaded account for authorise, accountId={}, availableBalance={}, reservedBalance={}",
+          accountEntity.getId(),
+          accountEntity.getAvailableBalance(),
+          accountEntity.getReservedBalance());
       account.reserve(request.amount(), normalizedCurrency);
 
       accountEntity.setAvailableBalance(account.getAvailableBalance());
       accountEntity.setReservedBalance(account.getReservedBalance());
+      log.debug(
+          "Reserved amount for authorise, accountId={}, availableBalance={}, reservedBalance={}",
+          accountEntity.getId(),
+          accountEntity.getAvailableBalance(),
+          accountEntity.getReservedBalance());
       // send sql to trigger DB constraint validation earlier
       accountRepository.flush();
 
@@ -110,6 +132,10 @@ public class AuthorisationTransactionalExecutorImpl implements AuthorisationTran
               OffsetDateTime.now());
 
     } catch (InsufficientFundException ife) {
+      log.debug(
+          "Authorise declined due to insufficient funds, accountId={}, requestedAmount={}",
+          request.accountId(),
+          request.amount());
       // in this case, Account in DB will remain intact and the Authorisation will persist
       authorisation =
           new Authorisation(
@@ -136,12 +162,26 @@ public class AuthorisationTransactionalExecutorImpl implements AuthorisationTran
     try {
       authorisationRepository.saveAndFlush(authorisationEntity);
       authorisationEventRepository.saveAndFlush(authorisationEventEntity);
+      log.debug(
+          "Persisted authorise state and event, authorisationId={}, eventId={}, eventType={}",
+          authorisationEntity.getId(),
+          authorisationEventEntity.getEventId(),
+          authorisationEventEntity.getEventType());
     } catch (DataIntegrityViolationException e) {
       // Fail-fast signal of concurrent idempotency race, so the whole transaction rolls back
       // consistently.
+      log.warn(
+          "Concurrent idempotency race while persisting authorise, accountId={}, idempotencyKey={}",
+          request.accountId(),
+          request.idempotencyKey(),
+          e);
       throw new ConcurrentIdempotencyRaceException(e);
     }
 
+    log.debug(
+        "Enqueueing authorise outbox event, authorisationId={}, eventId={}",
+        authorisationEntity.getId(),
+        authorisationEventEntity.getEventId());
     outboxEventService.enqueueAuthorisation(
         authorisationEntity, authorisationEventEntity, OperationType.AUTHORISE);
 
@@ -183,6 +223,10 @@ public class AuthorisationTransactionalExecutorImpl implements AuthorisationTran
 
   @Override
   public CaptureResponse captureInTransaction(UUID authorisationId, CaptureRequest captureRequest) {
+    log.debug(
+        "Starting capture transaction, authorisationId={}, idempotencyKey={}",
+        authorisationId,
+        captureRequest.idempotencyKey());
 
     // load authorisation by id, fail if not found
     AuthorisationEntity authorisationEntity =
@@ -192,6 +236,10 @@ public class AuthorisationTransactionalExecutorImpl implements AuthorisationTran
 
     AuthorisationStatus status = authorisationEntity.getStatus();
     if (status.equals(AuthorisationStatus.CAPTURED)) {
+      log.debug(
+          "Authorisation already captured, checking capture idempotency replay, authorisationId={}, idempotencyKey={}",
+          authorisationId,
+          captureRequest.idempotencyKey());
       // if capture idempotency key matches → return previous response
       // else → throw already captured / conflict
       return authorisationEventRepository
@@ -208,9 +256,20 @@ public class AuthorisationTransactionalExecutorImpl implements AuthorisationTran
                       authorisationEntity.getCurrencyCode(),
                       AuthorisationStatus.CAPTURED,
                       authorisationEntity.getUpdatedAt()))
-          .orElseThrow(IdempotencyConflictException::new);
+          .orElseThrow(
+              () -> {
+                log.warn(
+                    "Capture idempotency conflict for already captured authorisation, authorisationId={}, idempotencyKey={}",
+                    authorisationId,
+                    captureRequest.idempotencyKey());
+                return new IdempotencyConflictException();
+              });
     } else if (!status.equals(AuthorisationStatus.AUTHORISED)) {
       // if status != AUTHORISED → fail
+      log.warn(
+          "Capture rejected due to illegal state, authorisationId={}, currentStatus={}",
+          authorisationId,
+          status);
       throw new AuthorisationIllegalStateException(authorisationId, status, "capture");
     }
 
@@ -222,8 +281,16 @@ public class AuthorisationTransactionalExecutorImpl implements AuthorisationTran
             .findById(authorisationEntity.getAccountId())
             .orElseThrow(() -> new AccountNotFoundException(authorisationEntity.getAccountId()));
     Account account = accountMapper.toAccount(accountEntity);
+    log.debug(
+        "Loaded account for capture, accountId={}, reservedBalance={}",
+        accountEntity.getId(),
+        accountEntity.getReservedBalance());
     account.capture(authorisationEntity.getAmount(), authorisationEntity.getCurrencyCode());
     accountEntity.setReservedBalance(account.getReservedBalance());
+    log.debug(
+        "Captured reserved amount, accountId={}, newReservedBalance={}",
+        accountEntity.getId(),
+        accountEntity.getReservedBalance());
 
     // update authorization to CAPTURED
     authorisationEntity.setStatus(AuthorisationStatus.CAPTURED);
@@ -244,10 +311,23 @@ public class AuthorisationTransactionalExecutorImpl implements AuthorisationTran
     try {
       authorisationRepository.saveAndFlush(authorisationEntity);
       authorisationEventRepository.saveAndFlush(authorisationEventEntity);
+      log.debug(
+          "Persisted capture state and event, authorisationId={}, eventId={}",
+          authorisationEntity.getId(),
+          authorisationEventEntity.getEventId());
     } catch (DataIntegrityViolationException e) {
+      log.warn(
+          "Concurrent idempotency race while persisting capture, authorisationId={}, idempotencyKey={}",
+          authorisationId,
+          captureRequest.idempotencyKey(),
+          e);
       throw new ConcurrentIdempotencyRaceException(e);
     }
     // write outbox event
+    log.debug(
+        "Enqueueing capture outbox event, authorisationId={}, eventId={}",
+        authorisationEntity.getId(),
+        authorisationEventEntity.getEventId());
     outboxEventService.enqueueAuthorisation(
         authorisationEntity, authorisationEventEntity, OperationType.CAPTURE);
 

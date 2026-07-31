@@ -140,7 +140,7 @@ class AuthorisationCapturedHandlerTest {
     when(objectMapper.readValue(eq(rawPayload), any(TypeReference.class)))
         .thenThrow(new RuntimeException("invalid json"));
 
-    assertThrows(RuntimeException.class, () -> handler.handle(metadata, rawPayload));
+    assertThrows(IllegalArgumentException.class, () -> handler.handle(metadata, rawPayload));
     verifyNoInteractions(ledgerEntryMapper, ledgerEventLogRepository, ledgerEntryRepository);
   }
 

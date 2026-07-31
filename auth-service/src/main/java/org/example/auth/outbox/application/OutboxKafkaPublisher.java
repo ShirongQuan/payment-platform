@@ -15,6 +15,7 @@ import org.springframework.stereotype.Service;
 
 @Slf4j
 @Service
+/** Builds Kafka records from outbox events and attaches event metadata headers for consumers. */
 public class OutboxKafkaPublisher {
   private final KafkaTemplate<UUID, Map<String, Object>> kafkaTemplate;
   private final OutboxKafkaProperties outboxKafkaProperties;
@@ -27,7 +28,11 @@ public class OutboxKafkaPublisher {
   }
 
   public CompletableFuture<SendResult<UUID, Map<String, Object>>> publishAsync(OutboxEvent event) {
-    log.debug("Publishing event to Kafka, id={} ", event.getId());
+    log.debug(
+        "Publishing outbox event to Kafka, eventId={}, eventType={}, aggregateId={}",
+        event.getId(),
+        event.getEventType(),
+        event.getAggregateId());
     UUID key = event.getAggregateId();
 
     ProducerRecord<UUID, Map<String, Object>> record =
@@ -64,7 +69,12 @@ public class OutboxKafkaPublisher {
                 "correlationId",
                 event.getCorrelationId().toString().getBytes(StandardCharsets.UTF_8)));
     record.headers().add(new RecordHeader("schemaVersion", "1".getBytes(StandardCharsets.UTF_8)));
+    log.debug(
+        "Prepared Kafka record headers for outbox event, eventId={}, headersCount={}",
+        event.getId(),
+        record.headers().toArray().length);
 
+    log.debug("Dispatching Kafka send for outbox event, eventId={}", event.getId());
     return (kafkaTemplate.send(record));
   }
 }

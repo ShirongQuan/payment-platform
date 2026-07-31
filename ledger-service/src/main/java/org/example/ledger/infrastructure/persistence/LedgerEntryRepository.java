@@ -6,6 +6,12 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+/**
+ * Query repository for ledger projection reads.
+ *
+ * <p>Provides timeline views per authorisation aggregate and account-level event feeds sorted by
+ * occurrence time.
+ */
 public interface LedgerEntryRepository extends JpaRepository<LedgerEntryEntity, UUID> {
 
   @Query(

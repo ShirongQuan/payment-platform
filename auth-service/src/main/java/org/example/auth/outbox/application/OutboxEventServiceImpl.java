@@ -27,6 +27,12 @@ import tools.jackson.databind.ObjectMapper;
 
 @Slf4j
 @Service
+/**
+ * Outbox orchestrator for reliable event publication.
+ *
+ * <p>Persists business events in the outbox table inside the caller transaction and asynchronously
+ * publishes them to Kafka with claim-lease based coordination and retry/fail transitions.
+ */
 public class OutboxEventServiceImpl implements OutboxEventService {
   private final OutboxEventRepository outboxEventRepository;
   private final OutboxKafkaPublisher outboxKafkaPublisher;
@@ -58,6 +64,11 @@ public class OutboxEventServiceImpl implements OutboxEventService {
       AuthorisationEntity authorisationEntity,
       AuthorisationEventEntity authorisationEventEntity,
       OperationType operationType) {
+    log.debug(
+        "Enqueueing authorisation outbox event, authorisationId={}, eventId={}, operationType={}",
+        authorisationEntity.getId(),
+        authorisationEventEntity.getEventId(),
+        operationType);
 
     Map<String, Object> payloadMap =
         switch (operationType) {
@@ -113,6 +124,11 @@ public class OutboxEventServiceImpl implements OutboxEventService {
             authorisationEventEntity.getCorrelationId());
 
     outboxEventRepository.save(outboxEventMapper.toEntity(outboxEvent));
+    log.debug(
+        "Saved outbox event, eventId={}, eventType={}, status={}",
+        outboxEvent.getId(),
+        outboxEvent.getEventType(),
+        outboxEvent.getStatus());
   }
 
   @Override
@@ -137,6 +153,8 @@ public class OutboxEventServiceImpl implements OutboxEventService {
   private void processEvent(OutboxEventEntity event) {
     OffsetDateTime claimedAt = OffsetDateTime.now();
     OffsetDateTime claimUntil = claimedAt.plus(outboxPublisherProperties.claimLease());
+    log.debug(
+        "Attempting to claim outbox event, eventId={}, claimUntil={}", event.getId(), claimUntil);
 
     int claimed =
         outboxEventRepository.claimNewEvent(
@@ -146,6 +164,7 @@ public class OutboxEventServiceImpl implements OutboxEventService {
             OutboxEventStatus.PUBLISHING,
             OutboxEventStatus.NEW);
     if (claimed != 1) {
+      log.debug("Skipping publish because claim failed, eventId={}", event.getId());
       return;
     }
 
@@ -154,6 +173,7 @@ public class OutboxEventServiceImpl implements OutboxEventService {
         .whenComplete(
             (result, throwable) -> {
               if (throwable == null) {
+                log.debug("Published outbox event successfully, eventId={}", event.getId());
                 int markPublished =
                     outboxEventRepository.markPublished(
                         event.getId(), OffsetDateTime.now(), OutboxEventStatus.PUBLISHED);

@@ -7,6 +7,7 @@ import org.springframework.stereotype.Service;
 
 @Slf4j
 @Service
+/** Routes inbound authorisation events to the correct ledger command handler. */
 public class LedgerEventProcessor {
   private final AuthorisationAuthorisedHandler authorisationAuthorisedHandler;
   private final AuthorisationCapturedHandler authorisationCapturedHandler;
@@ -20,15 +21,22 @@ public class LedgerEventProcessor {
 
   public void process(EventMetadata metadata, String rawPayload) {
     final EventType eventType = EventType.valueOf(metadata.eventType());
-    log.debug("Handling event, event type: {}", eventType);
+    log.debug(
+        "Routing event to handler, eventId={}, eventType={}, aggregateId={}",
+        metadata.eventId(),
+        eventType,
+        metadata.aggregateId());
     switch (eventType) {
       case AUTHORISATION_AUTHORISED -> {
         authorisationAuthorisedHandler.handle(metadata, rawPayload);
+        log.debug("Handled AUTHORISATION_AUTHORISED event, eventId={}", metadata.eventId());
       }
       case AUTHORISATION_CAPTURED -> {
         authorisationCapturedHandler.handle(metadata, rawPayload);
+        log.debug("Handled AUTHORISATION_CAPTURED event, eventId={}", metadata.eventId());
       }
       default -> {
+        log.error("Unsupported event type received, eventId={}, eventType={}", metadata.eventId(), eventType);
         throw new IllegalArgumentException("Unsupported event type: " + metadata.eventType());
       }
     }

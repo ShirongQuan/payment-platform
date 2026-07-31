@@ -2,6 +2,7 @@ package org.example.auth.authorisation.application;
 
 import java.util.Objects;
 import java.util.UUID;
+import lombok.extern.slf4j.Slf4j;
 import org.example.auth.authorisation.api.AuthorisationRequest;
 import org.example.auth.authorisation.api.AuthorisationResponse;
 import org.example.auth.authorisation.api.CaptureRequest;
@@ -19,6 +20,13 @@ import org.example.auth.outbox.domain.EventType;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+/**
+ * Application service orchestrating authorisation lifecycle use-cases.
+ *
+ * <p>Handles currency normalization, delegates transactional mutations, and resolves idempotency
+ * races when concurrent requests insert the same key.
+ */
+@Slf4j
 @Service
 public class AuthorisationServiceImpl implements AuthorisationService {
   private final AuthorisationTransactionalExecutor authorisationTransactionalExecutor;
@@ -38,9 +46,19 @@ public class AuthorisationServiceImpl implements AuthorisationService {
   public AuthorisationResponse authorise(AuthorisationRequest request) {
     String normalizedCurrency =
         ValidationHelpers.normalizeAndValidateCurrency(request.currencyCode());
+    log.debug(
+        "Handling authorise request, accountId={}, idempotencyKey={}, normalizedCurrency={}",
+        request.accountId(),
+        request.idempotencyKey(),
+        normalizedCurrency);
     try {
       return authorisationTransactionalExecutor.authoriseInTransaction(request, normalizedCurrency);
     } catch (ConcurrentIdempotencyRaceException e) {
+      log.warn(
+          "Resolving authorise idempotency after concurrent race, accountId={}, idempotencyKey={}",
+          request.accountId(),
+          request.idempotencyKey(),
+          e);
       return resolveIdempotencyAfterRollback(request, normalizedCurrency);
     }
   }
@@ -83,6 +101,7 @@ public class AuthorisationServiceImpl implements AuthorisationService {
   @Override
   @Transactional(readOnly = true)
   public AuthorisationResponse getAuthorisationById(UUID authorisationId) {
+    log.debug("Fetching authorisation by id, authorisationId={}", authorisationId);
     AuthorisationEntity authorisation =
         authorisationRepository
             .findById(authorisationId)
@@ -102,10 +121,19 @@ public class AuthorisationServiceImpl implements AuthorisationService {
   @Override
   @Transactional
   public CaptureResponse capture(UUID authorisationId, CaptureRequest captureRequest) {
+    log.debug(
+        "Handling capture request, authorisationId={}, idempotencyKey={}",
+        authorisationId,
+        captureRequest.idempotencyKey());
     try {
       return authorisationTransactionalExecutor.captureInTransaction(
           authorisationId, captureRequest);
     } catch (ConcurrentIdempotencyRaceException e) {
+      log.warn(
+          "Resolving capture idempotency after concurrent race, authorisationId={}, idempotencyKey={}",
+          authorisationId,
+          captureRequest.idempotencyKey(),
+          e);
       return resolveIdempotencyAfterCaptureRollback(authorisationId, captureRequest);
     }
   }
