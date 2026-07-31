@@ -18,11 +18,12 @@ import org.mockito.junit.jupiter.MockitoExtension;
 class LedgerEventProcessorTest {
 
   @Mock private AuthorisationAuthorisedHandler authorisationAuthorisedHandler;
+  @Mock private AuthorisationCapturedHandler authorisationCapturedHandler;
 
   @InjectMocks private LedgerEventProcessor ledgerEventProcessor;
 
   @Test
-  void shouldProcessEventWithCorrectHandler() throws Exception {
+  void shouldProcessEventWithCorrectHandler() {
     EventMetadata metadata =
         new EventMetadata(
             UUID.randomUUID(),
@@ -35,6 +36,22 @@ class LedgerEventProcessorTest {
     ledgerEventProcessor.process(metadata, "{\"status\":\"AUTHORISED\"}");
 
     verify(authorisationAuthorisedHandler).handle(metadata, "{\"status\":\"AUTHORISED\"}");
+  }
+
+  @Test
+  void shouldProcessCapturedEventWithCorrectHandler() {
+    EventMetadata metadata =
+        new EventMetadata(
+            UUID.randomUUID(),
+            "AUTHORISATION",
+            UUID.randomUUID(),
+            EventType.AUTHORISATION_CAPTURED.name(),
+            OffsetDateTime.parse("2026-07-14T09:00:00Z"),
+            UUID.randomUUID());
+
+    ledgerEventProcessor.process(metadata, "{\"status\":\"CAPTURED\"}");
+
+    verify(authorisationCapturedHandler).handle(metadata, "{\"status\":\"CAPTURED\"}");
   }
 
   @Test
@@ -51,6 +68,6 @@ class LedgerEventProcessorTest {
     assertThrows(
         IllegalArgumentException.class,
         () -> ledgerEventProcessor.process(metadata, "{\"status\":\"DECLINED\"}"));
-    verifyNoInteractions(authorisationAuthorisedHandler);
+    verifyNoInteractions(authorisationAuthorisedHandler, authorisationCapturedHandler);
   }
 }

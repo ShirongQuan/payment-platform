@@ -50,7 +50,7 @@ create table authorisation_event (
     idempotency_key varchar(20) not null,
     amount decimal(19,2) not null default 0,
     currency_code varchar(3) not null,
-    reason varchar(30),
+    reason_code varchar(30),
     correlation_id uuid,
     created_at timestamp with time zone not null,
 

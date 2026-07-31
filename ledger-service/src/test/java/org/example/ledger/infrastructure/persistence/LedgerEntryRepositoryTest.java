@@ -97,8 +97,48 @@ class LedgerEntryRepositoryTest {
     assertThat(result.get(1).getEventId()).isEqualTo(older.getEventId());
   }
 
+  @Test
+  void shouldIncludeCapturedEntriesWhenQueryingAuthorisationTimeline() {
+    UUID authorisationId = UUID.fromString("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa");
+    UUID accountId = UUID.fromString("11111111-1111-1111-1111-111111111111");
+
+    persistEntry(
+        accountId,
+        authorisationId,
+        "AUTHORISATION",
+        "AUTHORISATION_AUTHORISED",
+        "AUTHORISED",
+        OffsetDateTime.parse("2026-07-14T09:00:00Z"));
+    persistEntry(
+        accountId,
+        authorisationId,
+        "AUTHORISATION",
+        "AUTHORISATION_CAPTURED",
+        "CAPTURED",
+        OffsetDateTime.parse("2026-07-14T10:00:00Z"));
+
+    entityManager.clear();
+
+    var result = repository.findAuthorisationsById(authorisationId);
+
+    assertThat(result).hasSize(2);
+    assertThat(result.get(0).getEventType()).isEqualTo("AUTHORISATION_CAPTURED");
+    assertThat(result.get(1).getEventType()).isEqualTo("AUTHORISATION_AUTHORISED");
+  }
+
   private LedgerEntryEntity persistEntry(
       UUID accountId, UUID aggregateId, String aggregateType, OffsetDateTime occurredAt) {
+    return persistEntry(
+        accountId, aggregateId, aggregateType, "AUTHORISATION_AUTHORISED", "AUTHORISED", occurredAt);
+  }
+
+  private LedgerEntryEntity persistEntry(
+      UUID accountId,
+      UUID aggregateId,
+      String aggregateType,
+      String eventType,
+      String entryStatus,
+      OffsetDateTime occurredAt) {
     LedgerEntryEntity entity =
         new LedgerEntryEntity(
             UUID.randomUUID(),
@@ -107,8 +147,8 @@ class LedgerEntryRepositoryTest {
             aggregateId,
             accountId,
             aggregateId,
-            "AUTHORISATION_AUTHORISED",
-            "AUTHORISED",
+            eventType,
+            entryStatus,
             new BigDecimal("10.00"),
             "GBP",
             "merchant",

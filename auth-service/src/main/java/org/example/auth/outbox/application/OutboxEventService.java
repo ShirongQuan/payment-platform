@@ -1,11 +1,14 @@
 package org.example.auth.outbox.application;
 
-import org.example.auth.authorisation.domain.Authorisation;
+import org.example.auth.authorisation.infrastructure.AuthorisationEntity;
 import org.example.auth.authorisation.infrastructure.AuthorisationEventEntity;
+import org.example.auth.common.OperationType;
 
 public interface OutboxEventService {
   void enqueueAuthorisation(
-      Authorisation authorisation, AuthorisationEventEntity authorisationEventEntity);
+      AuthorisationEntity authorisationEntity,
+      AuthorisationEventEntity authorisationEventEntity,
+      OperationType operationType);
 
   void publishNextBatch(int batchSize);
 }

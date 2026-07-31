@@ -20,11 +20,12 @@ public class LedgerKafkaConsumer {
     this.ledgerEventProcessor = ledgerEventProcessor;
   }
 
-  @KafkaListener(topics = "auth.events", groupId = "ledger-service")
-  public void onMessage(ConsumerRecord<UUID, String> record) throws Exception {
+  @KafkaListener(topics = "auth.events", groupId = "${spring.kafka.consumer.group-id}")
+  public void onMessage(ConsumerRecord<UUID, String> record) {
 
     EventMetadata eventMetadata = kafkaHeaderReader.read(record.headers());
     String rawPayload = record.value();
+    log.debug("On message, eventType: {}", eventMetadata.eventType());
     log.debug("Raw message {}", rawPayload);
     log.debug("eventMetaData {}", eventMetadata.toString());
 

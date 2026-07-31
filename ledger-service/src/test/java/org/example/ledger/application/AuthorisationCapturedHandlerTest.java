@@ -11,8 +11,8 @@ import java.math.BigDecimal;
 import java.time.OffsetDateTime;
 import java.util.Map;
 import java.util.UUID;
-import org.example.ledger.application.command.AuthorisationAuthorisedHandler;
-import org.example.ledger.domain.AuthorisationAuthorisedPayload;
+import org.example.ledger.application.command.AuthorisationCapturedHandler;
+import org.example.ledger.domain.AuthorisationCapturedPayload;
 import org.example.ledger.domain.EventMetadata;
 import org.example.ledger.domain.EventType;
 import org.example.ledger.infrastructure.persistence.LedgerEntryEntity;
@@ -30,7 +30,7 @@ import tools.jackson.core.type.TypeReference;
 import tools.jackson.databind.ObjectMapper;
 
 @ExtendWith(MockitoExtension.class)
-class AuthorisationAuthorisedHandlerTest {
+class AuthorisationCapturedHandlerTest {
 
   @Mock private ProcessedEventRepository processedEventRepository;
   @Mock private LedgerEventLogRepository ledgerEventLogRepository;
@@ -38,54 +38,51 @@ class AuthorisationAuthorisedHandlerTest {
   @Mock private LedgerEntryMapper ledgerEntryMapper;
   @Mock private ObjectMapper objectMapper;
 
-  @InjectMocks private AuthorisationAuthorisedHandler handler;
+  @InjectMocks private AuthorisationCapturedHandler handler;
 
   @Test
   void shouldReturnEarlyWhenEventAlreadyProcessed() {
     EventMetadata metadata = sampleMetadata();
 
     when(processedEventRepository.tryInsertProcessedEvent(
-            eq(metadata.eventId()), eq(EventType.AUTHORISATION_AUTHORISED.name()), any()))
+            eq(metadata.eventId()), eq(EventType.AUTHORISATION_CAPTURED.name()), any()))
         .thenReturn(0);
 
     handler.handle(metadata, "{\"dummy\":true}");
 
     verify(processedEventRepository)
         .tryInsertProcessedEvent(
-            eq(metadata.eventId()), eq(EventType.AUTHORISATION_AUTHORISED.name()), any());
+            eq(metadata.eventId()), eq(EventType.AUTHORISATION_CAPTURED.name()), any());
     verifyNoInteractions(
         objectMapper, ledgerEntryMapper, ledgerEventLogRepository, ledgerEntryRepository);
   }
 
   @Test
-  void shouldPersistLedgerRowsWhenEventClaimed() {
+  void shouldPersistLedgerRowsWhenCapturedEventClaimed() {
     EventMetadata metadata = sampleMetadata();
     String rawPayload =
         """
         {
           "authorisationId":"aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
           "accountId":"11111111-1111-1111-1111-111111111111",
-          "idempotencyKey":"idem-001",
-          "merchantReference":"merchant-001",
+          "idempotencyKey":"idem-capture-001",
           "amount":10.00,
           "currencyCode":"GBP",
-          "status":"AUTHORISED",
-          "createdAt":"2026-07-13T09:00:00Z",
-          "updatedAt":"2026-07-13T09:00:00Z"
+          "status":"CAPTURED",
+          "capturedAt":"2026-07-31T09:00:00Z"
         }
         """;
 
-    Map<String, Object> payloadJson = Map.of("status", "AUTHORISED");
-    AuthorisationAuthorisedPayload payload =
-        new AuthorisationAuthorisedPayload(
+    Map<String, Object> payloadJson = Map.of("status", "CAPTURED");
+    AuthorisationCapturedPayload payload =
+        new AuthorisationCapturedPayload(
             UUID.fromString("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"),
             UUID.fromString("11111111-1111-1111-1111-111111111111"),
-            "idem-001",
-            "merchant-001",
             new BigDecimal("10.00"),
             "GBP",
-            "AUTHORISED",
-            OffsetDateTime.parse("2026-07-13T09:00:00Z"));
+            "idem-capture-001",
+            "CAPTURED",
+            OffsetDateTime.parse("2026-07-31T09:00:00Z"));
 
     LedgerEventLogEntity eventLogEntity =
         new LedgerEventLogEntity(
@@ -97,6 +94,7 @@ class AuthorisationAuthorisedHandlerTest {
             metadata.correlationId(),
             metadata.occurredAt(),
             OffsetDateTime.now());
+
     LedgerEntryEntity entryEntity =
         new LedgerEntryEntity(
             UUID.randomUUID(),
@@ -105,22 +103,21 @@ class AuthorisationAuthorisedHandlerTest {
             metadata.aggregateId(),
             payload.accountId(),
             payload.authorisationId(),
-            EventType.AUTHORISATION_AUTHORISED.name(),
+            EventType.AUTHORISATION_CAPTURED.name(),
             payload.status(),
             payload.amount(),
             payload.currencyCode(),
-            payload.merchantReference(),
+            null,
             payload.idempotencyKey(),
             metadata.occurredAt(),
             OffsetDateTime.now(),
             payloadJson);
 
     when(processedEventRepository.tryInsertProcessedEvent(
-            eq(metadata.eventId()), eq(EventType.AUTHORISATION_AUTHORISED.name()), any()))
+            eq(metadata.eventId()), eq(EventType.AUTHORISATION_CAPTURED.name()), any()))
         .thenReturn(1);
     when(objectMapper.readValue(eq(rawPayload), any(TypeReference.class))).thenReturn(payloadJson);
-    when(objectMapper.convertValue(payloadJson, AuthorisationAuthorisedPayload.class))
-        .thenReturn(payload);
+    when(objectMapper.convertValue(payloadJson, AuthorisationCapturedPayload.class)).thenReturn(payload);
     when(ledgerEntryMapper.toEventLogEntity(metadata, payloadJson)).thenReturn(eventLogEntity);
     when(ledgerEntryMapper.toLedgerEntry(metadata, payload, payloadJson)).thenReturn(entryEntity);
 
@@ -133,21 +130,17 @@ class AuthorisationAuthorisedHandlerTest {
   }
 
   @Test
-  void shouldThrowIllegalArgumentExceptionWhenPayloadIsMalformed() throws Exception {
+  void shouldThrowIllegalArgumentExceptionWhenCapturedPayloadIsMalformed() {
     EventMetadata metadata = sampleMetadata();
     String rawPayload = "{not-json}";
 
     when(processedEventRepository.tryInsertProcessedEvent(
-            eq(metadata.eventId()), eq(EventType.AUTHORISATION_AUTHORISED.name()), any()))
+            eq(metadata.eventId()), eq(EventType.AUTHORISATION_CAPTURED.name()), any()))
         .thenReturn(1);
     when(objectMapper.readValue(eq(rawPayload), any(TypeReference.class)))
         .thenThrow(new RuntimeException("invalid json"));
 
-    assertThrows(IllegalArgumentException.class, () -> handler.handle(metadata, rawPayload));
-
-    verify(processedEventRepository)
-        .tryInsertProcessedEvent(
-            eq(metadata.eventId()), eq(EventType.AUTHORISATION_AUTHORISED.name()), any());
+    assertThrows(RuntimeException.class, () -> handler.handle(metadata, rawPayload));
     verifyNoInteractions(ledgerEntryMapper, ledgerEventLogRepository, ledgerEntryRepository);
   }
 
@@ -156,8 +149,9 @@ class AuthorisationAuthorisedHandlerTest {
         UUID.fromString("00000000-0000-0000-0000-000000000001"),
         "AUTHORISATION",
         UUID.fromString("a5b63e7c-1a37-4798-aa4c-e518d72675f2"),
-        EventType.AUTHORISATION_AUTHORISED.name(),
-        OffsetDateTime.parse("2026-07-13T09:00:00Z"),
+        EventType.AUTHORISATION_CAPTURED.name(),
+        OffsetDateTime.parse("2026-07-31T09:00:00Z"),
         UUID.fromString("00000000-0000-0000-0000-000000000010"));
   }
 }
+

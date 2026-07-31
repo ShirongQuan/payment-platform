@@ -8,6 +8,7 @@ import java.util.Map;
 import java.util.UUID;
 import org.example.ledger.api.AuthenticationResponse;
 import org.example.ledger.domain.AuthorisationAuthorisedPayload;
+import org.example.ledger.domain.AuthorisationCapturedPayload;
 import org.example.ledger.domain.EventMetadata;
 import org.example.ledger.domain.EventType;
 import org.junit.jupiter.api.Test;
@@ -47,8 +48,6 @@ class LedgerEntryMapperTest {
             new BigDecimal("10.00"),
             "GBP",
             "AUTHORISED",
-            "",
-            OffsetDateTime.parse("2026-07-14T10:00:00Z"),
             OffsetDateTime.parse("2026-07-14T10:00:00Z"));
 
     LedgerEntryEntity entity = mapper.toLedgerEntry(metadata, payload, payloadJson);
@@ -66,6 +65,38 @@ class LedgerEntryMapperTest {
     assertThat(entity.getIdempotencyKey()).isEqualTo(payload.idempotencyKey());
     assertThat(entity.getOccurredAt()).isEqualTo(metadata.occurredAt());
     assertThat(entity.getCreatedAt()).isNotNull();
+    assertThat(entity.getPayload()).isEqualTo(payloadJson);
+  }
+
+  @Test
+  void shouldConvertCapturedPayloadToLedgerEntity() {
+    EventMetadata metadata =
+        new EventMetadata(
+            UUID.fromString("00000000-0000-0000-0000-000000000002"),
+            "AUTHORISATION",
+            UUID.fromString("a5b63e7c-1a37-4798-aa4c-e518d72675f3"),
+            EventType.AUTHORISATION_CAPTURED.name(),
+            OffsetDateTime.parse("2026-07-14T10:01:00Z"),
+            UUID.fromString("00000000-0000-0000-0000-000000000011"));
+    Map<String, Object> payloadJson = Map.of("status", "CAPTURED", "currencyCode", "GBP");
+    AuthorisationCapturedPayload payload =
+        new AuthorisationCapturedPayload(
+            UUID.fromString("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"),
+            UUID.fromString("22222222-2222-2222-2222-222222222222"),
+            new BigDecimal("10.00"),
+            "GBP",
+            "capture-idem-1",
+            "CAPTURED",
+            OffsetDateTime.parse("2026-07-14T10:01:00Z"));
+
+    LedgerEntryEntity entity = mapper.toLedgerEntry(metadata, payload, payloadJson);
+
+    assertThat(entity.getEventType()).isEqualTo(EventType.AUTHORISATION_CAPTURED.name());
+    assertThat(entity.getAuthorisationId()).isEqualTo(payload.authorisationId());
+    assertThat(entity.getAccountId()).isEqualTo(payload.accountId());
+    assertThat(entity.getAmount()).isEqualByComparingTo("10.00");
+    assertThat(entity.getMerchantReference()).isNull();
+    assertThat(entity.getIdempotencyKey()).isEqualTo(payload.idempotencyKey());
     assertThat(entity.getPayload()).isEqualTo(payloadJson);
   }
 

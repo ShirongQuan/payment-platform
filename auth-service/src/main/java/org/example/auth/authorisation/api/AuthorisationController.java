@@ -1,6 +1,7 @@
 package org.example.auth.authorisation.api;
 
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotNull;
 import java.util.UUID;
 import org.example.auth.authorisation.application.AuthorisationService;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -27,5 +28,19 @@ public class AuthorisationController {
   @GetMapping("/{authorisationId}")
   public AuthorisationResponse getAuthorisationById(@PathVariable UUID authorisationId) {
     return authorisationService.getAuthorisationById(authorisationId);
+  }
+
+  @PostMapping("/{authorisationId}/captures")
+  public CaptureResponse capture(
+      @PathVariable UUID authorisationId,
+      @RequestBody @NotNull @Valid CaptureRequest captureRequest) {
+    return authorisationService.capture(authorisationId, captureRequest);
+  }
+
+  @PostMapping("/{authorisationId}/reversals")
+  public ReverseResponse reverse(
+      @PathVariable UUID authorisationId,
+      @RequestBody @NotNull @Valid ReverseRequest reverseRequest) {
+    return authorisationService.reverse(authorisationId, reverseRequest);
   }
 }

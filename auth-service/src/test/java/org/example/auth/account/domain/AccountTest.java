@@ -262,4 +262,47 @@ class AccountTest {
     account.validateCurrency("usd");
     account.validateCurrency(" USD ");
   }
+
+  @Test
+  void shouldCaptureWithCorrectInputAndSufficientReserved() {
+    Account account = new Account("USD");
+    account.deposit(new BigDecimal("20.00"), "USD");
+    account.reserve(new BigDecimal("12.00"), "USD");
+
+    account.capture(new BigDecimal("10.00"), "USD");
+
+    assertThat(account.getAvailableBalance()).isEqualByComparingTo("8.00");
+    assertThat(account.getReservedBalance()).isEqualByComparingTo("2.00");
+  }
+
+  @Test
+  void shouldFailCaptureWithInvalidInputOrInsufficientReserved() {
+    Account account = new Account("USD");
+    account.deposit(new BigDecimal("20.00"), "USD");
+    account.reserve(new BigDecimal("10.00"), "USD");
+
+    assertThatThrownBy(() -> account.capture(BigDecimal.ONE, "EUR"))
+        .isInstanceOf(CurrencyMismatchException.class)
+        .satisfies(
+            ex ->
+                assertThat(((CurrencyMismatchException) ex).getErrorCode())
+                    .isEqualTo(ErrorCode.CURRENCY_MISMATCH));
+
+    assertThatThrownBy(() -> account.capture(null, "USD")).isInstanceOf(NullPointerException.class);
+
+    assertThatThrownBy(() -> account.capture(BigDecimal.ZERO, "USD"))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessage("Amount must be positive");
+
+    assertThatThrownBy(() -> account.capture(BigDecimal.valueOf(-1), "USD"))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessage("Amount must be positive");
+
+    assertThatThrownBy(() -> account.capture(new BigDecimal("10.01"), "USD"))
+        .isInstanceOf(InsufficientFundException.class)
+        .satisfies(
+            ex ->
+                assertThat(((InsufficientFundException) ex).getErrorCode())
+                    .isEqualTo(ErrorCode.INSUFFICIENT_FUNDS));
+  }
 }

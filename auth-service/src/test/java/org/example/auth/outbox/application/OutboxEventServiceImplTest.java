@@ -1,12 +1,12 @@
 package org.example.auth.outbox.application;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
-import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import java.math.BigDecimal;
 import java.time.OffsetDateTime;
@@ -15,13 +15,15 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
-import org.example.auth.authorisation.domain.Authorisation;
+import org.example.auth.authorisation.domain.AuthorisationEventReason;
 import org.example.auth.authorisation.domain.AuthorisationStatus;
+import org.example.auth.authorisation.infrastructure.AuthorisationEntity;
 import org.example.auth.authorisation.infrastructure.AuthorisationEventEntity;
+import org.example.auth.common.OperationType;
 import org.example.auth.outbox.configuration.OutboxBackoffPolicy;
 import org.example.auth.outbox.configuration.OutboxPublisherProperties;
 import org.example.auth.outbox.domain.AggregateType;
-import org.example.auth.outbox.domain.AuthorisationCreatedPayload;
+import org.example.auth.outbox.domain.AuthorisationAuthorisedPayload;
 import org.example.auth.outbox.domain.EventType;
 import org.example.auth.outbox.domain.OutboxEvent;
 import org.example.auth.outbox.domain.OutboxEventStatus;
@@ -31,10 +33,10 @@ import org.example.auth.outbox.infrastructure.OutboxEventRepository;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mapstruct.factory.Mappers;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.Spy;
-import org.mockito.ArgumentCaptor;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.kafka.support.SendResult;
@@ -65,30 +67,40 @@ class OutboxEventServiceImplTest {
     UUID correctionId = UUID.randomUUID();
     String idempotencyKey = "key";
 
-    Authorisation authorisation =
-        new Authorisation(
-            accountId, BigDecimal.TEN, "GBP", "reference", AuthorisationStatus.AUTHORISED);
+    AuthorisationEntity authorisationEntity =
+        new AuthorisationEntity(
+            UUID.randomUUID(),
+            0L,
+            accountId,
+            BigDecimal.TEN,
+            "GBP",
+            "reference",
+            AuthorisationStatus.AUTHORISED,
+            OffsetDateTime.now(),
+            OffsetDateTime.now());
 
     AuthorisationEventEntity authorisationEventEntity =
         new AuthorisationEventEntity(
             eventId,
-            authorisation.getId(),
+            authorisationEntity.getId(),
             accountId,
             EventType.AUTHORISATION_AUTHORISED,
             idempotencyKey,
             BigDecimal.TEN,
             "GBP",
-            "",
+            AuthorisationEventReason.NONE,
             correctionId,
             OffsetDateTime.now());
 
     when(objectMapper.convertValue(
-            any(AuthorisationCreatedPayload.class), any(TypeReference.class)))
+            any(AuthorisationAuthorisedPayload.class), any(TypeReference.class)))
         .thenReturn(new HashMap<String, Object>());
 
-    service.enqueueAuthorisation(authorisation, authorisationEventEntity);
+    service.enqueueAuthorisation(
+        authorisationEntity, authorisationEventEntity, OperationType.AUTHORISE);
 
-    ArgumentCaptor<OutboxEventEntity> savedEventCaptor = ArgumentCaptor.forClass(OutboxEventEntity.class);
+    ArgumentCaptor<OutboxEventEntity> savedEventCaptor =
+        ArgumentCaptor.forClass(OutboxEventEntity.class);
     verify(outboxEventRepository, times(1)).save(savedEventCaptor.capture());
 
     OutboxEventEntity savedEntity = savedEventCaptor.getValue();

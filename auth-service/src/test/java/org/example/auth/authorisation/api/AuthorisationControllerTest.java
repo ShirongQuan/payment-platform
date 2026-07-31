@@ -17,6 +17,7 @@ import java.util.UUID;
 import org.example.auth.account.application.AccountService;
 import org.example.auth.authorisation.application.AuthorisationService;
 import org.example.auth.authorisation.domain.AuthorisationStatus;
+import org.example.auth.common.OperationType;
 import org.example.auth.common.exception.AccountNotFoundException;
 import org.example.auth.common.exception.AuthorisationNotFoundException;
 import org.example.auth.common.exception.CurrencyMismatchException;
@@ -189,7 +190,9 @@ class AuthorisationControllerTest {
   @Test
   void shouldReturn400WhenInsufficientFundsDuringAuthorise() throws Exception {
     when(authorisationService.authorise(any(AuthorisationRequest.class)))
-        .thenThrow(new InsufficientFundException(new BigDecimal("5.00"), new BigDecimal("10.00")));
+        .thenThrow(
+            new InsufficientFundException(
+                OperationType.AUTHORISE, BigDecimal.valueOf(5), BigDecimal.valueOf(10)));
 
     mockMVC
         .perform(
@@ -283,5 +286,104 @@ class AuthorisationControllerTest {
         .andExpect(jsonPath("$.instance").value("/authorisations/" + authorisationId))
         .andExpect(jsonPath("$.authorisationId").value(authorisationId.toString()))
         .andExpect(jsonPath("$.errorCode").value(ErrorCode.AUTHORISATION_NOT_FOUND.name()));
+  }
+
+  @Test
+  void shouldCaptureWithCorrectInput() throws Exception {
+    UUID authorisationId = UUID.randomUUID();
+    OffsetDateTime updatedAt = OffsetDateTime.now().minusSeconds(1);
+
+    when(authorisationService.capture(any(UUID.class), any(CaptureRequest.class)))
+        .thenReturn(
+            new CaptureResponse(
+                authorisationId,
+                "capture-key",
+                BigDecimal.TEN,
+                "GBP",
+                AuthorisationStatus.CAPTURED,
+                updatedAt));
+
+    mockMVC
+        .perform(
+            post("/authorisations/{authorisationId}/captures", authorisationId)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(
+                    """
+                    {
+                      "idempotencyKey": "capture-key"
+                    }
+                    """))
+        .andExpect(status().isOk())
+        .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
+        .andExpect(jsonPath("$.authorisationId").value(authorisationId.toString()))
+        .andExpect(jsonPath("$.idempotencyKey").value("capture-key"))
+        .andExpect(jsonPath("$.capturedAmount").value(10.00))
+        .andExpect(jsonPath("$.currencyCode").value("GBP"))
+        .andExpect(jsonPath("$.status").value(AuthorisationStatus.CAPTURED.name()))
+        .andExpect(jsonPath("$.updatedAt").isNotEmpty());
+
+    verify(authorisationService, times(1)).capture(any(UUID.class), any(CaptureRequest.class));
+  }
+
+  @Test
+  void shouldReturnBadRequestWhenCaptureRequestIdempotencyInvalid() throws Exception {
+    UUID authorisationId = UUID.randomUUID();
+
+    mockMVC
+        .perform(
+            post("/authorisations/{authorisationId}/captures", authorisationId)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(
+                    """
+                    {
+                      "idempotencyKey": ""
+                    }
+                    """))
+        .andExpect(status().isBadRequest())
+        .andExpect(content().string(""));
+
+    verify(authorisationService, never()).capture(any(UUID.class), any(CaptureRequest.class));
+  }
+
+  @Test
+  void shouldReturnNotFoundWhenCaptureAuthorisationNotFound() throws Exception {
+    UUID authorisationId = UUID.randomUUID();
+    when(authorisationService.capture(any(UUID.class), any(CaptureRequest.class)))
+        .thenThrow(new AuthorisationNotFoundException(authorisationId));
+
+    mockMVC
+        .perform(
+            post("/authorisations/{authorisationId}/captures", authorisationId)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(
+                    """
+                    {
+                      "idempotencyKey": "capture-key"
+                    }
+                    """))
+        .andExpect(status().isNotFound())
+        .andExpect(content().contentTypeCompatibleWith("application/problem+json"))
+        .andExpect(jsonPath("$.errorCode").value(ErrorCode.AUTHORISATION_NOT_FOUND.name()));
+  }
+
+  @Test
+  void shouldReturnConflictWhenCaptureIdempotencyConflict() throws Exception {
+    UUID authorisationId = UUID.randomUUID();
+    when(authorisationService.capture(any(UUID.class), any(CaptureRequest.class)))
+        .thenThrow(new IdempotencyConflictException());
+
+    mockMVC
+        .perform(
+            post("/authorisations/{authorisationId}/captures", authorisationId)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(
+                    """
+                    {
+                      "idempotencyKey": "capture-key"
+                    }
+                    """))
+        .andExpect(status().isConflict())
+        .andExpect(content().contentTypeCompatibleWith("application/problem+json"))
+        .andExpect(jsonPath("$.errorCode").value(ErrorCode.IDEMPOTENCY_CONFLICT.name()));
   }
 }

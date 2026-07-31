@@ -2,13 +2,17 @@ package org.example.auth.outbox.application;
 
 import java.time.OffsetDateTime;
 import java.util.List;
+import java.util.Map;
 import lombok.extern.slf4j.Slf4j;
-import org.example.auth.authorisation.domain.Authorisation;
+import org.example.auth.authorisation.infrastructure.AuthorisationEntity;
 import org.example.auth.authorisation.infrastructure.AuthorisationEventEntity;
+import org.example.auth.common.OperationType;
 import org.example.auth.outbox.configuration.OutboxBackoffPolicy;
 import org.example.auth.outbox.configuration.OutboxPublisherProperties;
 import org.example.auth.outbox.domain.AggregateType;
-import org.example.auth.outbox.domain.AuthorisationCreatedPayload;
+import org.example.auth.outbox.domain.AuthorisationAuthorisedPayload;
+import org.example.auth.outbox.domain.AuthorisationCapturedPayload;
+import org.example.auth.outbox.domain.AuthorisationReversedPayload;
 import org.example.auth.outbox.domain.OutboxEvent;
 import org.example.auth.outbox.domain.OutboxEventStatus;
 import org.example.auth.outbox.infrastructure.OutboxEventEntity;
@@ -51,24 +55,59 @@ public class OutboxEventServiceImpl implements OutboxEventService {
   @Transactional(propagation = Propagation.MANDATORY)
   @Override
   public void enqueueAuthorisation(
-      Authorisation authorisation, AuthorisationEventEntity authorisationEventEntity) {
-    AuthorisationCreatedPayload payload =
-        new AuthorisationCreatedPayload(
-            authorisation.getId(),
-            authorisation.getAccountId(),
-            authorisation.getAmount(),
-            authorisation.getCurrencyCode(),
-            authorisation.getStatus(),
-            authorisation.getCreatedAt(),
-            authorisation.getMerchantReference());
+      AuthorisationEntity authorisationEntity,
+      AuthorisationEventEntity authorisationEventEntity,
+      OperationType operationType) {
+
+    Map<String, Object> payloadMap =
+        switch (operationType) {
+          case AUTHORISE -> {
+            AuthorisationAuthorisedPayload payload =
+                new AuthorisationAuthorisedPayload(
+                    authorisationEntity.getId(),
+                    authorisationEntity.getAccountId(),
+                    authorisationEntity.getAmount(),
+                    authorisationEntity.getCurrencyCode(),
+                    authorisationEventEntity.getIdempotencyKey(),
+                    authorisationEntity.getStatus(),
+                    authorisationEntity.getCreatedAt(),
+                    authorisationEntity.getMerchantReference());
+            yield objectMapper.convertValue(payload, new TypeReference<>() {});
+          }
+          case CAPTURE -> {
+            AuthorisationCapturedPayload payload =
+                new AuthorisationCapturedPayload(
+                    authorisationEntity.getId(),
+                    authorisationEntity.getAccountId(),
+                    authorisationEntity.getAmount(),
+                    authorisationEntity.getCurrencyCode(),
+                    authorisationEventEntity.getIdempotencyKey(),
+                    authorisationEntity.getStatus(),
+                    authorisationEventEntity.getCreatedAt());
+            yield objectMapper.convertValue(payload, new TypeReference<>() {});
+          }
+          case REVERSE -> {
+            AuthorisationReversedPayload payload =
+                new AuthorisationReversedPayload(
+                    authorisationEntity.getId(),
+                    authorisationEntity.getAccountId(),
+                    authorisationEntity.getAmount(),
+                    authorisationEntity.getCurrencyCode(),
+                    authorisationEventEntity.getIdempotencyKey(),
+                    authorisationEntity.getStatus(),
+                    authorisationEventEntity.getCreatedAt(),
+                    authorisationEventEntity.getReasonCode());
+            yield objectMapper.convertValue(payload, new TypeReference<>() {});
+          }
+        };
 
     OutboxEvent outboxEvent =
         new OutboxEvent(
             authorisationEventEntity.getEventId(),
             AggregateType.AUTHORISATION,
-            authorisation.getId(),
+            authorisationEntity.getId(),
             authorisationEventEntity.getEventType(),
-            objectMapper.convertValue(payload, new TypeReference<>() {}),
+            payloadMap,
             OffsetDateTime.now(),
             authorisationEventEntity.getIdempotencyKey(),
             authorisationEventEntity.getCorrelationId());

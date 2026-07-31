@@ -4,11 +4,18 @@ import java.util.Objects;
 import java.util.UUID;
 import org.example.auth.authorisation.api.AuthorisationRequest;
 import org.example.auth.authorisation.api.AuthorisationResponse;
+import org.example.auth.authorisation.api.CaptureRequest;
+import org.example.auth.authorisation.api.CaptureResponse;
+import org.example.auth.authorisation.api.ReverseRequest;
+import org.example.auth.authorisation.api.ReverseResponse;
+import org.example.auth.authorisation.domain.AuthorisationStatus;
 import org.example.auth.authorisation.infrastructure.AuthorisationEntity;
+import org.example.auth.authorisation.infrastructure.AuthorisationEventRepository;
 import org.example.auth.authorisation.infrastructure.AuthorisationRepository;
 import org.example.auth.common.exception.AuthorisationNotFoundException;
 import org.example.auth.common.exception.IdempotencyConflictException;
 import org.example.auth.common.validation.ValidationHelpers;
+import org.example.auth.outbox.domain.EventType;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -16,12 +23,15 @@ import org.springframework.transaction.annotation.Transactional;
 public class AuthorisationServiceImpl implements AuthorisationService {
   private final AuthorisationTransactionalExecutor authorisationTransactionalExecutor;
   private final AuthorisationRepository authorisationRepository;
+  private final AuthorisationEventRepository authorisationEventRepository;
 
   public AuthorisationServiceImpl(
       AuthorisationTransactionalExecutor authorisationTransactionalExecutor,
-      AuthorisationRepository authorisationRepository) {
+      AuthorisationRepository authorisationRepository,
+      AuthorisationEventRepository authorisationEventRepository) {
     this.authorisationTransactionalExecutor = authorisationTransactionalExecutor;
     this.authorisationRepository = authorisationRepository;
+    this.authorisationEventRepository = authorisationEventRepository;
   }
 
   @Override
@@ -87,5 +97,49 @@ public class AuthorisationServiceImpl implements AuthorisationService {
         authorisation.getStatus(),
         authorisation.getCreatedAt(),
         authorisation.getUpdatedAt());
+  }
+
+  @Override
+  @Transactional
+  public CaptureResponse capture(UUID authorisationId, CaptureRequest captureRequest) {
+    try {
+      return authorisationTransactionalExecutor.captureInTransaction(
+          authorisationId, captureRequest);
+    } catch (ConcurrentIdempotencyRaceException e) {
+      return resolveIdempotencyAfterCaptureRollback(authorisationId, captureRequest);
+    }
+  }
+
+  private CaptureResponse resolveIdempotencyAfterCaptureRollback(
+      UUID authorisationId, CaptureRequest captureRequest) {
+    // load authorisation by id, fail if not found
+    AuthorisationEntity authorisationEntity =
+        authorisationRepository
+            .findById(authorisationId)
+            .orElseThrow(() -> new AuthorisationNotFoundException(authorisationId));
+
+    // if capture idempotency key matches → return previous response
+    // else → throw already captured / conflict
+    return authorisationEventRepository
+        .findByAccountIdAndEventTypeAndIdempotencyKey(
+            authorisationEntity.getAccountId(),
+            captureRequest.idempotencyKey(),
+            EventType.AUTHORISATION_CAPTURED.toString())
+        .map(
+            ignored ->
+                new CaptureResponse(
+                    authorisationId,
+                    captureRequest.idempotencyKey(),
+                    authorisationEntity.getAmount(),
+                    authorisationEntity.getCurrencyCode(),
+                    AuthorisationStatus.CAPTURED,
+                    authorisationEntity.getUpdatedAt()))
+        .orElseThrow(IdempotencyConflictException::new);
+  }
+
+  @Override
+  public ReverseResponse reverse(UUID authorisationId, ReverseRequest reverseRequest) {
+    // TODO
+    return null;
   }
 }

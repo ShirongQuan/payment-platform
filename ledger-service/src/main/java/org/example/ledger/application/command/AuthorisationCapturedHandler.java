@@ -3,7 +3,7 @@ package org.example.ledger.application.command;
 import java.time.OffsetDateTime;
 import java.util.Map;
 import lombok.extern.slf4j.Slf4j;
-import org.example.ledger.domain.AuthorisationAuthorisedPayload;
+import org.example.ledger.domain.AuthorisationCapturedPayload;
 import org.example.ledger.domain.EventMetadata;
 import org.example.ledger.domain.EventType;
 import org.example.ledger.infrastructure.persistence.LedgerEntryMapper;
@@ -17,7 +17,7 @@ import tools.jackson.databind.ObjectMapper;
 
 @Slf4j
 @Service
-public class AuthorisationAuthorisedHandler {
+public class AuthorisationCapturedHandler {
 
   private final ProcessedEventRepository processedEventRepository;
   private final LedgerEventLogRepository ledgerEventLogRepository;
@@ -25,7 +25,7 @@ public class AuthorisationAuthorisedHandler {
   private final LedgerEntryMapper ledgerEntryMapper;
   private final ObjectMapper objectMapper;
 
-  public AuthorisationAuthorisedHandler(
+  public AuthorisationCapturedHandler(
       ProcessedEventRepository processedEventRepository,
       LedgerEventLogRepository ledgerEventLogRepository,
       LedgerEntryRepository ledgerEntryRepository,
@@ -42,21 +42,14 @@ public class AuthorisationAuthorisedHandler {
   public void handle(EventMetadata metadata, String rawPayload) {
     int inserted =
         processedEventRepository.tryInsertProcessedEvent(
-            metadata.eventId(), EventType.AUTHORISATION_AUTHORISED.name(), OffsetDateTime.now());
+            metadata.eventId(), EventType.AUTHORISATION_CAPTURED.name(), OffsetDateTime.now());
     if (inserted == 0) {
       log.debug("Event with id {} already exist, do nothing", metadata.eventId());
       return;
     }
-
-    Map<String, Object> payloadJson;
-    AuthorisationAuthorisedPayload payload;
-    try {
-      payloadJson = objectMapper.readValue(rawPayload, new TypeReference<>() {});
-      payload = objectMapper.convertValue(payloadJson, AuthorisationAuthorisedPayload.class);
-    } catch (RuntimeException e) {
-      throw new IllegalArgumentException(
-          "Invalid AUTHORISATION_AUTHORISED payload for eventId=" + metadata.eventId(), e);
-    }
+    Map<String, Object> payloadJson = objectMapper.readValue(rawPayload, new TypeReference<>() {});
+    AuthorisationCapturedPayload payload =
+        objectMapper.convertValue(payloadJson, AuthorisationCapturedPayload.class);
 
     ledgerEventLogRepository.save(ledgerEntryMapper.toEventLogEntity(metadata, payloadJson));
 

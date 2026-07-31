@@ -15,6 +15,7 @@ import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
+import org.example.auth.authorisation.domain.AuthorisationEventReason;
 import org.example.auth.outbox.domain.EventType;
 
 @Entity
@@ -49,9 +50,9 @@ public class AuthorisationEventEntity {
   @Column(name = "currency_code", nullable = false, updatable = false, length = 3)
   private String currencyCode;
 
-  @Column(updatable = false)
-  @Size(max = 30)
-  private String reason;
+  @Column(name = "reason_code", updatable = false, nullable = true)
+  @Enumerated(EnumType.STRING)
+  private AuthorisationEventReason reasonCode;
 
   @Column(name = "correlation_id", nullable = true, updatable = false)
   private UUID correlationId;

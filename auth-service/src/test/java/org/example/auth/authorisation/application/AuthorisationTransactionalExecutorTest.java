@@ -21,15 +21,20 @@ import org.example.auth.account.infrastructure.AccountMapper;
 import org.example.auth.account.infrastructure.AccountRepository;
 import org.example.auth.authorisation.api.AuthorisationRequest;
 import org.example.auth.authorisation.api.AuthorisationResponse;
-import org.example.auth.authorisation.domain.Authorisation;
+import org.example.auth.authorisation.api.CaptureRequest;
+import org.example.auth.authorisation.api.CaptureResponse;
 import org.example.auth.authorisation.domain.AuthorisationStatus;
 import org.example.auth.authorisation.infrastructure.AuthorisationEntity;
 import org.example.auth.authorisation.infrastructure.AuthorisationEventEntity;
 import org.example.auth.authorisation.infrastructure.AuthorisationEventRepository;
 import org.example.auth.authorisation.infrastructure.AuthorisationMapper;
 import org.example.auth.authorisation.infrastructure.AuthorisationRepository;
+import org.example.auth.common.OperationType;
 import org.example.auth.common.exception.AccountNotFoundException;
+import org.example.auth.common.exception.AuthorisationIllegalStateException;
+import org.example.auth.common.exception.AuthorisationNotFoundException;
 import org.example.auth.common.exception.IdempotencyConflictException;
+import org.example.auth.outbox.domain.EventType;
 import org.example.auth.outbox.application.OutboxEventService;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -56,7 +61,7 @@ class AuthorisationTransactionalExecutorTest {
   @Spy
   private AuthorisationMapper authorisationMapper = Mappers.getMapper(AuthorisationMapper.class);
 
-  @InjectMocks private AuthorisationTransactionalExecutor executor;
+  @InjectMocks private AuthorisationTransactionalExecutorImpl executor;
 
   @Test
   void shouldReturnExistingAuthRecordIfSameIdempotentRequest() {
@@ -81,7 +86,10 @@ class AuthorisationTransactionalExecutorTest {
     verify(accountRepository, never()).findById(any(UUID.class));
     verify(authorisationRepository, never()).saveAndFlush(any(AuthorisationEntity.class));
     verify(outboxEventService, never())
-        .enqueueAuthorisation(any(Authorisation.class), any(AuthorisationEventEntity.class));
+        .enqueueAuthorisation(
+            any(AuthorisationEntity.class),
+            any(AuthorisationEventEntity.class),
+            any(OperationType.class));
   }
 
   @Test
@@ -103,7 +111,10 @@ class AuthorisationTransactionalExecutorTest {
     verify(accountRepository, never()).findById(any(UUID.class));
     verify(authorisationRepository, never()).saveAndFlush(any(AuthorisationEntity.class));
     verify(outboxEventService, never())
-        .enqueueAuthorisation(any(Authorisation.class), any(AuthorisationEventEntity.class));
+        .enqueueAuthorisation(
+            any(AuthorisationEntity.class),
+            any(AuthorisationEventEntity.class),
+            any(OperationType.class));
   }
 
   @Test
@@ -123,7 +134,10 @@ class AuthorisationTransactionalExecutorTest {
 
     verify(authorisationRepository, never()).saveAndFlush(any(AuthorisationEntity.class));
     verify(outboxEventService, never())
-        .enqueueAuthorisation(any(Authorisation.class), any(AuthorisationEventEntity.class));
+        .enqueueAuthorisation(
+            any(AuthorisationEntity.class),
+            any(AuthorisationEventEntity.class),
+            any(OperationType.class));
   }
 
   @Test
@@ -166,7 +180,10 @@ class AuthorisationTransactionalExecutorTest {
     assertThat(accountEntity.getReservedBalance()).isEqualByComparingTo("0.00");
     verify(accountRepository, never()).flush();
     verify(outboxEventService, times(1))
-        .enqueueAuthorisation(any(Authorisation.class), any(AuthorisationEventEntity.class));
+        .enqueueAuthorisation(
+            any(AuthorisationEntity.class),
+            any(AuthorisationEventEntity.class),
+            any(OperationType.class));
   }
 
   @Test
@@ -201,7 +218,10 @@ class AuthorisationTransactionalExecutorTest {
     assertThat(accountEntity.getReservedBalance()).isEqualByComparingTo("10.00");
     verify(accountRepository).flush();
     verify(outboxEventService, never())
-        .enqueueAuthorisation(any(Authorisation.class), any(AuthorisationEventEntity.class));
+        .enqueueAuthorisation(
+            any(AuthorisationEntity.class),
+            any(AuthorisationEventEntity.class),
+            any(OperationType.class));
   }
 
   @Test
@@ -241,7 +261,169 @@ class AuthorisationTransactionalExecutorTest {
     assertThat(eventCaptor.getValue().getCorrelationId()).isNotNull();
     assertThat(eventCaptor.getValue().getCorrelationId()).isInstanceOf(UUID.class);
     verify(outboxEventService, times(1))
-        .enqueueAuthorisation(any(Authorisation.class), any(AuthorisationEventEntity.class));
+        .enqueueAuthorisation(
+            any(AuthorisationEntity.class),
+            any(AuthorisationEventEntity.class),
+            any(OperationType.class));
+  }
+
+  @Test
+  void shouldCaptureInTransactionWhenAuthorisationIsAuthorised() {
+    UUID authorisationId = UUID.randomUUID();
+    UUID accountId = UUID.randomUUID();
+    CaptureRequest captureRequest = new CaptureRequest("capture-key");
+
+    AuthorisationEntity authorisationEntity = mock(AuthorisationEntity.class);
+    when(authorisationEntity.getId()).thenReturn(authorisationId);
+    when(authorisationEntity.getAccountId()).thenReturn(accountId);
+    when(authorisationEntity.getAmount()).thenReturn(BigDecimal.TEN);
+    when(authorisationEntity.getCurrencyCode()).thenReturn("USD");
+    when(authorisationEntity.getStatus()).thenReturn(AuthorisationStatus.AUTHORISED);
+    when(authorisationRepository.findById(authorisationId)).thenReturn(Optional.of(authorisationEntity));
+
+    AccountEntity accountEntity = mockExistingAccountEntity();
+    accountEntity.setId(accountId);
+    accountEntity.setCurrencyCode("USD");
+    accountEntity.setStatus(AccountStatus.ACTIVE);
+    accountEntity.setAvailableBalance(new BigDecimal("100.00"));
+    accountEntity.setReservedBalance(new BigDecimal("10.00"));
+    accountEntity.setCreatedAt(OffsetDateTime.now().minusDays(1));
+    accountEntity.setUpdatedAt(OffsetDateTime.now());
+    when(accountRepository.findById(accountId)).thenReturn(Optional.of(accountEntity));
+
+    CaptureResponse response = executor.captureInTransaction(authorisationId, captureRequest);
+
+    assertThat(response.authorisationId()).isEqualTo(authorisationId);
+    assertThat(response.idempotencyKey()).isEqualTo(captureRequest.idempotencyKey());
+    assertThat(response.capturedAmount()).isEqualByComparingTo("10.00");
+    assertThat(response.status()).isEqualTo(AuthorisationStatus.CAPTURED);
+
+    assertThat(accountEntity.getReservedBalance()).isEqualByComparingTo("0.00");
+    verify(authorisationEntity).setStatus(AuthorisationStatus.CAPTURED);
+    verify(authorisationRepository).saveAndFlush(authorisationEntity);
+
+    ArgumentCaptor<AuthorisationEventEntity> eventCaptor =
+        ArgumentCaptor.forClass(AuthorisationEventEntity.class);
+    verify(authorisationEventRepository).saveAndFlush(eventCaptor.capture());
+    assertThat(eventCaptor.getValue().getEventType()).isEqualTo(EventType.AUTHORISATION_CAPTURED);
+    assertThat(eventCaptor.getValue().getIdempotencyKey()).isEqualTo(captureRequest.idempotencyKey());
+    assertThat(eventCaptor.getValue().getCorrelationId()).isNotNull();
+
+    verify(outboxEventService)
+        .enqueueAuthorisation(authorisationEntity, eventCaptor.getValue(), OperationType.CAPTURE);
+  }
+
+  @Test
+  void shouldReturnCapturedResponseWhenAlreadyCapturedWithMatchingIdempotency() {
+    UUID authorisationId = UUID.randomUUID();
+    UUID accountId = UUID.randomUUID();
+    CaptureRequest captureRequest = new CaptureRequest("capture-key");
+
+    AuthorisationEntity authorisationEntity = mock(AuthorisationEntity.class);
+    OffsetDateTime updatedAt = OffsetDateTime.now().minusSeconds(5);
+    when(authorisationEntity.getAccountId()).thenReturn(accountId);
+    when(authorisationEntity.getAmount()).thenReturn(BigDecimal.TEN);
+    when(authorisationEntity.getCurrencyCode()).thenReturn("USD");
+    when(authorisationEntity.getStatus()).thenReturn(AuthorisationStatus.CAPTURED);
+    when(authorisationEntity.getUpdatedAt()).thenReturn(updatedAt);
+    when(authorisationRepository.findById(authorisationId)).thenReturn(Optional.of(authorisationEntity));
+    when(authorisationEventRepository.findByAccountIdAndEventTypeAndIdempotencyKey(
+            accountId, captureRequest.idempotencyKey(), EventType.AUTHORISATION_CAPTURED.toString()))
+        .thenReturn(Optional.of(mock(AuthorisationEventEntity.class)));
+
+    CaptureResponse response = executor.captureInTransaction(authorisationId, captureRequest);
+
+    assertThat(response.status()).isEqualTo(AuthorisationStatus.CAPTURED);
+    assertThat(response.idempotencyKey()).isEqualTo(captureRequest.idempotencyKey());
+    verify(accountRepository, never()).findById(any(UUID.class));
+    verify(outboxEventService, never())
+        .enqueueAuthorisation(
+            any(AuthorisationEntity.class),
+            any(AuthorisationEventEntity.class),
+            any(OperationType.class));
+  }
+
+  @Test
+  void shouldThrowConflictWhenAlreadyCapturedWithDifferentIdempotency() {
+    UUID authorisationId = UUID.randomUUID();
+    UUID accountId = UUID.randomUUID();
+    CaptureRequest captureRequest = new CaptureRequest("capture-key");
+
+    AuthorisationEntity authorisationEntity = mock(AuthorisationEntity.class);
+    when(authorisationEntity.getAccountId()).thenReturn(accountId);
+    when(authorisationEntity.getStatus()).thenReturn(AuthorisationStatus.CAPTURED);
+    when(authorisationRepository.findById(authorisationId)).thenReturn(Optional.of(authorisationEntity));
+    when(authorisationEventRepository.findByAccountIdAndEventTypeAndIdempotencyKey(
+            accountId, captureRequest.idempotencyKey(), EventType.AUTHORISATION_CAPTURED.toString()))
+        .thenReturn(Optional.empty());
+
+    assertThrows(
+        IdempotencyConflictException.class,
+        () -> executor.captureInTransaction(authorisationId, captureRequest));
+  }
+
+  @Test
+  void shouldThrowIllegalStateWhenCaptureOnNonAuthorisedStatus() {
+    UUID authorisationId = UUID.randomUUID();
+    CaptureRequest captureRequest = new CaptureRequest("capture-key");
+
+    AuthorisationEntity authorisationEntity = mock(AuthorisationEntity.class);
+    when(authorisationEntity.getStatus()).thenReturn(AuthorisationStatus.DECLINED);
+    when(authorisationRepository.findById(authorisationId)).thenReturn(Optional.of(authorisationEntity));
+
+    assertThrows(
+        AuthorisationIllegalStateException.class,
+        () -> executor.captureInTransaction(authorisationId, captureRequest));
+  }
+
+  @Test
+  void shouldThrowNotFoundWhenCaptureAuthorisationMissing() {
+    UUID authorisationId = UUID.randomUUID();
+    when(authorisationRepository.findById(authorisationId)).thenReturn(Optional.empty());
+
+    assertThrows(
+        AuthorisationNotFoundException.class,
+        () -> executor.captureInTransaction(authorisationId, new CaptureRequest("capture-key")));
+  }
+
+  @Test
+  void shouldWrapCaptureSaveRaceAsConcurrentIdempotencyRace() {
+    UUID authorisationId = UUID.randomUUID();
+    UUID accountId = UUID.randomUUID();
+    CaptureRequest captureRequest = new CaptureRequest("capture-key");
+
+    AuthorisationEntity authorisationEntity = mock(AuthorisationEntity.class);
+    when(authorisationEntity.getId()).thenReturn(authorisationId);
+    when(authorisationEntity.getAccountId()).thenReturn(accountId);
+    when(authorisationEntity.getAmount()).thenReturn(BigDecimal.TEN);
+    when(authorisationEntity.getCurrencyCode()).thenReturn("USD");
+    when(authorisationEntity.getStatus()).thenReturn(AuthorisationStatus.AUTHORISED);
+    when(authorisationRepository.findById(authorisationId)).thenReturn(Optional.of(authorisationEntity));
+
+    AccountEntity accountEntity = mockExistingAccountEntity();
+    accountEntity.setId(accountId);
+    accountEntity.setCurrencyCode("USD");
+    accountEntity.setStatus(AccountStatus.ACTIVE);
+    accountEntity.setAvailableBalance(new BigDecimal("100.00"));
+    accountEntity.setReservedBalance(new BigDecimal("10.00"));
+    accountEntity.setCreatedAt(OffsetDateTime.now().minusDays(1));
+    accountEntity.setUpdatedAt(OffsetDateTime.now());
+    when(accountRepository.findById(accountId)).thenReturn(Optional.of(accountEntity));
+
+    DataIntegrityViolationException cause = new DataIntegrityViolationException("duplicate key");
+    when(authorisationRepository.saveAndFlush(authorisationEntity)).thenThrow(cause);
+
+    ConcurrentIdempotencyRaceException exception =
+        assertThrows(
+            ConcurrentIdempotencyRaceException.class,
+            () -> executor.captureInTransaction(authorisationId, captureRequest));
+
+    assertThat(exception.getCause()).isEqualTo(cause);
+    verify(outboxEventService, never())
+        .enqueueAuthorisation(
+            any(AuthorisationEntity.class),
+            any(AuthorisationEventEntity.class),
+            any(OperationType.class));
   }
 
   private AuthorisationEntity existingAuthorisationEntity(UUID accountId, String idempotencyKey) {

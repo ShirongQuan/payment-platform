@@ -16,11 +16,16 @@ import java.util.Optional;
 import java.util.UUID;
 import org.example.auth.authorisation.api.AuthorisationRequest;
 import org.example.auth.authorisation.api.AuthorisationResponse;
+import org.example.auth.authorisation.api.CaptureRequest;
+import org.example.auth.authorisation.api.CaptureResponse;
 import org.example.auth.authorisation.domain.AuthorisationStatus;
 import org.example.auth.authorisation.infrastructure.AuthorisationEntity;
+import org.example.auth.authorisation.infrastructure.AuthorisationEventEntity;
+import org.example.auth.authorisation.infrastructure.AuthorisationEventRepository;
 import org.example.auth.authorisation.infrastructure.AuthorisationRepository;
 import org.example.auth.common.exception.AuthorisationNotFoundException;
 import org.example.auth.common.exception.IdempotencyConflictException;
+import org.example.auth.outbox.domain.EventType;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -30,14 +35,17 @@ import org.mockito.junit.jupiter.MockitoExtension;
 @ExtendWith(MockitoExtension.class)
 class AuthorisationServiceImplTest {
 
-  @Mock private AuthorisationTransactionalExecutor transactionalExecutor;
+  @Mock private AuthorisationTransactionalExecutorImpl transactionalExecutor;
   @Mock private AuthorisationRepository authorisationRepository;
+  @Mock private AuthorisationEventRepository authorisationEventRepository;
 
   private AuthorisationServiceImpl service;
 
   @BeforeEach
   void setUp() {
-    service = new AuthorisationServiceImpl(transactionalExecutor, authorisationRepository);
+    service =
+        new AuthorisationServiceImpl(
+            transactionalExecutor, authorisationRepository, authorisationEventRepository);
   }
 
   @Test
@@ -242,6 +250,89 @@ class AuthorisationServiceImplTest {
 
     assertThat(response.merchantReference()).isNull();
     assertThat(response.currencyCode()).isEqualTo("USD");
+  }
+
+  @Test
+  void capture_shouldReturnExecutorResponse_whenNoRace() {
+    UUID authorisationId = UUID.randomUUID();
+    CaptureRequest request = new CaptureRequest("capture-key");
+
+    CaptureResponse response =
+        new CaptureResponse(
+            authorisationId,
+            request.idempotencyKey(),
+            new BigDecimal("10.00"),
+            "USD",
+            AuthorisationStatus.CAPTURED,
+            OffsetDateTime.now());
+
+    when(transactionalExecutor.captureInTransaction(authorisationId, request)).thenReturn(response);
+
+    assertThat(service.capture(authorisationId, request)).isSameAs(response);
+    verify(authorisationRepository, never()).findById(any(UUID.class));
+    verify(authorisationEventRepository, never())
+        .findByAccountIdAndEventTypeAndIdempotencyKey(any(UUID.class), any(String.class), any(String.class));
+  }
+
+  @Test
+  void capture_returnsExistingCapture_afterRollbackFromConcurrentInsertRace() {
+    UUID authorisationId = UUID.randomUUID();
+    UUID accountId = UUID.randomUUID();
+    CaptureRequest request = new CaptureRequest("capture-key");
+
+    when(transactionalExecutor.captureInTransaction(authorisationId, request))
+        .thenThrow(new ConcurrentIdempotencyRaceException(new RuntimeException("duplicate key")));
+
+    AuthorisationEntity authorisationEntity = mock(AuthorisationEntity.class);
+    OffsetDateTime updatedAt = OffsetDateTime.now().minusSeconds(2);
+    when(authorisationEntity.getAccountId()).thenReturn(accountId);
+    when(authorisationEntity.getAmount()).thenReturn(new BigDecimal("10.00"));
+    when(authorisationEntity.getCurrencyCode()).thenReturn("USD");
+    when(authorisationEntity.getUpdatedAt()).thenReturn(updatedAt);
+    when(authorisationRepository.findById(authorisationId)).thenReturn(Optional.of(authorisationEntity));
+
+    AuthorisationEventEntity capturedEvent = mock(AuthorisationEventEntity.class);
+    when(authorisationEventRepository.findByAccountIdAndEventTypeAndIdempotencyKey(
+            accountId, request.idempotencyKey(), EventType.AUTHORISATION_CAPTURED.toString()))
+        .thenReturn(Optional.of(capturedEvent));
+
+    CaptureResponse response = service.capture(authorisationId, request);
+
+    assertThat(response.authorisationId()).isEqualTo(authorisationId);
+    assertThat(response.idempotencyKey()).isEqualTo(request.idempotencyKey());
+    assertThat(response.status()).isEqualTo(AuthorisationStatus.CAPTURED);
+    assertThat(response.capturedAmount()).isEqualByComparingTo("10.00");
+  }
+
+  @Test
+  void capture_throwsConflict_whenRaceWinnerCaptureEventMissing() {
+    UUID authorisationId = UUID.randomUUID();
+    UUID accountId = UUID.randomUUID();
+    CaptureRequest request = new CaptureRequest("capture-key");
+
+    when(transactionalExecutor.captureInTransaction(authorisationId, request))
+        .thenThrow(new ConcurrentIdempotencyRaceException(new RuntimeException("duplicate key")));
+
+    AuthorisationEntity authorisationEntity = mock(AuthorisationEntity.class);
+    when(authorisationEntity.getAccountId()).thenReturn(accountId);
+    when(authorisationRepository.findById(authorisationId)).thenReturn(Optional.of(authorisationEntity));
+    when(authorisationEventRepository.findByAccountIdAndEventTypeAndIdempotencyKey(
+            accountId, request.idempotencyKey(), EventType.AUTHORISATION_CAPTURED.toString()))
+        .thenReturn(Optional.empty());
+
+    assertThrows(IdempotencyConflictException.class, () -> service.capture(authorisationId, request));
+  }
+
+  @Test
+  void capture_throwsNotFound_whenRaceAndAuthorisationMissing() {
+    UUID authorisationId = UUID.randomUUID();
+    CaptureRequest request = new CaptureRequest("capture-key");
+
+    when(transactionalExecutor.captureInTransaction(authorisationId, request))
+        .thenThrow(new ConcurrentIdempotencyRaceException(new RuntimeException("duplicate key")));
+    when(authorisationRepository.findById(authorisationId)).thenReturn(Optional.empty());
+
+    assertThrows(AuthorisationNotFoundException.class, () -> service.capture(authorisationId, request));
   }
 
   private static AuthorisationEntity existingAuthorisation(

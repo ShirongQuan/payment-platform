@@ -10,6 +10,7 @@ import org.springframework.kafka.listener.DeadLetterPublishingRecoverer;
 import org.springframework.kafka.listener.DefaultErrorHandler;
 import org.springframework.util.backoff.FixedBackOff;
 
+// TODO add comment how it works
 @Configuration
 public class KafkaConsumerConfig {
   @Bean
@@ -18,8 +19,9 @@ public class KafkaConsumerConfig {
         new DeadLetterPublishingRecoverer(
             kafkaTemplate,
             (ConsumerRecord<?, ?> record, Exception ex) ->
-                new TopicPartition("(auth.events.ledger.dlt", record.partition()));
+                new TopicPartition("auth.events.ledger.dlt", record.partition()));
 
+    // TODO: add comment how the FixedBackOff works
     DefaultErrorHandler errorHandler =
         new DefaultErrorHandler(recoverer, new FixedBackOff(2000L, 3L));
 

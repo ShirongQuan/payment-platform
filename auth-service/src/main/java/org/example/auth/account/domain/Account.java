@@ -9,6 +9,7 @@ import java.time.OffsetDateTime;
 import java.util.Objects;
 import java.util.UUID;
 import lombok.Getter;
+import org.example.auth.common.OperationType;
 import org.example.auth.common.exception.CurrencyMismatchException;
 import org.example.auth.common.exception.InsufficientFundException;
 import org.example.auth.common.exception.InvalidCurrencyException;
@@ -96,10 +97,20 @@ public class Account {
     validateCurrency(currencyCode);
     validateAmount(amount);
     if (availableBalance.compareTo(amount) < 0) {
-      throw new InsufficientFundException(availableBalance, amount);
+      throw new InsufficientFundException(OperationType.AUTHORISE, availableBalance, amount);
     }
     availableBalance = availableBalance.subtract(amount);
     reservedBalance = reservedBalance.add(amount);
+  }
+
+  public void capture(BigDecimal amount, String currencyCode) {
+    // TODO: validate account status
+    validateCurrency(currencyCode);
+    validateAmount(amount);
+    if (reservedBalance.compareTo(amount) < 0) {
+      throw new InsufficientFundException(OperationType.CAPTURE, reservedBalance, amount);
+    }
+    reservedBalance = reservedBalance.subtract(amount);
   }
 
   void validateCurrency(String currencyCode) {

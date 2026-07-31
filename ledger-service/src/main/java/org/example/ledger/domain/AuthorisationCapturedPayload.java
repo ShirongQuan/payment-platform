@@ -4,12 +4,11 @@ import java.math.BigDecimal;
 import java.time.OffsetDateTime;
 import java.util.UUID;
 
-public record AuthorisationAuthorisedPayload(
+public record AuthorisationCapturedPayload(
     UUID authorisationId,
     UUID accountId,
-    String idempotencyKey,
-    String merchantReference,
     BigDecimal amount,
     String currencyCode,
+    String idempotencyKey,
     String status,
-    OffsetDateTime createdAt) {}
+    OffsetDateTime capturedAt) {}
