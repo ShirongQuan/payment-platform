@@ -1,0 +1,44 @@
+flowchart LR
+	Client[Client]
+
+	subgraph Auth[auth-service components]
+		Controller[AuthorisationController]
+		Service[AuthorisationServiceImpl]
+		TxExecutor[AuthorisationTransactionalExecutorImpl]
+		AuthRepo[(authorisation + account + authorisation_event)]
+		OutboxSvc[OutboxEventServiceImpl]
+		OutboxRepo[(outbox_events)]
+		OutboxScheduler[OutboxScheduler]
+		KafkaPublisher[OutboxKafkaPublisher]
+	end
+
+	Kafka[(Kafka: auth.events)]
+
+	subgraph Ledger[ledger-service components]
+		KafkaConsumer[LedgerKafkaConsumer]
+		EventProcessor[LedgerEventProcessor]
+		AuthHandler[AuthorisationAuthorisedHandler]
+		CapHandler[AuthorisationCapturedHandler]
+		Dedup[(processed_events)]
+		EventLog[(ledger_event_log)]
+		Projection[(ledger_entries)]
+	end
+
+	Client --> Controller --> Service --> TxExecutor
+	TxExecutor --> AuthRepo
+	TxExecutor --> OutboxSvc --> OutboxRepo
+
+	OutboxScheduler --> OutboxSvc
+	OutboxSvc --> OutboxRepo
+	OutboxSvc --> KafkaPublisher --> Kafka
+
+	Kafka --> KafkaConsumer --> EventProcessor
+	EventProcessor --> AuthHandler
+	EventProcessor --> CapHandler
+	AuthHandler --> Dedup
+	CapHandler --> Dedup
+	AuthHandler --> EventLog
+	CapHandler --> EventLog
+	AuthHandler --> Projection
+	CapHandler --> Projection
+

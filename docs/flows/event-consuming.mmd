@@ -1,0 +1,42 @@
+sequenceDiagram
+	autonumber
+	participant Kafka as Kafka topic: auth.events
+	participant LCons as LedgerKafkaConsumer
+	participant Hdr as KafkaHeaderReader
+	participant LProc as LedgerEventProcessor
+	participant AuthH as AuthorisationAuthorisedHandler
+	participant CapH as AuthorisationCapturedHandler
+	participant PRepo as ProcessedEventRepository
+	participant LLog as LedgerEventLogRepository
+	participant LEntry as LedgerEntryRepository
+
+	Kafka-->>LCons: consume record(key, value, headers)
+	LCons->>Hdr: read(headers)
+	Hdr-->>LCons: EventMetadata
+	LCons->>LProc: process(metadata, rawPayload)
+
+	alt eventType == AUTHORISATION_AUTHORISED
+		LProc->>AuthH: handle(metadata, rawPayload)
+		AuthH->>PRepo: tryInsertProcessedEvent(eventId, type, processedAt)
+		alt first-time event
+			AuthH->>LLog: save(event log)
+			AuthH->>LEntry: save(ledger entry)
+		else duplicate
+			Note over AuthH,PRepo: skip duplicate event
+		end
+	else eventType == AUTHORISATION_CAPTURED
+		LProc->>CapH: handle(metadata, rawPayload)
+		CapH->>PRepo: tryInsertProcessedEvent(eventId, type, processedAt)
+		alt first-time event
+			CapH->>LLog: save(event log)
+			CapH->>LEntry: save(ledger entry)
+		else duplicate
+			Note over CapH,PRepo: skip duplicate event
+		end
+	else unsupported event type
+		LProc-->>LCons: IllegalArgumentException
+		Note over LCons,Kafka: listener error handler retries or routes to DLT based on config
+	end
+
+
+

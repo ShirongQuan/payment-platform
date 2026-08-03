@@ -1,0 +1,33 @@
+sequenceDiagram
+	autonumber
+	actor Client
+	participant AC as AuthController
+	participant AS as AuthorisationServiceImpl
+
+	Client->>AC: POST /authorisations/{id}/reversals
+	AC->>AS: reverse(authorisationId, reverseRequest)
+
+	Note over AS: Current code path is TODO
+	AS-->>AC: null (reverse flow not implemented)
+	AC-->>Client: Implementation-dependent failure / empty response
+
+	Note over AC,AS: Intended target flow (to implement)
+	rect rgb(245,245,245)
+		participant ATE as AuthorisationTransactionalExecutorImpl
+		participant AR as AuthorisationRepository
+		participant AER as AuthorisationEventRepository
+		participant AccR as AccountRepository
+		participant OES as OutboxEventServiceImpl
+
+		AS->>ATE: reverseInTransaction(authorisationId, reverseRequest)
+		ATE->>AR: findById(authorisationId)
+		ATE->>AccR: findById(accountId)
+		ATE->>ATE: validate legal state + idempotency
+		ATE->>ATE: release reserved/available balance per reverse rules
+		ATE->>AR: saveAndFlush(authorisation REVERSED)
+		ATE->>AER: saveAndFlush(event AUTHORISATION_REVERSED)
+		ATE->>OES: enqueueAuthorisation(..., OperationType.REVERSE)
+		OES->>OES: save outbox event (status NEW)
+		ATE-->>AS: ReverseResponse
+	end
+

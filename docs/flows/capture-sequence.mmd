@@ -1,0 +1,57 @@
+sequenceDiagram
+	autonumber
+	actor Client
+	participant AC as AuthController
+	participant AS as AuthorisationServiceImpl
+	participant ATE as AuthorisationTransactionalExecutorImpl
+	participant AR as AuthorisationRepository
+	participant AER as AuthorisationEventRepository
+	participant AccR as AccountRepository
+	participant OES as OutboxEventServiceImpl
+
+	Client->>AC: POST /authorisations/{id}/captures
+	AC->>AS: capture(authorisationId, captureRequest)
+	AS->>ATE: captureInTransaction(authorisationId, captureRequest)
+
+	ATE->>AR: findById(authorisationId)
+	AR-->>ATE: AuthorisationEntity
+
+	alt status == CAPTURED
+		ATE->>AER: findByAccountIdAndEventTypeAndIdempotencyKey(accountId, idemKey, AUTHORISATION_CAPTURED)
+		alt capture event exists for idempotency key
+			AER-->>ATE: existing capture event
+			ATE-->>AS: previous CaptureResponse
+		else capture key mismatch
+			ATE-->>AS: throw IdempotencyConflictException
+		end
+	else status != AUTHORISED
+		ATE-->>AS: throw AuthorisationIllegalStateException
+	else status == AUTHORISED
+		ATE->>AccR: findById(accountId)
+		AccR-->>ATE: AccountEntity
+		ATE->>ATE: account.capture(amount, currency)
+		ATE->>ATE: set authorisation status = CAPTURED
+
+		ATE->>AR: saveAndFlush(authorisation CAPTURED)
+		ATE->>AER: saveAndFlush(event AUTHORISATION_CAPTURED)
+		ATE->>OES: enqueueAuthorisation(..., OperationType.CAPTURE)
+		OES->>OES: build CAPTURE payload map
+		OES->>OES: save outbox event (status NEW)
+		ATE-->>AS: CaptureResponse
+	end
+
+	alt Concurrent capture insert race
+		ATE-->>AS: throw ConcurrentIdempotencyRaceException
+		AS->>AR: findById(authorisationId)
+		AS->>AER: findByAccountIdAndEventTypeAndIdempotencyKey(accountId, idemKey, AUTHORISATION_CAPTURED)
+		alt capture event found
+			AS-->>AC: recovered CaptureResponse
+		else
+			AS-->>AC: IdempotencyConflictException
+		end
+	else No race
+		AS-->>AC: CaptureResponse
+	end
+
+	AC-->>Client: 200 OK / error
+

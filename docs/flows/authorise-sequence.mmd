@@ -1,0 +1,56 @@
+sequenceDiagram
+	autonumber
+	actor Client
+	participant AC as AuthController
+	participant AS as AuthorisationServiceImpl
+	participant ATE as AuthorisationTransactionalExecutorImpl
+	participant AR as AuthorisationRepository
+	participant AccR as AccountRepository
+	participant AER as AuthorisationEventRepository
+	participant OES as OutboxEventServiceImpl
+
+	Client->>AC: POST /authorisations
+	AC->>AS: authorise(request)
+	AS->>AS: normalizeAndValidateCurrency()
+
+	AS->>ATE: authoriseInTransaction(request, normalizedCurrency)
+	ATE->>AR: findByAccountIdAndIdempotencyKey(...)
+
+	alt Existing idempotent row found
+		AR-->>ATE: AuthorisationEntity
+		ATE-->>AS: AuthorisationResponse
+	else New request
+		ATE->>AccR: findById(accountId)
+		AccR-->>ATE: AccountEntity
+		ATE->>ATE: account.reserve(amount, currency)
+		ATE->>AccR: flush()  %% fail fast on DB constraints
+
+		alt reserve succeeded
+			ATE->>AR: saveAndFlush(authorisation AUTHORISED)
+			ATE->>AER: saveAndFlush(event AUTHORISATION_AUTHORISED)
+		else insufficient funds
+			ATE->>AR: saveAndFlush(authorisation DECLINED)
+			ATE->>AER: saveAndFlush(event AUTHORISATION_DECLINED)
+		end
+
+		ATE->>OES: enqueueAuthorisation(..., OperationType.AUTHORISE)
+		OES->>OES: build AUTHORISE payload map
+		OES->>OES: save outbox event (status NEW)
+		ATE-->>AS: AuthorisationResponse
+	end
+
+	alt Concurrent idempotency insert race
+		ATE-->>AS: throw ConcurrentIdempotencyRaceException
+		AS->>AR: findByAccountIdAndIdempotencyKey(...)
+		alt Matching winner payload
+			AR-->>AS: AuthorisationEntity
+			AS-->>AC: recovered idempotent response
+		else Mismatch or missing row
+			AS-->>AC: IdempotencyConflictException / IllegalStateException
+		end
+	else No race
+		AS-->>AC: AuthorisationResponse
+	end
+
+	AC-->>Client: 200 OK / error
+

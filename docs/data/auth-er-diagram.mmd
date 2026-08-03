@@ -1,0 +1,61 @@
+erDiagram
+	ACCOUNT {
+		uuid account_id PK
+		bigint version
+		varchar currency_code
+		varchar account_status
+		decimal available_balance
+		decimal reserved_balance
+		timestamptz created_at
+		timestamptz updated_at
+	}
+
+	AUTHORISATION {
+		uuid authorisation_id PK
+		bigint version
+		uuid account_id FK
+		varchar merchant_reference
+		decimal amount
+		varchar currency_code
+		varchar authorisation_status
+		timestamptz created_at
+		timestamptz updated_at
+	}
+
+	AUTHORISATION_EVENT {
+		uuid event_id PK
+		uuid authorisation_id FK
+		uuid account_id FK
+		varchar event_type
+		varchar idempotency_key
+		decimal amount
+		varchar currency_code
+		varchar reason_code
+		uuid correlation_id
+		timestamptz created_at
+	}
+
+	OUTBOX_EVENTS {
+		uuid event_id PK
+		bigint version
+		varchar aggregate_type
+		uuid aggregate_id
+		varchar event_type
+		jsonb payload
+		varchar status
+		int retry_count
+		varchar last_error
+		timestamptz created_at
+		timestamptz published_at
+		timestamptz next_attempt_at
+		varchar idempotency_key
+		uuid correlation_id
+		timestamptz claimed_at
+		timestamptz claim_until
+	}
+
+	ACCOUNT ||--o{ AUTHORISATION : owns
+	ACCOUNT ||--o{ AUTHORISATION_EVENT : emits
+	AUTHORISATION ||--o{ AUTHORISATION_EVENT : has
+	AUTHORISATION ||--o{ OUTBOX_EVENTS : aggregate_id_logical
+

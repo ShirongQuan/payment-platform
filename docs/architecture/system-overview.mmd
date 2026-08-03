@@ -1,0 +1,40 @@
+flowchart LR
+	Client[Client Apps\nSwagger / Postman / Load Tests]
+
+	subgraph AuthSvc[auth-service]
+		AuthAPI[REST API\nauthorise/capture/reverse]
+		AuthDomain[Domain + Idempotency]
+		OutboxWorker[Outbox Scheduler + Publisher]
+	end
+
+	subgraph FraudSvc[fraud-service]
+		FraudAPI[Risk Decision API]
+	end
+
+	subgraph LedgerSvc[ledger-service]
+		LedgerConsumer[Kafka Consumer + Event Processor]
+		LedgerQuery[Query API]
+	end
+
+	subgraph Infra[Infrastructure]
+		Kafka[(Kafka)]
+		AuthDB[(auth_db)]
+		FraudDB[(fraud_db)]
+		LedgerDB[(ledger_db)]
+	end
+
+	Client --> AuthAPI
+	AuthAPI --> AuthDomain
+	AuthDomain --> AuthDB
+	AuthDomain --> FraudAPI
+	FraudAPI --> FraudDB
+
+	AuthDomain --> OutboxWorker
+	OutboxWorker --> Kafka
+
+	Kafka --> LedgerConsumer
+	LedgerConsumer --> LedgerDB
+
+	Client --> LedgerQuery
+	LedgerQuery --> LedgerDB
+

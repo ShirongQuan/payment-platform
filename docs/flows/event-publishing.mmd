@@ -1,0 +1,35 @@
+sequenceDiagram
+	autonumber
+	participant Sch as OutboxScheduler (auth-service)
+	participant OES as OutboxEventServiceImpl
+	participant ORepo as OutboxEventRepository
+	participant Pub as OutboxKafkaPublisher
+	participant Kafka as Kafka topic: auth.events
+
+	loop every outbox.publisher.delay-ms
+		Sch->>OES: publishNextBatch(batchSize)
+		OES->>ORepo: reclaimStalePublishing(now, NEW, PUBLISHING)
+		OES->>ORepo: findNextBatch(NEW, now, page)
+
+		loop each outbox event
+			OES->>ORepo: claimNewEvent(eventId, claimedAt, claimUntil, PUBLISHING, NEW)
+			alt claim succeeded
+				OES->>Pub: publishAsync(outboxEvent)
+				Pub->>Kafka: send(payload + headers)
+
+				alt publish success
+					OES->>ORepo: markPublished(eventId, now, PUBLISHED)
+				else publish failure
+					alt backoffPolicy.shouldFail(nextRetryCount)
+						OES->>ORepo: markFailed(eventId, retryCount, error, FAILED)
+					else retry later
+						OES->>ORepo: markRetry(eventId, retryCount, nextAttemptAt, error, NEW)
+					end
+				end
+			else claim lost
+				Note over OES,ORepo: another poller instance already claimed it
+			end
+		end
+	end
+
+
