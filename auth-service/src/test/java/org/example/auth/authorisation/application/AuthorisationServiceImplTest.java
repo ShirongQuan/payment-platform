@@ -274,7 +274,8 @@ class AuthorisationServiceImplTest {
     assertThat(service.capture(authorisationId, request)).isSameAs(response);
     verify(authorisationRepository, never()).findById(any(UUID.class));
     verify(authorisationEventRepository, never())
-        .findByAccountIdAndEventTypeAndIdempotencyKey(any(UUID.class), any(String.class), any(String.class));
+        .findByAccountIdAndEventTypeAndIdempotencyKey(
+            any(UUID.class), any(String.class), any(String.class));
   }
 
   @Test
@@ -292,7 +293,8 @@ class AuthorisationServiceImplTest {
     when(authorisationEntity.getAmount()).thenReturn(new BigDecimal("10.00"));
     when(authorisationEntity.getCurrencyCode()).thenReturn("USD");
     when(authorisationEntity.getUpdatedAt()).thenReturn(updatedAt);
-    when(authorisationRepository.findById(authorisationId)).thenReturn(Optional.of(authorisationEntity));
+    when(authorisationRepository.findById(authorisationId))
+        .thenReturn(Optional.of(authorisationEntity));
 
     AuthorisationEventEntity capturedEvent = mock(AuthorisationEventEntity.class);
     when(authorisationEventRepository.findByAccountIdAndEventTypeAndIdempotencyKey(
@@ -318,12 +320,14 @@ class AuthorisationServiceImplTest {
 
     AuthorisationEntity authorisationEntity = mock(AuthorisationEntity.class);
     when(authorisationEntity.getAccountId()).thenReturn(accountId);
-    when(authorisationRepository.findById(authorisationId)).thenReturn(Optional.of(authorisationEntity));
+    when(authorisationRepository.findById(authorisationId))
+        .thenReturn(Optional.of(authorisationEntity));
     when(authorisationEventRepository.findByAccountIdAndEventTypeAndIdempotencyKey(
             accountId, request.idempotencyKey(), EventType.AUTHORISATION_CAPTURED.toString()))
         .thenReturn(Optional.empty());
 
-    assertThrows(IdempotencyConflictException.class, () -> service.capture(authorisationId, request));
+    assertThrows(
+        IdempotencyConflictException.class, () -> service.capture(authorisationId, request));
   }
 
   @Test
@@ -335,13 +339,15 @@ class AuthorisationServiceImplTest {
         .thenThrow(new ConcurrentIdempotencyRaceException(new RuntimeException("duplicate key")));
     when(authorisationRepository.findById(authorisationId)).thenReturn(Optional.empty());
 
-    assertThrows(AuthorisationNotFoundException.class, () -> service.capture(authorisationId, request));
+    assertThrows(
+        AuthorisationNotFoundException.class, () -> service.capture(authorisationId, request));
   }
 
   @Test
   void reverse_shouldReturnExecutorResponse_whenNoRace() {
     UUID authorisationId = UUID.randomUUID();
-    ReverseRequest request = new ReverseRequest("reverse-key", "CUSTOMER_REQUEST");
+    ReverseRequest request =
+        new ReverseRequest("reverse-key", AuthorisationEventReason.CUSTOMER_REQUEST);
 
     ReverseResponse response =
         new ReverseResponse(
@@ -350,7 +356,7 @@ class AuthorisationServiceImplTest {
             new BigDecimal("10.00"),
             "USD",
             AuthorisationStatus.REVERSED,
-            "CUSTOMER_REQUEST",
+            AuthorisationEventReason.CUSTOMER_REQUEST,
             OffsetDateTime.now());
 
     when(transactionalExecutor.reverseInTransaction(authorisationId, request)).thenReturn(response);
@@ -358,14 +364,16 @@ class AuthorisationServiceImplTest {
     assertThat(service.reverse(authorisationId, request)).isSameAs(response);
     verify(authorisationRepository, never()).findById(any(UUID.class));
     verify(authorisationEventRepository, never())
-        .findByAccountIdAndEventTypeAndIdempotencyKey(any(UUID.class), any(String.class), any(String.class));
+        .findByAccountIdAndEventTypeAndIdempotencyKey(
+            any(UUID.class), any(String.class), any(String.class));
   }
 
   @Test
   void reverse_returnsExistingReverse_afterRollbackFromConcurrentInsertRace() {
     UUID authorisationId = UUID.randomUUID();
     UUID accountId = UUID.randomUUID();
-    ReverseRequest request = new ReverseRequest("reverse-key", "CUSTOMER_REQUEST");
+    ReverseRequest request =
+        new ReverseRequest("reverse-key", AuthorisationEventReason.CUSTOMER_REQUEST);
 
     when(transactionalExecutor.reverseInTransaction(authorisationId, request))
         .thenThrow(new ConcurrentIdempotencyRaceException(new RuntimeException("duplicate key")));
@@ -376,7 +384,8 @@ class AuthorisationServiceImplTest {
     when(authorisationEntity.getAmount()).thenReturn(new BigDecimal("10.00"));
     when(authorisationEntity.getCurrencyCode()).thenReturn("USD");
     when(authorisationEntity.getUpdatedAt()).thenReturn(updatedAt);
-    when(authorisationRepository.findById(authorisationId)).thenReturn(Optional.of(authorisationEntity));
+    when(authorisationRepository.findById(authorisationId))
+        .thenReturn(Optional.of(authorisationEntity));
 
     AuthorisationEventEntity reversedEvent = mock(AuthorisationEventEntity.class);
     when(reversedEvent.getReasonCode()).thenReturn(AuthorisationEventReason.CUSTOMER_REQUEST);
@@ -390,38 +399,43 @@ class AuthorisationServiceImplTest {
     assertThat(response.idempotencyKey()).isEqualTo(request.idempotencyKey());
     assertThat(response.status()).isEqualTo(AuthorisationStatus.REVERSED);
     assertThat(response.reversedAmount()).isEqualByComparingTo("10.00");
-    assertThat(response.reasonCode()).isEqualTo("CUSTOMER_REQUEST");
+    assertThat(response.reasonCode()).isEqualTo(AuthorisationEventReason.CUSTOMER_REQUEST);
   }
 
   @Test
   void reverse_throwsConflict_whenRaceWinnerReverseEventMissing() {
     UUID authorisationId = UUID.randomUUID();
     UUID accountId = UUID.randomUUID();
-    ReverseRequest request = new ReverseRequest("reverse-key", "CUSTOMER_REQUEST");
+    ReverseRequest request =
+        new ReverseRequest("reverse-key", AuthorisationEventReason.CUSTOMER_REQUEST);
 
     when(transactionalExecutor.reverseInTransaction(authorisationId, request))
         .thenThrow(new ConcurrentIdempotencyRaceException(new RuntimeException("duplicate key")));
 
     AuthorisationEntity authorisationEntity = mock(AuthorisationEntity.class);
     when(authorisationEntity.getAccountId()).thenReturn(accountId);
-    when(authorisationRepository.findById(authorisationId)).thenReturn(Optional.of(authorisationEntity));
+    when(authorisationRepository.findById(authorisationId))
+        .thenReturn(Optional.of(authorisationEntity));
     when(authorisationEventRepository.findByAccountIdAndEventTypeAndIdempotencyKey(
             accountId, request.idempotencyKey(), EventType.AUTHORISATION_REVERSED.toString()))
         .thenReturn(Optional.empty());
 
-    assertThrows(IdempotencyConflictException.class, () -> service.reverse(authorisationId, request));
+    assertThrows(
+        IdempotencyConflictException.class, () -> service.reverse(authorisationId, request));
   }
 
   @Test
   void reverse_throwsNotFound_whenRaceAndAuthorisationMissing() {
     UUID authorisationId = UUID.randomUUID();
-    ReverseRequest request = new ReverseRequest("reverse-key", "CUSTOMER_REQUEST");
+    ReverseRequest request =
+        new ReverseRequest("reverse-key", AuthorisationEventReason.CUSTOMER_REQUEST);
 
     when(transactionalExecutor.reverseInTransaction(authorisationId, request))
         .thenThrow(new ConcurrentIdempotencyRaceException(new RuntimeException("duplicate key")));
     when(authorisationRepository.findById(authorisationId)).thenReturn(Optional.empty());
 
-    assertThrows(AuthorisationNotFoundException.class, () -> service.reverse(authorisationId, request));
+    assertThrows(
+        AuthorisationNotFoundException.class, () -> service.reverse(authorisationId, request));
   }
 
   private static AuthorisationEntity existingAuthorisation(

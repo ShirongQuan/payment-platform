@@ -37,8 +37,8 @@ import org.example.auth.common.exception.AccountNotFoundException;
 import org.example.auth.common.exception.AuthorisationIllegalStateException;
 import org.example.auth.common.exception.AuthorisationNotFoundException;
 import org.example.auth.common.exception.IdempotencyConflictException;
-import org.example.auth.outbox.domain.EventType;
 import org.example.auth.outbox.application.OutboxEventService;
+import org.example.auth.outbox.domain.EventType;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mapstruct.factory.Mappers;
@@ -282,7 +282,8 @@ class AuthorisationTransactionalExecutorTest {
     when(authorisationEntity.getAmount()).thenReturn(BigDecimal.TEN);
     when(authorisationEntity.getCurrencyCode()).thenReturn("USD");
     when(authorisationEntity.getStatus()).thenReturn(AuthorisationStatus.AUTHORISED);
-    when(authorisationRepository.findById(authorisationId)).thenReturn(Optional.of(authorisationEntity));
+    when(authorisationRepository.findById(authorisationId))
+        .thenReturn(Optional.of(authorisationEntity));
 
     AccountEntity accountEntity = mockExistingAccountEntity();
     accountEntity.setId(accountId);
@@ -309,7 +310,8 @@ class AuthorisationTransactionalExecutorTest {
         ArgumentCaptor.forClass(AuthorisationEventEntity.class);
     verify(authorisationEventRepository).saveAndFlush(eventCaptor.capture());
     assertThat(eventCaptor.getValue().getEventType()).isEqualTo(EventType.AUTHORISATION_CAPTURED);
-    assertThat(eventCaptor.getValue().getIdempotencyKey()).isEqualTo(captureRequest.idempotencyKey());
+    assertThat(eventCaptor.getValue().getIdempotencyKey())
+        .isEqualTo(captureRequest.idempotencyKey());
     assertThat(eventCaptor.getValue().getCorrelationId()).isNotNull();
 
     verify(outboxEventService)
@@ -329,9 +331,12 @@ class AuthorisationTransactionalExecutorTest {
     when(authorisationEntity.getCurrencyCode()).thenReturn("USD");
     when(authorisationEntity.getStatus()).thenReturn(AuthorisationStatus.CAPTURED);
     when(authorisationEntity.getUpdatedAt()).thenReturn(updatedAt);
-    when(authorisationRepository.findById(authorisationId)).thenReturn(Optional.of(authorisationEntity));
+    when(authorisationRepository.findById(authorisationId))
+        .thenReturn(Optional.of(authorisationEntity));
     when(authorisationEventRepository.findByAccountIdAndEventTypeAndIdempotencyKey(
-            accountId, captureRequest.idempotencyKey(), EventType.AUTHORISATION_CAPTURED.toString()))
+            accountId,
+            captureRequest.idempotencyKey(),
+            EventType.AUTHORISATION_CAPTURED.toString()))
         .thenReturn(Optional.of(mock(AuthorisationEventEntity.class)));
 
     CaptureResponse response = executor.captureInTransaction(authorisationId, captureRequest);
@@ -355,9 +360,12 @@ class AuthorisationTransactionalExecutorTest {
     AuthorisationEntity authorisationEntity = mock(AuthorisationEntity.class);
     when(authorisationEntity.getAccountId()).thenReturn(accountId);
     when(authorisationEntity.getStatus()).thenReturn(AuthorisationStatus.CAPTURED);
-    when(authorisationRepository.findById(authorisationId)).thenReturn(Optional.of(authorisationEntity));
+    when(authorisationRepository.findById(authorisationId))
+        .thenReturn(Optional.of(authorisationEntity));
     when(authorisationEventRepository.findByAccountIdAndEventTypeAndIdempotencyKey(
-            accountId, captureRequest.idempotencyKey(), EventType.AUTHORISATION_CAPTURED.toString()))
+            accountId,
+            captureRequest.idempotencyKey(),
+            EventType.AUTHORISATION_CAPTURED.toString()))
         .thenReturn(Optional.empty());
 
     assertThrows(
@@ -372,7 +380,8 @@ class AuthorisationTransactionalExecutorTest {
 
     AuthorisationEntity authorisationEntity = mock(AuthorisationEntity.class);
     when(authorisationEntity.getStatus()).thenReturn(AuthorisationStatus.DECLINED);
-    when(authorisationRepository.findById(authorisationId)).thenReturn(Optional.of(authorisationEntity));
+    when(authorisationRepository.findById(authorisationId))
+        .thenReturn(Optional.of(authorisationEntity));
 
     assertThrows(
         AuthorisationIllegalStateException.class,
@@ -401,7 +410,8 @@ class AuthorisationTransactionalExecutorTest {
     when(authorisationEntity.getAmount()).thenReturn(BigDecimal.TEN);
     when(authorisationEntity.getCurrencyCode()).thenReturn("USD");
     when(authorisationEntity.getStatus()).thenReturn(AuthorisationStatus.AUTHORISED);
-    when(authorisationRepository.findById(authorisationId)).thenReturn(Optional.of(authorisationEntity));
+    when(authorisationRepository.findById(authorisationId))
+        .thenReturn(Optional.of(authorisationEntity));
 
     AccountEntity accountEntity = mockExistingAccountEntity();
     accountEntity.setId(accountId);
@@ -433,7 +443,8 @@ class AuthorisationTransactionalExecutorTest {
   void shouldReverseInTransactionWhenAuthorisationIsAuthorised() {
     UUID authorisationId = UUID.randomUUID();
     UUID accountId = UUID.randomUUID();
-    ReverseRequest reverseRequest = new ReverseRequest("reverse-key", "CUSTOMER_REQUEST");
+    ReverseRequest reverseRequest =
+        new ReverseRequest("reverse-key", AuthorisationEventReason.CUSTOMER_REQUEST);
 
     AuthorisationEntity authorisationEntity = mock(AuthorisationEntity.class);
     when(authorisationEntity.getId()).thenReturn(authorisationId);
@@ -441,7 +452,8 @@ class AuthorisationTransactionalExecutorTest {
     when(authorisationEntity.getAmount()).thenReturn(BigDecimal.TEN);
     when(authorisationEntity.getCurrencyCode()).thenReturn("USD");
     when(authorisationEntity.getStatus()).thenReturn(AuthorisationStatus.AUTHORISED);
-    when(authorisationRepository.findById(authorisationId)).thenReturn(Optional.of(authorisationEntity));
+    when(authorisationRepository.findById(authorisationId))
+        .thenReturn(Optional.of(authorisationEntity));
 
     AccountEntity accountEntity = mockExistingAccountEntity();
     accountEntity.setId(accountId);
@@ -459,7 +471,7 @@ class AuthorisationTransactionalExecutorTest {
     assertThat(response.idempotencyKey()).isEqualTo(reverseRequest.idempotencyKey());
     assertThat(response.reversedAmount()).isEqualByComparingTo("10.00");
     assertThat(response.status()).isEqualTo(AuthorisationStatus.REVERSED);
-    assertThat(response.reasonCode()).isEqualTo("CUSTOMER_REQUEST");
+    assertThat(response.reasonCode()).isEqualTo(AuthorisationEventReason.CUSTOMER_REQUEST);
 
     assertThat(accountEntity.getAvailableBalance()).isEqualByComparingTo("100.00");
     assertThat(accountEntity.getReservedBalance()).isEqualByComparingTo("0.00");
@@ -470,7 +482,8 @@ class AuthorisationTransactionalExecutorTest {
         ArgumentCaptor.forClass(AuthorisationEventEntity.class);
     verify(authorisationEventRepository).saveAndFlush(eventCaptor.capture());
     assertThat(eventCaptor.getValue().getEventType()).isEqualTo(EventType.AUTHORISATION_REVERSED);
-    assertThat(eventCaptor.getValue().getIdempotencyKey()).isEqualTo(reverseRequest.idempotencyKey());
+    assertThat(eventCaptor.getValue().getIdempotencyKey())
+        .isEqualTo(reverseRequest.idempotencyKey());
     assertThat(eventCaptor.getValue().getReasonCode())
         .isEqualTo(AuthorisationEventReason.CUSTOMER_REQUEST);
     assertThat(eventCaptor.getValue().getCorrelationId()).isNotNull();
@@ -483,7 +496,8 @@ class AuthorisationTransactionalExecutorTest {
   void shouldReturnReversedResponseWhenAlreadyReversedWithMatchingIdempotency() {
     UUID authorisationId = UUID.randomUUID();
     UUID accountId = UUID.randomUUID();
-    ReverseRequest reverseRequest = new ReverseRequest("reverse-key", "CUSTOMER_REQUEST");
+    ReverseRequest reverseRequest =
+        new ReverseRequest("reverse-key", AuthorisationEventReason.CUSTOMER_REQUEST);
 
     AuthorisationEntity authorisationEntity = mock(AuthorisationEntity.class);
     OffsetDateTime updatedAt = OffsetDateTime.now().minusSeconds(5);
@@ -492,19 +506,22 @@ class AuthorisationTransactionalExecutorTest {
     when(authorisationEntity.getCurrencyCode()).thenReturn("USD");
     when(authorisationEntity.getStatus()).thenReturn(AuthorisationStatus.REVERSED);
     when(authorisationEntity.getUpdatedAt()).thenReturn(updatedAt);
-    when(authorisationRepository.findById(authorisationId)).thenReturn(Optional.of(authorisationEntity));
+    when(authorisationRepository.findById(authorisationId))
+        .thenReturn(Optional.of(authorisationEntity));
 
     AuthorisationEventEntity reverseEvent = mock(AuthorisationEventEntity.class);
     when(reverseEvent.getReasonCode()).thenReturn(AuthorisationEventReason.CUSTOMER_REQUEST);
     when(authorisationEventRepository.findByAccountIdAndEventTypeAndIdempotencyKey(
-            accountId, reverseRequest.idempotencyKey(), EventType.AUTHORISATION_REVERSED.toString()))
+            accountId,
+            reverseRequest.idempotencyKey(),
+            EventType.AUTHORISATION_REVERSED.toString()))
         .thenReturn(Optional.of(reverseEvent));
 
     ReverseResponse response = executor.reverseInTransaction(authorisationId, reverseRequest);
 
     assertThat(response.status()).isEqualTo(AuthorisationStatus.REVERSED);
     assertThat(response.idempotencyKey()).isEqualTo(reverseRequest.idempotencyKey());
-    assertThat(response.reasonCode()).isEqualTo("CUSTOMER_REQUEST");
+    assertThat(response.reasonCode()).isEqualTo(AuthorisationEventReason.CUSTOMER_REQUEST);
     verify(accountRepository, never()).findById(any(UUID.class));
     verify(outboxEventService, never())
         .enqueueAuthorisation(
@@ -517,14 +534,18 @@ class AuthorisationTransactionalExecutorTest {
   void shouldThrowConflictWhenAlreadyReversedWithDifferentIdempotency() {
     UUID authorisationId = UUID.randomUUID();
     UUID accountId = UUID.randomUUID();
-    ReverseRequest reverseRequest = new ReverseRequest("reverse-key", "CUSTOMER_REQUEST");
+    ReverseRequest reverseRequest =
+        new ReverseRequest("reverse-key", AuthorisationEventReason.CUSTOMER_REQUEST);
 
     AuthorisationEntity authorisationEntity = mock(AuthorisationEntity.class);
     when(authorisationEntity.getAccountId()).thenReturn(accountId);
     when(authorisationEntity.getStatus()).thenReturn(AuthorisationStatus.REVERSED);
-    when(authorisationRepository.findById(authorisationId)).thenReturn(Optional.of(authorisationEntity));
+    when(authorisationRepository.findById(authorisationId))
+        .thenReturn(Optional.of(authorisationEntity));
     when(authorisationEventRepository.findByAccountIdAndEventTypeAndIdempotencyKey(
-            accountId, reverseRequest.idempotencyKey(), EventType.AUTHORISATION_REVERSED.toString()))
+            accountId,
+            reverseRequest.idempotencyKey(),
+            EventType.AUTHORISATION_REVERSED.toString()))
         .thenReturn(Optional.empty());
 
     assertThrows(
@@ -535,11 +556,13 @@ class AuthorisationTransactionalExecutorTest {
   @Test
   void shouldThrowIllegalStateWhenReverseOnNonAuthorisedStatus() {
     UUID authorisationId = UUID.randomUUID();
-    ReverseRequest reverseRequest = new ReverseRequest("reverse-key", "CUSTOMER_REQUEST");
+    ReverseRequest reverseRequest =
+        new ReverseRequest("reverse-key", AuthorisationEventReason.CUSTOMER_REQUEST);
 
     AuthorisationEntity authorisationEntity = mock(AuthorisationEntity.class);
     when(authorisationEntity.getStatus()).thenReturn(AuthorisationStatus.CAPTURED);
-    when(authorisationRepository.findById(authorisationId)).thenReturn(Optional.of(authorisationEntity));
+    when(authorisationRepository.findById(authorisationId))
+        .thenReturn(Optional.of(authorisationEntity));
 
     assertThrows(
         AuthorisationIllegalStateException.class,
@@ -555,14 +578,16 @@ class AuthorisationTransactionalExecutorTest {
         AuthorisationNotFoundException.class,
         () ->
             executor.reverseInTransaction(
-                authorisationId, new ReverseRequest("reverse-key", "CUSTOMER_REQUEST")));
+                authorisationId,
+                new ReverseRequest("reverse-key", AuthorisationEventReason.CUSTOMER_REQUEST)));
   }
 
   @Test
   void shouldWrapReverseSaveRaceAsConcurrentIdempotencyRace() {
     UUID authorisationId = UUID.randomUUID();
     UUID accountId = UUID.randomUUID();
-    ReverseRequest reverseRequest = new ReverseRequest("reverse-key", "CUSTOMER_REQUEST");
+    ReverseRequest reverseRequest =
+        new ReverseRequest("reverse-key", AuthorisationEventReason.CUSTOMER_REQUEST);
 
     AuthorisationEntity authorisationEntity = mock(AuthorisationEntity.class);
     when(authorisationEntity.getId()).thenReturn(authorisationId);
@@ -570,7 +595,8 @@ class AuthorisationTransactionalExecutorTest {
     when(authorisationEntity.getAmount()).thenReturn(BigDecimal.TEN);
     when(authorisationEntity.getCurrencyCode()).thenReturn("USD");
     when(authorisationEntity.getStatus()).thenReturn(AuthorisationStatus.AUTHORISED);
-    when(authorisationRepository.findById(authorisationId)).thenReturn(Optional.of(authorisationEntity));
+    when(authorisationRepository.findById(authorisationId))
+        .thenReturn(Optional.of(authorisationEntity));
 
     AccountEntity accountEntity = mockExistingAccountEntity();
     accountEntity.setId(accountId);

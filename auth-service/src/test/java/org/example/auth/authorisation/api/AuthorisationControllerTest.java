@@ -16,6 +16,7 @@ import java.time.OffsetDateTime;
 import java.util.UUID;
 import org.example.auth.account.application.AccountService;
 import org.example.auth.authorisation.application.AuthorisationService;
+import org.example.auth.authorisation.domain.AuthorisationEventReason;
 import org.example.auth.authorisation.domain.AuthorisationStatus;
 import org.example.auth.common.OperationType;
 import org.example.auth.common.exception.AccountNotFoundException;
@@ -400,7 +401,7 @@ class AuthorisationControllerTest {
                 BigDecimal.TEN,
                 "GBP",
                 AuthorisationStatus.REVERSED,
-                "CUSTOMER_REQUEST",
+                AuthorisationEventReason.CUSTOMER_REQUEST,
                 updatedAt));
 
     mockMVC
