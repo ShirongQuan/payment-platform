@@ -166,8 +166,50 @@ public class AuthorisationServiceImpl implements AuthorisationService {
   }
 
   @Override
+  @Transactional
   public ReverseResponse reverse(UUID authorisationId, ReverseRequest reverseRequest) {
-    // TODO
-    return null;
+    log.debug(
+        "Handling reverse request, authorisationId={}, idempotencyKey={}, reasonCode={}",
+        authorisationId,
+        reverseRequest.idempotencyKey(),
+        reverseRequest.reasonCode());
+    try {
+      return authorisationTransactionalExecutor.reverseInTransaction(
+          authorisationId, reverseRequest);
+    } catch (ConcurrentIdempotencyRaceException e) {
+      log.warn(
+          "Resolving reverse idempotency after concurrent race, authorisationId={}, idempotencyKey={}",
+          authorisationId,
+          reverseRequest.idempotencyKey(),
+          e);
+      return resolveIdempotencyAfterReverseRollback(authorisationId, reverseRequest);
+    }
+  }
+
+  private ReverseResponse resolveIdempotencyAfterReverseRollback(
+      UUID authorisationId, ReverseRequest reverseRequest) {
+    AuthorisationEntity authorisationEntity =
+        authorisationRepository
+            .findById(authorisationId)
+            .orElseThrow(() -> new AuthorisationNotFoundException(authorisationId));
+
+    return authorisationEventRepository
+        .findByAccountIdAndEventTypeAndIdempotencyKey(
+            authorisationEntity.getAccountId(),
+            reverseRequest.idempotencyKey(),
+            EventType.AUTHORISATION_REVERSED.toString())
+        .map(
+            event ->
+                new ReverseResponse(
+                    authorisationId,
+                    reverseRequest.idempotencyKey(),
+                    authorisationEntity.getAmount(),
+                    authorisationEntity.getCurrencyCode(),
+                    AuthorisationStatus.REVERSED,
+                    event.getReasonCode() != null
+                        ? event.getReasonCode()
+                        : reverseRequest.reasonCode(),
+                    authorisationEntity.getUpdatedAt()))
+        .orElseThrow(IdempotencyConflictException::new);
   }
 }

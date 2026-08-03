@@ -305,4 +305,47 @@ class AccountTest {
                 assertThat(((InsufficientFundException) ex).getErrorCode())
                     .isEqualTo(ErrorCode.INSUFFICIENT_FUNDS));
   }
+
+  @Test
+  void shouldReverseWithCorrectInputAndSufficientReserved() {
+    Account account = new Account("USD");
+    account.deposit(new BigDecimal("20.00"), "USD");
+    account.reserve(new BigDecimal("10.00"), "USD");
+
+    account.reverse(new BigDecimal("6.00"), "USD");
+
+    assertThat(account.getAvailableBalance()).isEqualByComparingTo("16.00");
+    assertThat(account.getReservedBalance()).isEqualByComparingTo("4.00");
+  }
+
+  @Test
+  void shouldFailReverseWithInvalidInputOrInsufficientReserved() {
+    Account account = new Account("USD");
+    account.deposit(new BigDecimal("20.00"), "USD");
+    account.reserve(new BigDecimal("10.00"), "USD");
+
+    assertThatThrownBy(() -> account.reverse(BigDecimal.ONE, "EUR"))
+        .isInstanceOf(CurrencyMismatchException.class)
+        .satisfies(
+            ex ->
+                assertThat(((CurrencyMismatchException) ex).getErrorCode())
+                    .isEqualTo(ErrorCode.CURRENCY_MISMATCH));
+
+    assertThatThrownBy(() -> account.reverse(null, "USD")).isInstanceOf(NullPointerException.class);
+
+    assertThatThrownBy(() -> account.reverse(BigDecimal.ZERO, "USD"))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessage("Amount must be positive");
+
+    assertThatThrownBy(() -> account.reverse(BigDecimal.valueOf(-1), "USD"))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessage("Amount must be positive");
+
+    assertThatThrownBy(() -> account.reverse(new BigDecimal("10.01"), "USD"))
+        .isInstanceOf(InsufficientFundException.class)
+        .satisfies(
+            ex ->
+                assertThat(((InsufficientFundException) ex).getErrorCode())
+                    .isEqualTo(ErrorCode.INSUFFICIENT_FUNDS));
+  }
 }

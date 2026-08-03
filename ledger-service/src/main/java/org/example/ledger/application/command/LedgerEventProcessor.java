@@ -11,12 +11,15 @@ import org.springframework.stereotype.Service;
 public class LedgerEventProcessor {
   private final AuthorisationAuthorisedHandler authorisationAuthorisedHandler;
   private final AuthorisationCapturedHandler authorisationCapturedHandler;
+  private final AuthorisationReversedHandler authorisationReversedHandler;
 
   public LedgerEventProcessor(
       AuthorisationAuthorisedHandler authorisationAuthorisedHandler,
-      AuthorisationCapturedHandler authorisationCapturedHandler) {
+      AuthorisationCapturedHandler authorisationCapturedHandler,
+      AuthorisationReversedHandler authorisationReversedHandler) {
     this.authorisationAuthorisedHandler = authorisationAuthorisedHandler;
     this.authorisationCapturedHandler = authorisationCapturedHandler;
+    this.authorisationReversedHandler = authorisationReversedHandler;
   }
 
   public void process(EventMetadata metadata, String rawPayload) {
@@ -34,6 +37,10 @@ public class LedgerEventProcessor {
       case AUTHORISATION_CAPTURED -> {
         authorisationCapturedHandler.handle(metadata, rawPayload);
         log.debug("Handled AUTHORISATION_CAPTURED event, eventId={}", metadata.eventId());
+      }
+      case AUTHORISATION_REVERSED -> {
+        authorisationReversedHandler.handle(metadata, rawPayload);
+        log.debug("Handled AUTHORISATION_REVERSED event, eventId={}", metadata.eventId());
       }
       default -> {
         log.error("Unsupported event type received, eventId={}, eventType={}", metadata.eventId(), eventType);

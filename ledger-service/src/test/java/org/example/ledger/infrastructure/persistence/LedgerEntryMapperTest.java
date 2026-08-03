@@ -9,6 +9,7 @@ import java.util.UUID;
 import org.example.ledger.api.AuthenticationResponse;
 import org.example.ledger.domain.AuthorisationAuthorisedPayload;
 import org.example.ledger.domain.AuthorisationCapturedPayload;
+import org.example.ledger.domain.AuthorisationReversedPayload;
 import org.example.ledger.domain.EventMetadata;
 import org.example.ledger.domain.EventType;
 import org.junit.jupiter.api.Test;
@@ -98,6 +99,41 @@ class LedgerEntryMapperTest {
     assertThat(entity.getMerchantReference()).isNull();
     assertThat(entity.getIdempotencyKey()).isEqualTo(payload.idempotencyKey());
     assertThat(entity.getPayload()).isEqualTo(payloadJson);
+  }
+
+  @Test
+  void shouldConvertReversedPayloadToLedgerEntity() {
+    EventMetadata metadata =
+        new EventMetadata(
+            UUID.fromString("00000000-0000-0000-0000-000000000003"),
+            "AUTHORISATION",
+            UUID.fromString("a5b63e7c-1a37-4798-aa4c-e518d72675f4"),
+            EventType.AUTHORISATION_REVERSED.name(),
+            OffsetDateTime.parse("2026-07-14T10:02:00Z"),
+            UUID.fromString("00000000-0000-0000-0000-000000000012"));
+    Map<String, Object> payloadJson =
+        Map.of("status", "REVERSED", "currencyCode", "GBP", "reasonCode", "CUSTOMER_REQUEST");
+    AuthorisationReversedPayload payload =
+        new AuthorisationReversedPayload(
+            UUID.fromString("cccccccc-cccc-cccc-cccc-cccccccccccc"),
+            UUID.fromString("33333333-3333-3333-3333-333333333333"),
+            new BigDecimal("10.00"),
+            "GBP",
+            "reverse-idem-1",
+            "REVERSED",
+            OffsetDateTime.parse("2026-07-14T10:02:00Z"),
+            "CUSTOMER_REQUEST");
+
+    LedgerEntryEntity entity = mapper.toReversedLedgerEntry(metadata, payload, payloadJson);
+
+    assertThat(entity.getEventType()).isEqualTo(EventType.AUTHORISATION_REVERSED.name());
+    assertThat(entity.getAuthorisationId()).isEqualTo(payload.authorisationId());
+    assertThat(entity.getAccountId()).isEqualTo(payload.accountId());
+    assertThat(entity.getAmount()).isEqualByComparingTo("10.00");
+    assertThat(entity.getMerchantReference()).isNull();
+    assertThat(entity.getIdempotencyKey()).isEqualTo(payload.idempotencyKey());
+    assertThat(entity.getPayload()).isEqualTo(payloadJson);
+    assertThat(entity.getPayload()).containsEntry("reasonCode", "CUSTOMER_REQUEST");
   }
 
   @Test

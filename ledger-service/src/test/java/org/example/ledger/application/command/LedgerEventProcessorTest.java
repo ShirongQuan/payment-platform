@@ -19,6 +19,7 @@ class LedgerEventProcessorTest {
 
   @Mock private AuthorisationAuthorisedHandler authorisationAuthorisedHandler;
   @Mock private AuthorisationCapturedHandler authorisationCapturedHandler;
+  @Mock private AuthorisationReversedHandler authorisationReversedHandler;
 
   @InjectMocks private LedgerEventProcessor ledgerEventProcessor;
 
@@ -68,6 +69,26 @@ class LedgerEventProcessorTest {
     assertThrows(
         IllegalArgumentException.class,
         () -> ledgerEventProcessor.process(metadata, "{\"status\":\"DECLINED\"}"));
-    verifyNoInteractions(authorisationAuthorisedHandler, authorisationCapturedHandler);
+    verifyNoInteractions(
+        authorisationAuthorisedHandler,
+        authorisationCapturedHandler,
+        authorisationReversedHandler);
+  }
+
+  @Test
+  void shouldProcessReversedEventWithCorrectHandler() {
+    EventMetadata metadata =
+        new EventMetadata(
+            UUID.randomUUID(),
+            "AUTHORISATION",
+            UUID.randomUUID(),
+            EventType.AUTHORISATION_REVERSED.name(),
+            OffsetDateTime.parse("2026-07-14T09:00:00Z"),
+            UUID.randomUUID());
+
+    ledgerEventProcessor.process(metadata, "{\"status\":\"REVERSED\",\"reasonCode\":\"CUSTOMER_REQUEST\"}");
+
+    verify(authorisationReversedHandler)
+        .handle(metadata, "{\"status\":\"REVERSED\",\"reasonCode\":\"CUSTOMER_REQUEST\"}");
   }
 }

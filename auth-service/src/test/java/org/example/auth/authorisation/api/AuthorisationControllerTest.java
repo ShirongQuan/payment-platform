@@ -386,4 +386,109 @@ class AuthorisationControllerTest {
         .andExpect(content().contentTypeCompatibleWith("application/problem+json"))
         .andExpect(jsonPath("$.errorCode").value(ErrorCode.IDEMPOTENCY_CONFLICT.name()));
   }
+
+  @Test
+  void shouldReverseWithCorrectInput() throws Exception {
+    UUID authorisationId = UUID.randomUUID();
+    OffsetDateTime updatedAt = OffsetDateTime.now().minusSeconds(1);
+
+    when(authorisationService.reverse(any(UUID.class), any(ReverseRequest.class)))
+        .thenReturn(
+            new ReverseResponse(
+                authorisationId,
+                "reverse-key",
+                BigDecimal.TEN,
+                "GBP",
+                AuthorisationStatus.REVERSED,
+                "CUSTOMER_REQUEST",
+                updatedAt));
+
+    mockMVC
+        .perform(
+            post("/authorisations/{authorisationId}/reversals", authorisationId)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(
+                    """
+                    {
+                      "idempotencyKey": "reverse-key",
+                      "reasonCode": "CUSTOMER_REQUEST"
+                    }
+                    """))
+        .andExpect(status().isOk())
+        .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
+        .andExpect(jsonPath("$.authorisationId").value(authorisationId.toString()))
+        .andExpect(jsonPath("$.idempotencyKey").value("reverse-key"))
+        .andExpect(jsonPath("$.reversedAmount").value(10.00))
+        .andExpect(jsonPath("$.currencyCode").value("GBP"))
+        .andExpect(jsonPath("$.status").value(AuthorisationStatus.REVERSED.name()))
+        .andExpect(jsonPath("$.reasonCode").value("CUSTOMER_REQUEST"))
+        .andExpect(jsonPath("$.updatedAt").isNotEmpty());
+
+    verify(authorisationService, times(1)).reverse(any(UUID.class), any(ReverseRequest.class));
+  }
+
+  @Test
+  void shouldReturnBadRequestWhenReverseRequestInvalid() throws Exception {
+    UUID authorisationId = UUID.randomUUID();
+
+    mockMVC
+        .perform(
+            post("/authorisations/{authorisationId}/reversals", authorisationId)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(
+                    """
+                    {
+                      "idempotencyKey": "",
+                      "reasonCode": ""
+                    }
+                    """))
+        .andExpect(status().isBadRequest())
+        .andExpect(content().string(""));
+
+    verify(authorisationService, never()).reverse(any(UUID.class), any(ReverseRequest.class));
+  }
+
+  @Test
+  void shouldReturnNotFoundWhenReverseAuthorisationNotFound() throws Exception {
+    UUID authorisationId = UUID.randomUUID();
+    when(authorisationService.reverse(any(UUID.class), any(ReverseRequest.class)))
+        .thenThrow(new AuthorisationNotFoundException(authorisationId));
+
+    mockMVC
+        .perform(
+            post("/authorisations/{authorisationId}/reversals", authorisationId)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(
+                    """
+                    {
+                      "idempotencyKey": "reverse-key",
+                      "reasonCode": "CUSTOMER_REQUEST"
+                    }
+                    """))
+        .andExpect(status().isNotFound())
+        .andExpect(content().contentTypeCompatibleWith("application/problem+json"))
+        .andExpect(jsonPath("$.errorCode").value(ErrorCode.AUTHORISATION_NOT_FOUND.name()));
+  }
+
+  @Test
+  void shouldReturnConflictWhenReverseIdempotencyConflict() throws Exception {
+    UUID authorisationId = UUID.randomUUID();
+    when(authorisationService.reverse(any(UUID.class), any(ReverseRequest.class)))
+        .thenThrow(new IdempotencyConflictException());
+
+    mockMVC
+        .perform(
+            post("/authorisations/{authorisationId}/reversals", authorisationId)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(
+                    """
+                    {
+                      "idempotencyKey": "reverse-key",
+                      "reasonCode": "CUSTOMER_REQUEST"
+                    }
+                    """))
+        .andExpect(status().isConflict())
+        .andExpect(content().contentTypeCompatibleWith("application/problem+json"))
+        .andExpect(jsonPath("$.errorCode").value(ErrorCode.IDEMPOTENCY_CONFLICT.name()));
+  }
 }

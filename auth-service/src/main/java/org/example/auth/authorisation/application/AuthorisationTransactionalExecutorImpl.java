@@ -13,6 +13,8 @@ import org.example.auth.authorisation.api.AuthorisationRequest;
 import org.example.auth.authorisation.api.AuthorisationResponse;
 import org.example.auth.authorisation.api.CaptureRequest;
 import org.example.auth.authorisation.api.CaptureResponse;
+import org.example.auth.authorisation.api.ReverseRequest;
+import org.example.auth.authorisation.api.ReverseResponse;
 import org.example.auth.authorisation.domain.Authorisation;
 import org.example.auth.authorisation.domain.AuthorisationEventReason;
 import org.example.auth.authorisation.domain.AuthorisationStatus;
@@ -338,6 +340,125 @@ public class AuthorisationTransactionalExecutorImpl implements AuthorisationTran
         authorisationEntity.getAmount(),
         authorisationEntity.getCurrencyCode(),
         AuthorisationStatus.CAPTURED,
+        OffsetDateTime.now());
+  }
+
+  @Override
+  public ReverseResponse reverseInTransaction(UUID authorisationId, ReverseRequest reverseRequest) {
+    log.debug(
+        "Starting reverse transaction, authorisationId={}, idempotencyKey={}, reasonCode={}",
+        authorisationId,
+        reverseRequest.idempotencyKey(),
+        reverseRequest.reasonCode());
+
+    AuthorisationEntity authorisationEntity =
+        authorisationRepository
+            .findById(authorisationId)
+            .orElseThrow(() -> new AuthorisationNotFoundException(authorisationId));
+
+    AuthorisationStatus status = authorisationEntity.getStatus();
+    if (status.equals(AuthorisationStatus.REVERSED)) {
+      log.debug(
+          "Authorisation already reversed, checking reverse idempotency replay, authorisationId={}, idempotencyKey={}",
+          authorisationId,
+          reverseRequest.idempotencyKey());
+      return authorisationEventRepository
+          .findByAccountIdAndEventTypeAndIdempotencyKey(
+              authorisationEntity.getAccountId(),
+              reverseRequest.idempotencyKey(),
+              EventType.AUTHORISATION_REVERSED.toString())
+          .map(
+              event ->
+                  new ReverseResponse(
+                      authorisationId,
+                      reverseRequest.idempotencyKey(),
+                      authorisationEntity.getAmount(),
+                      authorisationEntity.getCurrencyCode(),
+                      AuthorisationStatus.REVERSED,
+                      event.getReasonCode() != null
+                          ? event.getReasonCode()
+                          : reverseRequest.reasonCode(),
+                      authorisationEntity.getUpdatedAt()))
+          .orElseThrow(
+              () -> {
+                log.warn(
+                    "Reverse idempotency conflict for already reversed authorisation, authorisationId={}, idempotencyKey={}",
+                    authorisationId,
+                    reverseRequest.idempotencyKey());
+                return new IdempotencyConflictException();
+              });
+    } else if (!status.equals(AuthorisationStatus.AUTHORISED)) {
+      log.warn(
+          "Reverse rejected due to illegal state, authorisationId={}, currentStatus={}",
+          authorisationId,
+          status);
+      throw new AuthorisationIllegalStateException(authorisationId, status, "reverse");
+    }
+
+    UUID correlationId = UUID.randomUUID();
+    AccountEntity accountEntity =
+        accountRepository
+            .findById(authorisationEntity.getAccountId())
+            .orElseThrow(() -> new AccountNotFoundException(authorisationEntity.getAccountId()));
+    Account account = accountMapper.toAccount(accountEntity);
+    log.debug(
+        "Loaded account for reverse, accountId={}, availableBalance={}, reservedBalance={}",
+        accountEntity.getId(),
+        accountEntity.getAvailableBalance(),
+        accountEntity.getReservedBalance());
+    account.reverse(authorisationEntity.getAmount(), authorisationEntity.getCurrencyCode());
+    accountEntity.setAvailableBalance(account.getAvailableBalance());
+    accountEntity.setReservedBalance(account.getReservedBalance());
+    log.debug(
+        "Reversed reserved amount, accountId={}, newAvailableBalance={}, newReservedBalance={}",
+        accountEntity.getId(),
+        accountEntity.getAvailableBalance(),
+        accountEntity.getReservedBalance());
+
+    authorisationEntity.setStatus(AuthorisationStatus.REVERSED);
+    AuthorisationEventEntity authorisationEventEntity =
+        new AuthorisationEventEntity(
+            UUID.randomUUID(),
+            authorisationEntity.getId(),
+            authorisationEntity.getAccountId(),
+            EventType.AUTHORISATION_REVERSED,
+            reverseRequest.idempotencyKey(),
+            authorisationEntity.getAmount(),
+            authorisationEntity.getCurrencyCode(),
+            reverseRequest.reasonCode(),
+            correlationId,
+            OffsetDateTime.now());
+
+    try {
+      authorisationRepository.saveAndFlush(authorisationEntity);
+      authorisationEventRepository.saveAndFlush(authorisationEventEntity);
+      log.debug(
+          "Persisted reverse state and event, authorisationId={}, eventId={}",
+          authorisationEntity.getId(),
+          authorisationEventEntity.getEventId());
+    } catch (DataIntegrityViolationException e) {
+      log.warn(
+          "Concurrent idempotency race while persisting reverse, authorisationId={}, idempotencyKey={}",
+          authorisationId,
+          reverseRequest.idempotencyKey(),
+          e);
+      throw new ConcurrentIdempotencyRaceException(e);
+    }
+
+    log.debug(
+        "Enqueueing reverse outbox event, authorisationId={}, eventId={}",
+        authorisationEntity.getId(),
+        authorisationEventEntity.getEventId());
+    outboxEventService.enqueueAuthorisation(
+        authorisationEntity, authorisationEventEntity, OperationType.REVERSE);
+
+    return new ReverseResponse(
+        authorisationId,
+        reverseRequest.idempotencyKey(),
+        authorisationEntity.getAmount(),
+        authorisationEntity.getCurrencyCode(),
+        AuthorisationStatus.REVERSED,
+        reverseRequest.reasonCode(),
         OffsetDateTime.now());
   }
 }

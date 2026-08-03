@@ -6,6 +6,7 @@ import java.util.UUID;
 import org.example.ledger.api.AuthenticationResponse;
 import org.example.ledger.domain.AuthorisationAuthorisedPayload;
 import org.example.ledger.domain.AuthorisationCapturedPayload;
+import org.example.ledger.domain.AuthorisationReversedPayload;
 import org.example.ledger.domain.EventMetadata;
 import org.example.ledger.domain.EventType;
 import org.mapstruct.Mapper;
@@ -63,6 +64,25 @@ public interface LedgerEntryMapper {
   LedgerEntryEntity toLedgerEntry(
       EventMetadata metadata,
       AuthorisationCapturedPayload payload,
+      Map<String, Object> payloadJson);
+
+  @Mapping(target = "entryId", expression = "java(UUID.randomUUID())")
+  @Mapping(target = "eventId", source = "metadata.eventId")
+  @Mapping(target = "aggregateType", source = "metadata.aggregateType")
+  @Mapping(target = "aggregateId", source = "metadata.aggregateId")
+  @Mapping(target = "accountId", source = "payload.accountId")
+  @Mapping(target = "authorisationId", source = "payload.authorisationId")
+  @Mapping(target = "eventType", source = "metadata.eventType")
+  @Mapping(target = "entryStatus", source = "payload.status")
+  @Mapping(target = "amount", source = "payload.amount")
+  @Mapping(target = "currencyCode", source = "payload.currencyCode")
+  @Mapping(target = "idempotencyKey", source = "payload.idempotencyKey")
+  @Mapping(target = "occurredAt", source = "metadata.occurredAt")
+  @Mapping(target = "createdAt", expression = "java(OffsetDateTime.now())")
+  @Mapping(target = "payload", source = "payloadJson")
+  LedgerEntryEntity toReversedLedgerEntry(
+      EventMetadata metadata,
+      AuthorisationReversedPayload payload,
       Map<String, Object> payloadJson);
 
   @Mapping(target = "authorisationId", source = "entity.authorisationId")

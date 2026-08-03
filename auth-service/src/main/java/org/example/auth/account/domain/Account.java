@@ -113,6 +113,17 @@ public class Account {
     reservedBalance = reservedBalance.subtract(amount);
   }
 
+  public void reverse(BigDecimal amount, String currencyCode) {
+    // TODO: validate account status
+    validateCurrency(currencyCode);
+    validateAmount(amount);
+    if (reservedBalance.compareTo(amount) < 0) {
+      throw new InsufficientFundException(OperationType.REVERSE, reservedBalance, amount);
+    }
+    reservedBalance = reservedBalance.subtract(amount);
+    availableBalance = availableBalance.add(amount);
+  }
+
   void validateCurrency(String currencyCode) {
     String normalizedCurrency = normalizeAndValidateCurrency(currencyCode);
     if (!(this.currencyCode.equals(normalizedCurrency))) {
