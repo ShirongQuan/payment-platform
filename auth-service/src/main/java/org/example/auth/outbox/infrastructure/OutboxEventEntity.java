@@ -20,7 +20,7 @@ import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 
 @Entity
-@Table(name = "outbox_events")
+@Table(name = "outbox_event")
 @Getter
 @Setter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)

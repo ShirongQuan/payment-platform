@@ -1,6 +1,6 @@
-drop table if exists outbox_events;
+drop table if exists outbox_event;
 
-create table outbox_events (
+create table outbox_event (
     event_id uuid primary key,
     version bigint,
     aggregate_type varchar(20) not null,

@@ -66,7 +66,8 @@ public class AuthorisationServiceImpl implements AuthorisationService {
   private AuthorisationResponse resolveIdempotencyAfterRollback(
       AuthorisationRequest request, String normalizedCurrency) {
     return authorisationRepository
-        .findByAccountIdAndIdempotencyKey(request.accountId(), request.idempotencyKey())
+        .findByAccountIdAndAuthoriseEventTypesAndIdempotencyKey(
+            request.accountId(), request.idempotencyKey())
         .map(entity -> validateAndBuildIdempotentResponse(entity, request, normalizedCurrency))
         .orElseThrow(
             () ->

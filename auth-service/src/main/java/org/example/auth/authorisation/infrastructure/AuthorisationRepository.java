@@ -18,10 +18,11 @@ public interface AuthorisationRepository extends JpaRepository<AuthorisationEnti
           join authorisation_event e on e.authorisation_id = a.authorisation_id
           where e.account_id = :accountId
             and e.idempotency_key = :idempotencyKey
+             and e.event_type in ('AUTHORISATION_AUTHORISED', 'AUTHORISATION_DECLINED')
           order by e.created_at desc
           limit 1
           """,
       nativeQuery = true)
-  Optional<AuthorisationEntity> findByAccountIdAndIdempotencyKey(
+  Optional<AuthorisationEntity> findByAccountIdAndAuthoriseEventTypesAndIdempotencyKey(
       @Param("accountId") UUID accountId, @Param("idempotencyKey") String idempotencyKey);
 }

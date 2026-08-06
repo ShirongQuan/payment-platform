@@ -134,7 +134,10 @@ class OutboxEventServiceImplTest {
         .thenReturn(1);
 
     when(outboxEventRepository.markPublished(
-            any(UUID.class), any(OffsetDateTime.class), eq(OutboxEventStatus.PUBLISHED)))
+            any(UUID.class),
+            any(OffsetDateTime.class),
+            eq(OutboxEventStatus.PUBLISHED),
+            eq(OutboxEventStatus.PUBLISHING)))
         .thenReturn(1);
 
     SendResult<UUID, Map<String, Object>> result = mock(SendResult.class);
@@ -159,7 +162,11 @@ class OutboxEventServiceImplTest {
             any(OutboxEventStatus.class));
     verify(outboxKafkaPublisher, times(2)).publishAsync(any(OutboxEvent.class));
     verify(outboxEventRepository, times(2))
-        .markPublished(any(UUID.class), any(OffsetDateTime.class), eq(OutboxEventStatus.PUBLISHED));
+        .markPublished(
+            any(UUID.class),
+            any(OffsetDateTime.class),
+            eq(OutboxEventStatus.PUBLISHED),
+            eq(OutboxEventStatus.PUBLISHING));
   }
 
   @Test
@@ -214,17 +221,21 @@ class OutboxEventServiceImplTest {
 
     verify(outboxKafkaPublisher, times(0)).publishAsync(any(OutboxEvent.class));
     verify(outboxEventRepository, times(0))
-        .markPublished(any(UUID.class), any(OffsetDateTime.class), any(OutboxEventStatus.class));
+        .markPublished(
+            any(UUID.class),
+            any(OffsetDateTime.class),
+            any(OutboxEventStatus.class),
+            any(OutboxEventStatus.class));
     verify(outboxEventRepository, times(0))
         .markRetry(
             any(UUID.class),
             any(Integer.class),
             any(OffsetDateTime.class),
             any(String.class),
+            any(OutboxEventStatus.class),
             any(OutboxEventStatus.class));
     verify(outboxEventRepository, times(0))
-        .markFailed(
-            any(UUID.class), any(Integer.class), any(String.class), any(OutboxEventStatus.class));
+        .markFailed(any(UUID.class), any(Integer.class), any(String.class), any(), any());
   }
 
   @Test
@@ -260,12 +271,16 @@ class OutboxEventServiceImplTest {
             eq(1),
             any(OffsetDateTime.class),
             any(String.class),
-            eq(OutboxEventStatus.NEW));
+            eq(OutboxEventStatus.NEW),
+            eq(OutboxEventStatus.PUBLISHING));
     verify(outboxEventRepository, times(0))
-        .markFailed(
-            any(UUID.class), any(Integer.class), any(String.class), any(OutboxEventStatus.class));
+        .markFailed(any(UUID.class), any(Integer.class), any(String.class), any(), any());
     verify(outboxEventRepository, times(0))
-        .markPublished(any(UUID.class), any(OffsetDateTime.class), any(OutboxEventStatus.class));
+        .markPublished(
+            any(UUID.class),
+            any(OffsetDateTime.class),
+            any(OutboxEventStatus.class),
+            any(OutboxEventStatus.class));
   }
 
   @Test
@@ -295,16 +310,26 @@ class OutboxEventServiceImplTest {
     service.publishNextBatch(10);
 
     verify(outboxEventRepository, times(1))
-        .markFailed(eq(event.getId()), eq(1), any(String.class), eq(OutboxEventStatus.FAILED));
+        .markFailed(
+            eq(event.getId()),
+            eq(1),
+            any(String.class),
+            eq(OutboxEventStatus.FAILED),
+            eq(OutboxEventStatus.PUBLISHING));
     verify(outboxEventRepository, times(0))
         .markRetry(
             any(UUID.class),
             any(Integer.class),
             any(OffsetDateTime.class),
             any(String.class),
+            any(OutboxEventStatus.class),
             any(OutboxEventStatus.class));
     verify(outboxEventRepository, times(0))
-        .markPublished(any(UUID.class), any(OffsetDateTime.class), any(OutboxEventStatus.class));
+        .markPublished(
+            any(UUID.class),
+            any(OffsetDateTime.class),
+            any(OutboxEventStatus.class),
+            any(OutboxEventStatus.class));
   }
 
   private OutboxEventEntity mockOutboxEventEntity(OutboxEventStatus status) {

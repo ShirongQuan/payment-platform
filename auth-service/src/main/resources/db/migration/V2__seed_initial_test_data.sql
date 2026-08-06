@@ -2,9 +2,9 @@
 -- Flyway executes this once, but inserts are also conflict-safe.
 
 -- Align outbox status constraint with application statuses.
-alter table outbox_events drop constraint if exists chk_outbox_events_status;
-alter table outbox_events
-    add constraint chk_outbox_events_status
+alter table outbox_event drop constraint if exists chk_outbox_event_status;
+alter table outbox_event
+    add constraint chk_outbox_event_status
     check (status in ('NEW', 'PUBLISHING', 'PUBLISHED', 'FAILED'));
 
 insert into account (
@@ -91,7 +91,7 @@ values
     )
 on conflict (event_id) do nothing;
 
-insert into outbox_events (
+insert into outbox_event (
     event_id,
     version,
     aggregate_type,

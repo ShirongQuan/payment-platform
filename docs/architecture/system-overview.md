@@ -2,7 +2,8 @@
 
 ## Purpose
 
-This project is an MVP payment-platform that demonstrates event-driven service boundaries and reliability patterns for payment authorisation and ledger projection.
+This project is an MVP payment-platform that demonstrates event-driven service boundaries and reliability patterns for
+payment authorisation and ledger projection.
 
 ## Scope
 
@@ -62,7 +63,7 @@ Owns:
 - accounts
 - authorisations
 - authorisation_events
-- outbox_events
+- outbox_event
 
 ### Fraud Service
 
@@ -89,18 +90,22 @@ Owns:
 - ledger_entries
 - processed_events
 
+The Ledger Service does not require in-order delivery for ingestion.
+It persists each event independently as an immutable record and relies on event timestamps for historical
+reconstruction.
+
 ## Runtime Interaction Model
 
 The system uses two communication styles:
 
 1. **Synchronous HTTP**
-   - clients send authorise/capture requests to the Authorisation Service
-   - Authorisation Service calls Fraud Service for risk evaluation where required
+    - clients send authorise/capture requests to the Authorisation Service
+    - Authorisation Service calls Fraud Service for risk evaluation where required
 
 2. **Asynchronous messaging**
-   - Authorisation Service persists business state + outbox event in one transaction
-   - Outbox scheduler publishes pending events to Kafka
-   - Ledger Service consumes and projects events into read models
+    - Authorisation Service persists business state + outbox event in one transaction
+    - Outbox scheduler publishes pending events to Kafka
+    - Ledger Service consumes and projects events into read models
 
 ## Data Ownership Boundaries
 
@@ -151,6 +156,13 @@ For step-by-step interactions, see:
 - Outbox rows include retry state (`retry_count`, `next_attempt_at`, `last_error`) and failure terminal state.
 - Kafka consumer errors are handled via retry/error handler and dead-letter topic strategy.
 
+## Idempotency and Concurrency Summary
+
+- Authorisation Service requires idempotency keys for command retries.
+- Database uniqueness constraints guard duplicate processing under concurrent requests.
+- Ledger Service deduplicates consumed events by `event_id` using `processed_events`.
+- Transactional outbox pattern ensures reliable event publication from auth DB to Kafka.
+
 ## MVP Constraints
 
 To keep implementation focused, the MVP intentionally uses:
@@ -161,7 +173,8 @@ To keep implementation focused, the MVP intentionally uses:
 - single ledger projection service
 - limited downstream consumers
 
-These constraints keep the domain model understandable while still demonstrating realistic reliability and event-driven patterns.
+These constraints keep the domain model understandable while still demonstrating realistic reliability and event-driven
+patterns.
 
 ## Links To Deeper Docs
 

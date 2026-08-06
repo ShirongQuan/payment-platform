@@ -114,7 +114,9 @@ class OutboxEventRepositoryTestH2 {
             now.plusSeconds(20),
             null);
 
-    int updated = repository.markPublished(id, publishedAt, OutboxEventStatus.PUBLISHED);
+    int updated =
+        repository.markPublished(
+            id, publishedAt, OutboxEventStatus.PUBLISHED, OutboxEventStatus.PUBLISHING);
 
     assertThat(updated).isEqualTo(1);
     entityManager.clear();
@@ -141,7 +143,14 @@ class OutboxEventRepositoryTestH2 {
             now.plusSeconds(30),
             null);
 
-    int updated = repository.markRetry(id, 2, nextAttempt, "retryable", OutboxEventStatus.NEW);
+    int updated =
+        repository.markRetry(
+            id,
+            2,
+            nextAttempt,
+            "retryable",
+            OutboxEventStatus.NEW,
+            OutboxEventStatus.PUBLISHING);
 
     assertThat(updated).isEqualTo(1);
     entityManager.clear();
@@ -168,7 +177,9 @@ class OutboxEventRepositoryTestH2 {
             now.plusSeconds(30),
             null);
 
-    int updated = repository.markFailed(id, 3, "fatal", OutboxEventStatus.FAILED);
+    int updated =
+        repository.markFailed(
+            id, 3, "fatal", OutboxEventStatus.FAILED, OutboxEventStatus.PUBLISHING);
 
     assertThat(updated).isEqualTo(1);
     entityManager.clear();
@@ -178,6 +189,55 @@ class OutboxEventRepositoryTestH2 {
     assertThat(event.getLastError()).isEqualTo("fatal");
     assertThat(event.getClaimedAt()).isNull();
     assertThat(event.getClaimUntil()).isNull();
+  }
+
+  @Test
+  void markPublishedShouldNotUpdateWhenStatusIsNotPublishing() {
+    OffsetDateTime now = OffsetDateTime.parse("2026-07-08T15:00:00Z");
+    OffsetDateTime publishedAt = now.plusSeconds(5);
+
+    UUID id =
+        persistEvent(OutboxEventStatus.NEW, 0, null, now.minusMinutes(1), null, null, null);
+
+    int updated =
+        repository.markPublished(
+            id, publishedAt, OutboxEventStatus.PUBLISHED, OutboxEventStatus.PUBLISHING);
+
+    assertThat(updated).isEqualTo(0);
+  }
+
+  @Test
+  void markRetryShouldNotUpdateWhenStatusIsNotPublishing() {
+    OffsetDateTime now = OffsetDateTime.parse("2026-07-08T16:00:00Z");
+    OffsetDateTime nextAttempt = now.plusMinutes(2);
+
+    UUID id =
+        persistEvent(OutboxEventStatus.NEW, 0, null, now.minusMinutes(1), null, null, null);
+
+    int updated =
+        repository.markRetry(
+            id,
+            1,
+            nextAttempt,
+            "retryable",
+            OutboxEventStatus.NEW,
+            OutboxEventStatus.PUBLISHING);
+
+    assertThat(updated).isEqualTo(0);
+  }
+
+  @Test
+  void markFailedShouldNotUpdateWhenStatusIsNotPublishing() {
+    OffsetDateTime now = OffsetDateTime.parse("2026-07-08T17:00:00Z");
+
+    UUID id =
+        persistEvent(OutboxEventStatus.NEW, 0, null, now.minusMinutes(1), null, null, null);
+
+    int updated =
+        repository.markFailed(
+            id, 1, "fatal", OutboxEventStatus.FAILED, OutboxEventStatus.PUBLISHING);
+
+    assertThat(updated).isEqualTo(0);
   }
 
   private UUID persistEvent(

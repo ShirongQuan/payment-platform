@@ -75,7 +75,8 @@ class AuthorisationTransactionalExecutorTest {
 
     AuthorisationEntity existing = existingAuthorisationEntity(accountId, idempotencyKey);
 
-    when(authorisationRepository.findByAccountIdAndIdempotencyKey(accountId, idempotencyKey))
+    when(authorisationRepository.findByAccountIdAndAuthoriseEventTypesAndIdempotencyKey(
+            accountId, idempotencyKey))
         .thenReturn(Optional.of(existing));
 
     AuthorisationResponse response = executor.authoriseInTransaction(request, "USD");
@@ -105,7 +106,8 @@ class AuthorisationTransactionalExecutorTest {
     AuthorisationEntity existing = mock(AuthorisationEntity.class);
     when(existing.getAmount()).thenReturn(BigDecimal.ONE);
 
-    when(authorisationRepository.findByAccountIdAndIdempotencyKey(accountId, idempotencyKey))
+    when(authorisationRepository.findByAccountIdAndAuthoriseEventTypesAndIdempotencyKey(
+            accountId, idempotencyKey))
         .thenReturn(Optional.of(existing));
 
     assertThatExceptionOfType(IdempotencyConflictException.class)
@@ -126,7 +128,8 @@ class AuthorisationTransactionalExecutorTest {
     AuthorisationRequest request =
         new AuthorisationRequest(accountId, "key", BigDecimal.TEN, "USD", "reference");
 
-    when(authorisationRepository.findByAccountIdAndIdempotencyKey(accountId, "key"))
+    when(authorisationRepository.findByAccountIdAndAuthoriseEventTypesAndIdempotencyKey(
+            accountId, "key"))
         .thenReturn(Optional.empty());
     when(accountRepository.findById(accountId)).thenReturn(Optional.empty());
 
@@ -150,7 +153,8 @@ class AuthorisationTransactionalExecutorTest {
     AuthorisationRequest request =
         new AuthorisationRequest(accountId, idempotencyKey, BigDecimal.TEN, "USD", "reference");
 
-    when(authorisationRepository.findByAccountIdAndIdempotencyKey(accountId, idempotencyKey))
+    when(authorisationRepository.findByAccountIdAndAuthoriseEventTypesAndIdempotencyKey(
+            accountId, idempotencyKey))
         .thenReturn(Optional.empty());
 
     AccountEntity accountEntity = this.mockExistingAccountEntity();
@@ -195,7 +199,8 @@ class AuthorisationTransactionalExecutorTest {
     AuthorisationRequest request =
         new AuthorisationRequest(accountId, "key", BigDecimal.TEN, "USD", "reference");
 
-    when(authorisationRepository.findByAccountIdAndIdempotencyKey(accountId, "key"))
+    when(authorisationRepository.findByAccountIdAndAuthoriseEventTypesAndIdempotencyKey(
+            accountId, "key"))
         .thenReturn(Optional.empty());
 
     AccountEntity accountEntity = this.mockExistingAccountEntity();
@@ -229,7 +234,7 @@ class AuthorisationTransactionalExecutorTest {
 
   @Test
   void shouldAuthoriseInTransaction() {
-    when(authorisationRepository.findByAccountIdAndIdempotencyKey(
+    when(authorisationRepository.findByAccountIdAndAuthoriseEventTypesAndIdempotencyKey(
             any(UUID.class), any(String.class)))
         .thenReturn(Optional.empty());
 
@@ -369,7 +374,7 @@ class AuthorisationTransactionalExecutorTest {
         .thenReturn(Optional.empty());
 
     assertThrows(
-        IdempotencyConflictException.class,
+        AuthorisationIllegalStateException.class,
         () -> executor.captureInTransaction(authorisationId, captureRequest));
   }
 
@@ -549,7 +554,7 @@ class AuthorisationTransactionalExecutorTest {
         .thenReturn(Optional.empty());
 
     assertThrows(
-        IdempotencyConflictException.class,
+        AuthorisationIllegalStateException.class,
         () -> executor.reverseInTransaction(authorisationId, reverseRequest));
   }
 

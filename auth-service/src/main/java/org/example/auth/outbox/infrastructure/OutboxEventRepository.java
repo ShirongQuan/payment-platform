@@ -74,11 +74,13 @@ set e.status = :publishedStatus,
     e.claimedAt = null,
     e.claimUntil = null
 where e.id =:id
+  and e.status = :publishingStatus
 """)
   int markPublished(
       @Param("id") UUID id,
       @Param("publishedAt") OffsetDateTime publishedAt,
-      @Param("publishedStatus") OutboxEventStatus publishedStatus);
+      @Param("publishedStatus") OutboxEventStatus publishedStatus,
+      @Param("publishingStatus") OutboxEventStatus publishingStatus);
 
   @Modifying
   @Transactional
@@ -92,13 +94,15 @@ set e.retryCount = :retryCount,
   e.claimedAt = null,
   e.claimUntil = null
 where e.id = :id
+  and e.status = :publishingStatus
 """)
   int markRetry(
       @Param("id") UUID id,
       @Param("retryCount") int retryCount,
       @Param("nextAttemptAt") OffsetDateTime nextAttemptAt,
       @Param("lastError") String lastError,
-      @Param("newStatus") OutboxEventStatus newStatus);
+      @Param("newStatus") OutboxEventStatus newStatus,
+      @Param("publishingStatus") OutboxEventStatus publishingStatus);
 
   @Modifying
   @Transactional
@@ -111,10 +115,12 @@ where e.id = :id
       e.claimedAt = null,
       e.claimUntil = null
     where e.id = :id
+      and e.status = :publishingStatus
     """)
   int markFailed(
       @Param("id") UUID id,
       @Param("retryCount") int retryCount,
       @Param("lastError") String lastError,
-      @Param("failedStatus") OutboxEventStatus failedStatus);
+      @Param("failedStatus") OutboxEventStatus failedStatus,
+      @Param("publishingStatus") OutboxEventStatus publishingStatus);
 }

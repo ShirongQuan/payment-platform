@@ -77,7 +77,7 @@ public class AuthorisationTransactionalExecutorImpl implements AuthorisationTran
         request.amount(),
         normalizedCurrency);
     Optional<AuthorisationEntity> entityOpt =
-        authorisationRepository.findByAccountIdAndIdempotencyKey(
+        authorisationRepository.findByAccountIdAndAuthoriseEventTypesAndIdempotencyKey(
             request.accountId(), request.idempotencyKey());
 
     if (entityOpt.isPresent()) {
@@ -170,6 +170,8 @@ public class AuthorisationTransactionalExecutorImpl implements AuthorisationTran
           authorisationEventEntity.getEventId(),
           authorisationEventEntity.getEventType());
     } catch (DataIntegrityViolationException e) {
+      // race-condition safety net for idempotency under concurrency.
+      // DB constraint: uq_authorisation_event_account_eventtype_idempotency
       // Fail-fast signal of concurrent idempotency race, so the whole transaction rolls back
       // consistently.
       log.warn(
@@ -261,10 +263,10 @@ public class AuthorisationTransactionalExecutorImpl implements AuthorisationTran
           .orElseThrow(
               () -> {
                 log.warn(
-                    "Capture idempotency conflict for already captured authorisation, authorisationId={}, idempotencyKey={}",
-                    authorisationId,
-                    captureRequest.idempotencyKey());
-                return new IdempotencyConflictException();
+                    "Authorisation {} cannot be captured because it is already CAPTURED.",
+                    authorisationId);
+                return new AuthorisationIllegalStateException(
+                    authorisationId, AuthorisationStatus.CAPTURED, "capture");
               });
     } else if (!status.equals(AuthorisationStatus.AUTHORISED)) {
       // if status != AUTHORISED → fail
@@ -275,6 +277,7 @@ public class AuthorisationTransactionalExecutorImpl implements AuthorisationTran
       throw new AuthorisationIllegalStateException(authorisationId, status, "capture");
     }
 
+    // TODO: correlationId
     UUID correlationId = UUID.randomUUID();
     // load account
     // move reserved balance out
@@ -382,10 +385,10 @@ public class AuthorisationTransactionalExecutorImpl implements AuthorisationTran
           .orElseThrow(
               () -> {
                 log.warn(
-                    "Reverse idempotency conflict for already reversed authorisation, authorisationId={}, idempotencyKey={}",
-                    authorisationId,
-                    reverseRequest.idempotencyKey());
-                return new IdempotencyConflictException();
+                    "Authorisation {} cannot be reversed because it is already REVERSED.",
+                    authorisationId);
+                return new AuthorisationIllegalStateException(
+                    authorisationId, AuthorisationStatus.REVERSED, "reverse");
               });
     } else if (!status.equals(AuthorisationStatus.AUTHORISED)) {
       log.warn(

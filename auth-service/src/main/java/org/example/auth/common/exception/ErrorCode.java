@@ -6,7 +6,8 @@ public enum ErrorCode {
   INSUFFICIENT_FUNDS("Insufficient funds"),
   CURRENCY_MISMATCH("Currency mismatch"),
   INVALID_CURRENCY("Invalid currency"),
-  IDEMPOTENCY_CONFLICT("Idempotency key conflict");
+  IDEMPOTENCY_CONFLICT("Idempotency key conflict"),
+  INVALID_AUTHORISATION_STATE("Authorisation is in an invalid state for this operation");
 
   private final String defaultMessage;
 

@@ -101,4 +101,16 @@ public class AuthExceptionHandler {
     pd.setProperty("errorCode", e.getErrorCode().name());
     return pd;
   }
+
+  @ExceptionHandler(AuthorisationIllegalStateException.class)
+  public ProblemDetail handleAuthorisationIllegalStateException(
+      AuthorisationIllegalStateException e, WebRequest request) {
+    ProblemDetail pd = ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, e.getMessage());
+    pd.setTitle(e.getErrorCode().getDefaultMessage());
+    if (request instanceof ServletWebRequest servletWebRequest) {
+      pd.setInstance(URI.create(servletWebRequest.getRequest().getRequestURI()));
+    }
+    pd.setProperty("errorCode", e.getErrorCode().name());
+    return pd;
+  }
 }

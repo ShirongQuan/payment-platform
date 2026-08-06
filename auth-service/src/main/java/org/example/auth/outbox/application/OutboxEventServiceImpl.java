@@ -176,7 +176,10 @@ public class OutboxEventServiceImpl implements OutboxEventService {
                 log.debug("Published outbox event successfully, eventId={}", event.getId());
                 int markPublished =
                     outboxEventRepository.markPublished(
-                        event.getId(), OffsetDateTime.now(), OutboxEventStatus.PUBLISHED);
+                        event.getId(),
+                        OffsetDateTime.now(),
+                        OutboxEventStatus.PUBLISHED,
+                        OutboxEventStatus.PUBLISHING);
                 if (markPublished == 0) {
                   log.error("Failed to mark event id={} as published", event.getId());
                 }
@@ -189,7 +192,11 @@ public class OutboxEventServiceImpl implements OutboxEventService {
                 if (backoffPolicy.shouldFail(nextRetryCount)) {
                   int markFailed =
                       outboxEventRepository.markFailed(
-                          event.getId(), nextRetryCount, error, OutboxEventStatus.FAILED);
+                          event.getId(),
+                          nextRetryCount,
+                          error,
+                          OutboxEventStatus.FAILED,
+                          OutboxEventStatus.PUBLISHING);
                   if (markFailed == 0) {
                     log.error("Failed to mark event id={} as failed", event.getId());
                   }
@@ -200,7 +207,8 @@ public class OutboxEventServiceImpl implements OutboxEventService {
                           nextRetryCount,
                           backoffPolicy.nextAttempt(nextRetryCount),
                           error,
-                          OutboxEventStatus.NEW);
+                          OutboxEventStatus.NEW,
+                          OutboxEventStatus.PUBLISHING);
                   if (markRetry == 0) {
                     log.error("Failed to mark event id={} for retry", event.getId());
                   }

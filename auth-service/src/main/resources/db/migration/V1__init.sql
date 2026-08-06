@@ -81,15 +81,11 @@ create table authorisation_event (
 );
 
 -- Enforces per-event-type idempotency per account (e.g. AUTHORISE vs CAPTURE use separate keys).
-create unique index  if not exists uq_authorisation_event_account_eventtype_idempotency
+create unique index if not exists uq_authorisation_event_account_eventtype_idempotency
     on authorisation_event (account_id, event_type, idempotency_key);
 
--- Allows replay/audit of repeated keys at different times; not a strict (account_id, idempotency_key) unique pair.
-create unique index  if not exists  uq_account_id_idempotency_created_at on authorisation_event
- (account_id, idempotency_key, created_at);
-
 -- Transactional outbox table used by async publisher to deliver domain events to Kafka.
-create table outbox_events (
+create table outbox_event (
     event_id uuid primary key,
     version bigint not null default 0,
     aggregate_type varchar(20) not null,
@@ -109,11 +105,13 @@ create table outbox_events (
     claimed_at timestamp with time zone,
     claim_until timestamp with time zone,
 
-    constraint chk_outbox_events_status check (status in ('PENDING', 'PUBLISHED', 'FAILED'))
-
+    constraint chk_outbox_event_status check (status in ('PENDING', 'PUBLISHED', 'FAILED'))
 );
 
-    -- Speeds up outbox polling by status and creation time
-    create index if not exists idx_outbox_event_claim on outbox_events (status, next_attempt_at, created_at);
+create unique index if not exists uq_outbox_event_aggregateid_eventtype_idempotency
+    on outbox_event (aggregate_id, event_type, idempotency_key);
 
-    create index if not exists idx_outbox_events_claim_until on outbox_events (status, claim_until);
+    -- Speeds up outbox polling by status and creation time
+    create index if not exists idx_outbox_event_claim on outbox_event (status, next_attempt_at, created_at);
+
+    create index if not exists idx_outbox_event_claim_until on outbox_event (status, claim_until);

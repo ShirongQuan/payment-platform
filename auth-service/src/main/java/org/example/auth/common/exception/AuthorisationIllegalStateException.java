@@ -1,15 +1,19 @@
 package org.example.auth.common.exception;
 
+import java.util.UUID;
 import org.example.auth.authorisation.domain.AuthorisationStatus;
 
-import java.util.UUID;
-
-public class AuthorisationIllegalStateException extends RuntimeException {
+public class AuthorisationIllegalStateException extends RuntimeException implements CodedException {
 
   public AuthorisationIllegalStateException(
       UUID authorisationId, AuthorisationStatus currentStatus, String attemptedAction) {
     super(
         "Cannot %s authorisation %s because current status is %s"
             .formatted(attemptedAction, authorisationId, currentStatus));
+  }
+
+  @Override
+  public ErrorCode getErrorCode() {
+    return ErrorCode.INVALID_AUTHORISATION_STATE;
   }
 }
