@@ -126,8 +126,8 @@ The Authorisation Service writes domain events to an outbox table and publishes 
 The Ledger Service consumes these events and stores:
 
 - raw event payloads in `ledger_event_log`
-- normalized rows in `ledger_entries`
-- processed event ids in `processed_events`
+- normalized rows in `ledger_entry`
+- processed event ids in `processed_event`
 
 ## Database
 
@@ -344,8 +344,8 @@ flowchart TD
 # Local server IP address
 
 - auth service: 9000
-- fraud service: 9100
-- ledger service: 9200
+- fraud service: 9010
+- ledger service: 9020
 
 - kafka ui: 9091
 - kafka nodes: 9092, 9093, 9094

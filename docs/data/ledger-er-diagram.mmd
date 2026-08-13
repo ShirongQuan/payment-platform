@@ -1,39 +1,39 @@
 erDiagram
-	LEDGER_ENTRIES {
-		uuid entry_id PK
-		uuid event_id UK
-		varchar aggregate_type
-		uuid aggregate_id
-		uuid account_id
-		uuid authorisation_id
-		varchar event_type
-		varchar entry_status
-		decimal amount
-		varchar currency_code
-		varchar merchant_reference
-		varchar idempotency_key
-		timestamptz occurred_at
-		timestamptz created_at
-		jsonb payload
-	}
+    LEDGER_ENTRY {
+        uuid entry_id PK
+        uuid event_id UK
+        varchar aggregate_type
+        uuid aggregate_id
+        uuid account_id
+        uuid authorisation_id
+        varchar event_type
+        varchar entry_status
+        decimal amount
+        varchar currency_code
+        varchar merchant_reference
+        varchar idempotency_key
+        timestamptz occurred_at
+        timestamptz created_at
+        jsonb payload
+    }
 
-	LEDGER_EVENT_LOG {
-		uuid event_id PK
-		varchar aggregate_type
-		uuid aggregate_id
-		varchar event_type
-		jsonb payload
-		uuid correlation_id
-		timestamptz occurred_at
-		timestamptz received_at
-	}
+    LEDGER_EVENT_LOG {
+        uuid event_id PK
+        varchar aggregate_type
+        uuid aggregate_id
+        varchar event_type
+        jsonb payload
+        uuid correlation_id
+        timestamptz occurred_at
+        timestamptz received_at
+    }
 
-	PROCESSED_EVENTS {
-		uuid event_id PK
-		varchar event_type
-		timestamptz processed_at
-	}
+    PROCESSED_EVENT {
+        uuid event_id PK
+        varchar event_type
+        timestamptz processed_at
+    }
 
-	PROCESSED_EVENTS ||--|| LEDGER_EVENT_LOG : dedup_by_event_id
-	LEDGER_EVENT_LOG ||--|| LEDGER_ENTRIES : sourced_from_event
+    PROCESSED_EVENT ||--|| LEDGER_EVENT_LOG: dedup_by_event_id
+    LEDGER_EVENT_LOG ||--|| LEDGER_ENTRY: sourced_from_event
 

@@ -1,7 +1,7 @@
-drop table if exists ledger_entries;
-drop table if exists processed_events;
+drop table if exists ledger_entry;
+drop table if exists processed_event;
 
-create table ledger_entries (
+create table ledger_entry (
     entry_id uuid primary key,
     event_id uuid not null unique,
     aggregate_type varchar(20) not null,
@@ -19,13 +19,13 @@ create table ledger_entries (
     payload varchar(2000) not null
 );
 
-create index if not exists idx_ledger_entries_account_occurred_at
-    on ledger_entries (account_id, occurred_at desc);
+create index if not exists idx_ledger_entry_account_occurred_at
+    on ledger_entry (account_id, occurred_at desc);
 
-create index if not exists idx_ledger_entries_aggregate_occurred_at
-    on ledger_entries (aggregate_type, aggregate_id, occurred_at desc);
+create index if not exists idx_ledger_entry_aggregate_occurred_at
+    on ledger_entry (aggregate_type, aggregate_id, occurred_at desc);
 
-create table processed_events (
+create table processed_event (
     event_id uuid primary key,
     event_type varchar(30) not null,
     processed_at timestamp with time zone not null

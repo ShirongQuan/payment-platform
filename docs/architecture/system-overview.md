@@ -87,8 +87,8 @@ Responsible for:
 Owns:
 
 - ledger_event_log
-- ledger_entries
-- processed_events
+- ledger_entry
+- processed_event
 
 The Ledger Service does not require in-order delivery for ingestion.
 It persists each event independently as an immutable record and relies on event timestamps for historical
@@ -139,7 +139,7 @@ For step-by-step interactions, see:
 ### Idempotency
 
 - Command idempotency keys protect retries on authorise/capture requests.
-- Ledger consumer dedup uses `processed_events` keyed by event id.
+- Ledger consumer dedup uses `processed_event` keyed by event id.
 
 ### Transactional Outbox
 
@@ -160,7 +160,7 @@ For step-by-step interactions, see:
 
 - Authorisation Service requires idempotency keys for command retries.
 - Database uniqueness constraints guard duplicate processing under concurrent requests.
-- Ledger Service deduplicates consumed events by `event_id` using `processed_events`.
+- Ledger Service deduplicates consumed events by `event_id` using `processed_event`.
 - Transactional outbox pattern ensures reliable event publication from auth DB to Kafka.
 
 ## MVP Constraints

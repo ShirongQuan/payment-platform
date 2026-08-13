@@ -19,7 +19,7 @@ public interface ProcessedEventRepository extends JpaRepository<ProcessedEventEn
   @Query(
       value =
           """
-          insert into processed_events (event_id, event_type, processed_at)
+          insert into processed_event (event_id, event_type, processed_at)
           values (:eventId, :eventType, :processedAt)
           on conflict (event_id) do nothing
           """,

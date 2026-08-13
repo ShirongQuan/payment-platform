@@ -8,9 +8,9 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 @SpringBootApplication
 @ConfigurationPropertiesScan
 @EnableScheduling
-public class AuthServiceApplication {
+public class Application {
 
   public static void main(String[] args) {
-    SpringApplication.run(AuthServiceApplication.class, args);
+    SpringApplication.run(Application.class, args);
   }
 }

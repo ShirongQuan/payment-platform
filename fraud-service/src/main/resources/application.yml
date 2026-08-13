@@ -3,17 +3,23 @@ spring:
     name: fraud-service
 
   datasource:
-    url: jdbc:postgresql://localhost:5432/auth_db
+    url: jdbc:postgresql://localhost:5432/fraud_db
     username: postgres
     password: postgres
 
   jpa:
     hibernate:
       ddl-auto: validate
-    show-sql: true
+    show-sql: false
     properties:
       hibernate:
         format_sql: true
+
+  data:
+    redis:
+      host: localhost
+      port: 6379
+      database: 0
 
 server:
   port: 9010
@@ -34,7 +40,48 @@ management:
       export:
         enabled: true
 
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+
 logging:
   level:
-    org.hibernate.SQL: DEBUG
-    org.hibernate.orm.jdbc.bind: TRACE
+    org.example.fraud: DEBUG
+    org.hibernate.SQL: WARN
+    org.hibernate.orm.jdbc.bind: WARN
+    org.flywaydb: INFO
+    org.springframework.jdbc: INFO
+
+
+risk:
+  rules-version: v1.0
+  decline-threshold: 70
+  rules:
+    velocity:
+      ip:
+        enabled: true
+        #        threshold: 3
+        #        window-seconds: 5
+        threshold: 2
+        window-seconds: 50
+        score: 40
+        reason-code: IP_VELOCITY_EXCEEDED
+      account:
+        enabled: true
+        threshold: 2
+        window-seconds: 50
+        #        threshold: 5
+        #        window-seconds: 30
+        score: 30
+        reason-code: ACCOUNT_VELOCITY_EXCEEDED
+    amount-deviation:
+      enabled: true
+      amount-multiplier: 3
+      window-days: 30
+      amount-reference: 200
+      min-samples: 5
+      cache-ttl-minutes: 30
+      score: 25
+      reason-code: AMOUNT_DEVIATION

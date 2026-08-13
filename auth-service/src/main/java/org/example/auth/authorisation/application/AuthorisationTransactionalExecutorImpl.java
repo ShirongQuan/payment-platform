@@ -94,6 +94,7 @@ public class AuthorisationTransactionalExecutorImpl implements AuthorisationTran
           accountRepository
               .findById(request.accountId())
               .orElseThrow(() -> new AccountNotFoundException(request.accountId()));
+
       Account account = accountMapper.toAccount(accountEntity);
       log.debug(
           "Loaded account for authorise, accountId={}, availableBalance={}, reservedBalance={}",

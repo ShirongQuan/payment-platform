@@ -17,7 +17,7 @@ import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 
 @Entity
-@Table(name = "ledger_entries")
+@Table(name = "ledger_entry")
 @Getter
 @Setter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)

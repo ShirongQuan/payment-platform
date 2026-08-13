@@ -59,6 +59,19 @@ services:
       timeout: 5s
       retries: 5
 
+  redisinsight:
+    image: redis/redisinsight:latest
+    container_name: payment-platform-redisinsight
+    ports:
+      - "5540:5540"
+    volumes:
+      - redisinsight_data:/data
+    depends_on:
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+
   # --------------------------------------------      prometheus   -------------------------------------------------
 
   prometheus:
@@ -232,6 +245,7 @@ volumes:
   postgres_data:
   pgadmin_data:
   redis_data:
+  redisinsight_data:
   prometheus_data:
   grafana_data:
     name: payment-platform-grafana-data

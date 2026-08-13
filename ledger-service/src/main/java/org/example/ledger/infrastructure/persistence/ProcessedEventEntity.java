@@ -16,7 +16,7 @@ import lombok.Setter;
 import org.example.ledger.domain.EventType;
 
 @Entity
-@Table(name = "processed_events")
+@Table(name = "processed_event")
 @Getter
 @Setter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)

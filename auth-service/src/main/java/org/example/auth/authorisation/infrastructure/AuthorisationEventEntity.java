@@ -41,7 +41,7 @@ public class AuthorisationEventEntity {
   private EventType eventType;
 
   @Column(name = "idempotency_key", nullable = false, updatable = false)
-  @Size(max = 20)
+  @Size(max = 30)
   private String idempotencyKey;
 
   @Column(nullable = false, updatable = false)

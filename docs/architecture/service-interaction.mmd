@@ -19,9 +19,9 @@ flowchart LR
         EventProcessor[LedgerEventProcessor]
         AuthHandler[AuthorisationAuthorisedHandler]
         CapHandler[AuthorisationCapturedHandler]
-        Dedup[(processed_events)]
+        Dedup[(processed_event)]
         EventLog[(ledger_event_log)]
-        Projection[(ledger_entries)]
+        Projection[(ledger_entry)]
     end
 
     Client --> Controller --> Service --> TxExecutor

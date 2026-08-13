@@ -1,0 +1,70 @@
+package org.example.fraud.component;
+
+import java.math.BigDecimal;
+import java.util.Optional;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.example.fraud.api.FraudCheckRequest;
+import org.example.fraud.application.AmountDeviationRuleCacheService;
+import org.example.fraud.domain.FraudDecision;
+import org.example.fraud.domain.RuleResult;
+import org.example.fraud.infrastructure.AmountBaseline;
+import org.example.fraud.infrastructure.FraudEvaluationRepository;
+import org.example.fraud.properties.AmountDeviationRuleProperties;
+import org.springframework.stereotype.Component;
+
+@Slf4j
+@Component
+@RequiredArgsConstructor
+public class AmountDeviationRule implements RiskRule {
+
+  private final AmountDeviationRuleProperties ruleProperties;
+  private final FraudEvaluationRepository fraudEvaluationRepository;
+  private final AmountDeviationRuleCacheService amountDeviationRuleCacheService;
+
+  @Override
+  public String name() {
+    return "AMOUNT_DEVIATION_RULE";
+  }
+
+  @Override
+  public Optional<RuleResult> evaluate(FraudCheckRequest request) {
+
+    if (!ruleProperties.enabled()) {
+      return Optional.empty();
+    }
+    // check the average amount of the approved requests in the last 30 days from the cache
+    log.debug("Checking cached average amount baseline for account {}", request.accountId());
+    BigDecimal avgAmount = amountDeviationRuleCacheService.get(request.accountId());
+    if (avgAmount == null) {
+      // check from DB
+      AmountBaseline baseline =
+          fraudEvaluationRepository.findAmountBaseline(
+              request.accountId(), FraudDecision.APPROVE.name(), ruleProperties.windowDays());
+      avgAmount = baseline.getAvgAmount();
+
+      if (avgAmount == null || baseline.getTxnCount() < ruleProperties.minSamples()) {
+        log.debug(
+            "Skip amount deviation rule for account {}, baseline average amount {}, transaction count {}",
+            request.accountId(),
+            avgAmount,
+            baseline.getTxnCount());
+        return Optional.empty();
+      } else {
+        // save the avgAmount to cache
+        amountDeviationRuleCacheService.put(request.accountId(), avgAmount);
+      }
+    }
+    if ((request.amount().compareTo(BigDecimal.valueOf(ruleProperties.amountReference())) > 0)
+        && (request
+                .amount()
+                .compareTo(
+                    avgAmount.multiply(BigDecimal.valueOf(ruleProperties.amountMultiplier())))
+            > 0)) {
+      return Optional.of(
+          new RuleResult(name(), ruleProperties.score(), ruleProperties.reasonCode()));
+    } else {
+      return Optional.empty();
+    }
+  }
+}

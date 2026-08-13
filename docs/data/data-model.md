@@ -43,7 +43,7 @@ This document summarizes the core tables used by `auth-service` and `ledger-serv
 
 ### Main tables
 
-- `ledger_entries`
+- `ledger_entry`
     - Read-optimized projection used by query APIs.
     - Stores the current immutable accounting entries derived from consumed events.
 
@@ -53,15 +53,15 @@ This document summarizes the core tables used by `auth-service` and `ledger-serv
 
 ### Idempotency strategy
 
-- `processed_events`
+- `processed_event`
     - Consumer-side deduplication table keyed by `event_id`.
     - Insert-once guard (`on conflict do nothing`) ensures each event id is projected at most once.
 - Handler flow:
-    - First insert into `processed_events` succeeds -> persist into `ledger_event_log` and `ledger_entries`.
+    - First insert into `processed_event` succeeds -> persist into `ledger_event_log` and `ledger_entry`.
     - Duplicate insert -> skip event processing safely.
 
 ## End-to-end event reliability
 
 - Producer side: transactional outbox in auth DB guarantees events are not lost between DB commit and publish.
-- Consumer side: `processed_events` table in ledger DB guarantees idempotent projection under retries/rebalances.
+- Consumer side: `processed_event` table in ledger DB guarantees idempotent projection under retries/rebalances.
 

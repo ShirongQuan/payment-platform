@@ -1,6 +1,6 @@
 -- Initial ledger schema: read-optimized projections + immutable event log + deduplication table.
 
-create table ledger_entries (
+create table ledger_entry (
     entry_id uuid primary key,
     event_id uuid not null unique,
     aggregate_type varchar(20) not null,
@@ -23,29 +23,29 @@ create table ledger_entries (
     -- Stores original event payload to support audit/debug and future projection rebuilds.
     payload jsonb not null,
 
-    constraint chk_ledger_entries_aggregate_type
+    constraint chk_ledger_entry_aggregate_type
         check (aggregate_type in ('ACCOUNT', 'AUTHORISATION')),
 
-    constraint chk_ledger_entries_currency_code_iso check (
+    constraint chk_ledger_entry_currency_code_iso check (
             currency_code = upper(currency_code) and char_length(currency_code) = 3
     ),
 
-    constraint chk_ledger_entries_amount_non_negative check (
+    constraint chk_ledger_entry_amount_non_negative check (
         amount is null or amount >= 0
     )
 );
 
-create index if not exists idx_ledger_entries_account_occurred_at
-    on ledger_entries (account_id, occurred_at desc);
+create index if not exists idx_ledger_entry_account_occurred_at
+    on ledger_entry (account_id, occurred_at desc);
 
-create index if not exists idx_ledger_entries_authorisation_occurred_at
-    on ledger_entries (authorisation_id, occurred_at desc);
+create index if not exists idx_ledger_entry_authorisation_occurred_at
+    on ledger_entry (authorisation_id, occurred_at desc);
 
-create index if not exists idx_ledger_entries_event_type_occurred_at
-    on ledger_entries (event_type, occurred_at desc);
+create index if not exists idx_ledger_entry_event_type_occurred_at
+    on ledger_entry (event_type, occurred_at desc);
 
-create index if not exists idx_ledger_entries_aggregate_occurred_at
-    on ledger_entries (aggregate_type, aggregate_id, occurred_at desc);
+create index if not exists idx_ledger_entry_aggregate_occurred_at
+    on ledger_entry (aggregate_type, aggregate_id, occurred_at desc);
 
 
 create table ledger_event_log (
@@ -66,7 +66,7 @@ create index if not exists idx_ledger_event_log_event_type_occurred_at
     on ledger_event_log (event_type, occurred_at desc);
 
 -- Event-consumer deduplication guard: first insert wins, duplicates are ignored.
-create table processed_events (
+create table processed_event (
     event_id uuid primary key,
     event_type varchar(30) not null,
     processed_at timestamp with time zone not null default now()

@@ -44,7 +44,7 @@ public class AuthorisationEntity {
   private String currencyCode;
 
   @Column(name = "merchant_reference")
-  @Size(max = 20)
+  @Size(max = 128)
   private String merchantReference;
 
   @Column(name = "authorisation_status", nullable = false)
