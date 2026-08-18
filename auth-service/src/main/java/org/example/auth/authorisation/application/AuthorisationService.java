@@ -10,7 +10,7 @@ import org.example.auth.authorisation.api.ReverseResponse;
 
 /** Application use-case contract for authorise/capture/reverse operations. */
 public interface AuthorisationService {
-  AuthorisationResponse authorise(AuthorisationRequest request);
+  AuthorisationResponse authorise(AuthorisationRequest request, String clientIpAddress);
 
   AuthorisationResponse getAuthorisationById(UUID authorisationId);
 

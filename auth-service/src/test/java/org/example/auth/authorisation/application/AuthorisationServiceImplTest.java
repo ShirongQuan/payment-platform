@@ -5,6 +5,9 @@ import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -28,6 +31,8 @@ import org.example.auth.authorisation.infrastructure.AuthorisationEventRepositor
 import org.example.auth.authorisation.infrastructure.AuthorisationRepository;
 import org.example.auth.common.exception.AuthorisationNotFoundException;
 import org.example.auth.common.exception.IdempotencyConflictException;
+import org.example.auth.fraud.FraudDecision;
+import org.example.auth.fraud.FraudOrchestrator;
 import org.example.auth.outbox.domain.EventType;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -38,9 +43,12 @@ import org.mockito.junit.jupiter.MockitoExtension;
 @ExtendWith(MockitoExtension.class)
 class AuthorisationServiceImplTest {
 
+  private static final String CLIENT_IP = "203.0.113.10";
+
   @Mock private AuthorisationTransactionalExecutorImpl transactionalExecutor;
   @Mock private AuthorisationRepository authorisationRepository;
   @Mock private AuthorisationEventRepository authorisationEventRepository;
+  @Mock private FraudOrchestrator fraudOrchestrator;
 
   private AuthorisationServiceImpl service;
 
@@ -48,7 +56,12 @@ class AuthorisationServiceImplTest {
   void setUp() {
     service =
         new AuthorisationServiceImpl(
-            transactionalExecutor, authorisationRepository, authorisationEventRepository);
+            transactionalExecutor,
+            authorisationRepository,
+            authorisationEventRepository,
+            fraudOrchestrator);
+    lenient().when(fraudOrchestrator.evaluate(any(), any(), any(), any()))
+        .thenReturn(FraudDecision.approve(0, java.util.List.of()));
   }
 
   @Test
@@ -85,7 +98,8 @@ class AuthorisationServiceImplTest {
         new AuthorisationRequest(
             accountId, idempotencyKey, new BigDecimal("10.00"), "usd", "merchant-1");
 
-    when(transactionalExecutor.authoriseInTransaction(request, "USD"))
+    when(transactionalExecutor.authoriseInTransaction(
+            any(AuthorisationRequest.class), anyString(), any(FraudDecision.class), any(UUID.class)))
         .thenThrow(new ConcurrentIdempotencyRaceException(new RuntimeException("duplicate key")));
 
     AuthorisationEntity existing =
@@ -97,7 +111,7 @@ class AuthorisationServiceImplTest {
                 accountId, idempotencyKey))
         .thenReturn(Optional.of(existing));
 
-    AuthorisationResponse response = service.authorise(request);
+    AuthorisationResponse response = service.authorise(request, CLIENT_IP);
 
     assertEquals(accountId, response.accountId());
     assertEquals(idempotencyKey, response.idempotencyKey());
@@ -114,7 +128,8 @@ class AuthorisationServiceImplTest {
         new AuthorisationRequest(
             accountId, idempotencyKey, new BigDecimal("10.00"), "USD", "merchant-1");
 
-    when(transactionalExecutor.authoriseInTransaction(request, "USD"))
+    when(transactionalExecutor.authoriseInTransaction(
+            any(AuthorisationRequest.class), any(), any(FraudDecision.class), any(UUID.class)))
         .thenThrow(new ConcurrentIdempotencyRaceException(new RuntimeException("duplicate key")));
 
     AuthorisationEntity existing = conflictingAuthorisation(new BigDecimal("99.00"));
@@ -124,7 +139,7 @@ class AuthorisationServiceImplTest {
                 accountId, idempotencyKey))
         .thenReturn(Optional.of(existing));
 
-    assertThrows(IdempotencyConflictException.class, () -> service.authorise(request));
+    assertThrows(IdempotencyConflictException.class, () -> service.authorise(request, CLIENT_IP));
   }
 
   @Test
@@ -147,12 +162,17 @@ class AuthorisationServiceImplTest {
             OffsetDateTime.now(),
             OffsetDateTime.now());
 
-    when(transactionalExecutor.authoriseInTransaction(request, "USD")).thenReturn(executorResponse);
+    when(transactionalExecutor.authoriseInTransaction(
+            any(AuthorisationRequest.class), any(), any(FraudDecision.class), any(UUID.class)))
+        .thenReturn(executorResponse);
 
-    AuthorisationResponse response = service.authorise(request);
+    AuthorisationResponse response = service.authorise(request, CLIENT_IP);
 
     assertThat(response.currencyCode()).isEqualTo("USD");
-    verify(transactionalExecutor).authoriseInTransaction(request, "USD");
+    verify(transactionalExecutor)
+        .authoriseInTransaction(any(AuthorisationRequest.class), any(), any(FraudDecision.class), any(UUID.class));
+    verify(fraudOrchestrator)
+        .evaluate(any(AuthorisationRequest.class), anyString(), eq(CLIENT_IP), any(UUID.class));
     verify(authorisationRepository, never())
         .findByAccountIdAndAuthoriseEventTypesAndIdempotencyKey(any(), any());
   }
@@ -177,9 +197,11 @@ class AuthorisationServiceImplTest {
             OffsetDateTime.now(),
             OffsetDateTime.now());
 
-    when(transactionalExecutor.authoriseInTransaction(request, "USD")).thenReturn(executorResponse);
+    when(transactionalExecutor.authoriseInTransaction(
+            any(AuthorisationRequest.class), any(), any(FraudDecision.class), any(UUID.class)))
+        .thenReturn(executorResponse);
 
-    assertThat(service.authorise(request)).isSameAs(executorResponse);
+    assertThat(service.authorise(request, CLIENT_IP)).isSameAs(executorResponse);
     verify(authorisationRepository, never())
         .findByAccountIdAndAuthoriseEventTypesAndIdempotencyKey(any(), any());
   }
@@ -192,7 +214,8 @@ class AuthorisationServiceImplTest {
         new AuthorisationRequest(
             accountId, idempotencyKey, new BigDecimal("10.00"), "USD", "merchant-1");
 
-    when(transactionalExecutor.authoriseInTransaction(request, "USD"))
+    when(transactionalExecutor.authoriseInTransaction(
+            any(AuthorisationRequest.class), any(), any(FraudDecision.class), any(UUID.class)))
         .thenThrow(new ConcurrentIdempotencyRaceException(new RuntimeException("duplicate key")));
     when(
             authorisationRepository.findByAccountIdAndAuthoriseEventTypesAndIdempotencyKey(
@@ -200,7 +223,7 @@ class AuthorisationServiceImplTest {
         .thenReturn(Optional.empty());
 
     assertThatExceptionOfType(IllegalStateException.class)
-        .isThrownBy(() -> service.authorise(request))
+        .isThrownBy(() -> service.authorise(request, CLIENT_IP))
         .withMessageContaining("Duplicate idempotency key detected");
   }
 
@@ -212,7 +235,8 @@ class AuthorisationServiceImplTest {
         new AuthorisationRequest(
             accountId, idempotencyKey, new BigDecimal("10.00"), "USD", "merchant-1");
 
-    when(transactionalExecutor.authoriseInTransaction(request, "USD"))
+    when(transactionalExecutor.authoriseInTransaction(
+            any(AuthorisationRequest.class), any(), any(FraudDecision.class), any(UUID.class)))
         .thenThrow(new ConcurrentIdempotencyRaceException(new RuntimeException("duplicate key")));
 
     AuthorisationEntity existing = mock(AuthorisationEntity.class);
@@ -223,7 +247,7 @@ class AuthorisationServiceImplTest {
                 accountId, idempotencyKey))
         .thenReturn(Optional.of(existing));
 
-    assertThrows(IdempotencyConflictException.class, () -> service.authorise(request));
+    assertThrows(IdempotencyConflictException.class, () -> service.authorise(request, CLIENT_IP));
   }
 
   @Test
@@ -234,7 +258,8 @@ class AuthorisationServiceImplTest {
         new AuthorisationRequest(
             accountId, idempotencyKey, new BigDecimal("10.00"), "USD", "merchant-1");
 
-    when(transactionalExecutor.authoriseInTransaction(request, "USD"))
+    when(transactionalExecutor.authoriseInTransaction(
+            any(AuthorisationRequest.class), any(), any(FraudDecision.class), any(UUID.class)))
         .thenThrow(new ConcurrentIdempotencyRaceException(new RuntimeException("duplicate key")));
 
     AuthorisationEntity existing =
@@ -244,7 +269,7 @@ class AuthorisationServiceImplTest {
                 accountId, idempotencyKey))
         .thenReturn(Optional.of(existing));
 
-    assertThrows(IdempotencyConflictException.class, () -> service.authorise(request));
+    assertThrows(IdempotencyConflictException.class, () -> service.authorise(request, CLIENT_IP));
   }
 
   @Test
@@ -254,7 +279,8 @@ class AuthorisationServiceImplTest {
     AuthorisationRequest request =
         new AuthorisationRequest(accountId, idempotencyKey, new BigDecimal("10.00"), "USD", null);
 
-    when(transactionalExecutor.authoriseInTransaction(request, "USD"))
+    when(transactionalExecutor.authoriseInTransaction(
+            any(AuthorisationRequest.class), any(), any(FraudDecision.class), any(UUID.class)))
         .thenThrow(new ConcurrentIdempotencyRaceException(new RuntimeException("duplicate key")));
 
     AuthorisationEntity existing =
@@ -264,7 +290,7 @@ class AuthorisationServiceImplTest {
                 accountId, idempotencyKey))
         .thenReturn(Optional.of(existing));
 
-    AuthorisationResponse response = service.authorise(request);
+    AuthorisationResponse response = service.authorise(request, CLIENT_IP);
 
     assertThat(response.merchantReference()).isNull();
     assertThat(response.currencyCode()).isEqualTo("USD");

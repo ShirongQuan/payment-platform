@@ -28,6 +28,7 @@ import org.example.auth.authorisation.domain.AuthorisationStatus;
 import org.example.auth.authorisation.infrastructure.AuthorisationEntity;
 import org.example.auth.authorisation.infrastructure.AuthorisationEventRepository;
 import org.example.auth.authorisation.infrastructure.AuthorisationRepository;
+import org.example.auth.fraud.FraudDecision;
 import org.example.auth.outbox.application.OutboxEventService;
 import org.example.auth.outbox.domain.EventType;
 import org.junit.jupiter.api.Test;
@@ -63,12 +64,12 @@ class AuthorisationTransactionalExecutorConcurrencyTest {
         runConcurrently(
             List.of(
                 () ->
-                    executor.authoriseInTransaction(
+                    authoriseInTransaction(
                         new AuthorisationRequest(
                             accountId, "auth-key-1", new BigDecimal("80.00"), "USD", "m-1"),
                         "USD"),
                 () ->
-                    executor.authoriseInTransaction(
+                    authoriseInTransaction(
                         new AuthorisationRequest(
                             accountId, "auth-key-2", new BigDecimal("80.00"), "USD", "m-2"),
                         "USD")));
@@ -113,7 +114,7 @@ class AuthorisationTransactionalExecutorConcurrencyTest {
     UUID accountId = UUID.randomUUID();
     setupAccount(accountId, new BigDecimal("100.00"), BigDecimal.ZERO);
     AuthorisationResponse authorisation =
-        executor.authoriseInTransaction(
+        authoriseInTransaction(
             new AuthorisationRequest(
                 accountId, "auth-capture-seed", new BigDecimal("10.00"), "USD", "capture-seed"),
             "USD");
@@ -152,7 +153,7 @@ class AuthorisationTransactionalExecutorConcurrencyTest {
     UUID accountId = UUID.randomUUID();
     setupAccount(accountId, new BigDecimal("100.00"), BigDecimal.ZERO);
     AuthorisationResponse authorisation =
-        executor.authoriseInTransaction(
+        authoriseInTransaction(
             new AuthorisationRequest(
                 accountId, "auth-reverse-seed", new BigDecimal("10.00"), "USD", "reverse-seed"),
             "USD");
@@ -202,12 +203,12 @@ class AuthorisationTransactionalExecutorConcurrencyTest {
         runConcurrently(
             List.of(
                 () ->
-                    executor.authoriseInTransaction(
+                    authoriseInTransaction(
                         new AuthorisationRequest(
                             accountId, idempotencyKey, new BigDecimal("10.00"), "USD", "merchant-1"),
                         "USD"),
                 () ->
-                    executor.authoriseInTransaction(
+                    authoriseInTransaction(
                         new AuthorisationRequest(
                             accountId, idempotencyKey, new BigDecimal("10.00"), "USD", "merchant-1"),
                         "USD")));
@@ -230,7 +231,7 @@ class AuthorisationTransactionalExecutorConcurrencyTest {
     UUID accountId = UUID.randomUUID();
     setupAccount(accountId, new BigDecimal("100.00"), BigDecimal.ZERO);
     AuthorisationResponse authorisation =
-        executor.authoriseInTransaction(
+        authoriseInTransaction(
             new AuthorisationRequest(
                 accountId, "auth-cap-same-seed", new BigDecimal("10.00"), "USD", "capture-seed"),
             "USD");
@@ -258,7 +259,7 @@ class AuthorisationTransactionalExecutorConcurrencyTest {
     UUID accountId = UUID.randomUUID();
     setupAccount(accountId, new BigDecimal("100.00"), BigDecimal.ZERO);
     AuthorisationResponse authorisation =
-        executor.authoriseInTransaction(
+        authoriseInTransaction(
             new AuthorisationRequest(
                 accountId, "auth-rev-same-seed", new BigDecimal("10.00"), "USD", "reverse-seed"),
             "USD");
@@ -328,6 +329,15 @@ class AuthorisationTransactionalExecutorConcurrencyTest {
     accountRepository.saveAndFlush(account);
   }
 
+  private AuthorisationResponse authoriseInTransaction(
+      AuthorisationRequest request, String normalizedCurrency) {
+    return executor.authoriseInTransaction(
+        request,
+        normalizedCurrency,
+        FraudDecision.approve(0, java.util.List.of()),
+        UUID.randomUUID());
+  }
+
   private <T> List<InvocationResult<T>> runConcurrently(List<Callable<T>> operations) throws Exception {
     int parallelism = operations.size();
     ExecutorService executorService = Executors.newFixedThreadPool(parallelism);
@@ -389,8 +399,6 @@ class AuthorisationTransactionalExecutorConcurrencyTest {
     }
   }
 }
-
-
 
 
 

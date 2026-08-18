@@ -42,6 +42,8 @@ outbox:
 
 server:
   port: 9000
+  # Let Spring resolve client address/protocol from sanitized proxy forwarding headers.
+  forward-headers-strategy: framework
 
 management:
   endpoints:
@@ -76,3 +78,33 @@ logging:
     org.hibernate.orm.jdbc.bind: ERROR
     org.flywaydb: INFO
     org.springframework.jdbc: INFO
+
+fraud:
+  base-url: http://localhost:9010
+  http:
+    connect-timeout: 500ms
+    read-timeout: 1000ms
+  fail-open:
+    enabled: true
+    max-amount: 5.00
+    trusted-account-ids:
+      - "11111111-1111-1111-1111-111111111111"
+
+resilience4j:
+  timelimiter:
+    instances:
+      fraudService:
+        timeoutDuration: 250ms
+        cancelRunningFuture: true
+  circuitbreaker:
+    instances:
+      fraudService:
+        slidingWindowType: COUNT_BASED
+        slidingWindowSize: 20
+        minimumNumberOfCalls: 10
+        failureRateThreshold: 50
+        slowCallRateThreshold: 50
+        slowCallDurationThreshold: 300ms
+        waitDurationInOpenState: 10s
+        permittedNumberOfCallsInHalfOpenState: 3
+        automaticTransitionFromOpenToHalfOpenEnabled: true

@@ -16,16 +16,19 @@ import java.util.UUID;
 import org.example.auth.account.application.AccountService;
 import org.example.auth.account.domain.Account;
 import org.example.auth.account.domain.AccountStatus;
+import org.example.auth.common.exception.AuthExceptionHandler;
 import org.example.auth.common.exception.AccountNotFoundException;
 import org.example.auth.common.exception.ErrorCode;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.http.MediaType;
+import org.springframework.context.annotation.Import;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
 @WebMvcTest(AccountController.class)
+@Import(AuthExceptionHandler.class)
 class AccountControllerTest {
 
   @Autowired private MockMvc mockMvc;

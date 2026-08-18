@@ -16,6 +16,8 @@ import org.example.auth.authorisation.infrastructure.AuthorisationRepository;
 import org.example.auth.common.exception.AuthorisationNotFoundException;
 import org.example.auth.common.exception.IdempotencyConflictException;
 import org.example.auth.common.validation.ValidationHelpers;
+import org.example.auth.fraud.FraudDecision;
+import org.example.auth.fraud.FraudOrchestrator;
 import org.example.auth.outbox.domain.EventType;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -32,27 +34,40 @@ public class AuthorisationServiceImpl implements AuthorisationService {
   private final AuthorisationTransactionalExecutor authorisationTransactionalExecutor;
   private final AuthorisationRepository authorisationRepository;
   private final AuthorisationEventRepository authorisationEventRepository;
+  private final FraudOrchestrator fraudOrchestrator;
 
   public AuthorisationServiceImpl(
       AuthorisationTransactionalExecutor authorisationTransactionalExecutor,
       AuthorisationRepository authorisationRepository,
-      AuthorisationEventRepository authorisationEventRepository) {
+      AuthorisationEventRepository authorisationEventRepository,
+      FraudOrchestrator fraudOrchestrator) {
     this.authorisationTransactionalExecutor = authorisationTransactionalExecutor;
     this.authorisationRepository = authorisationRepository;
     this.authorisationEventRepository = authorisationEventRepository;
+    this.fraudOrchestrator = fraudOrchestrator;
   }
 
   @Override
-  public AuthorisationResponse authorise(AuthorisationRequest request) {
+  public AuthorisationResponse authorise(AuthorisationRequest request, String clientIpAddress) {
     String normalizedCurrency =
         ValidationHelpers.normalizeAndValidateCurrency(request.currencyCode());
     log.debug(
-        "Handling authorise request, accountId={}, idempotencyKey={}, normalizedCurrency={}",
+        "Handling authorise request, accountId={}, idempotencyKey={}, normalizedCurrency={}, clientIpAddress={}",
         request.accountId(),
         request.idempotencyKey(),
-        normalizedCurrency);
+        normalizedCurrency,
+        clientIpAddress);
+    UUID correlationId = UUID.randomUUID();
+    FraudDecision fraudDecision =
+        fraudOrchestrator.evaluate(request, normalizedCurrency, clientIpAddress, correlationId);
+    log.debug(
+        "Fraud decision evaluated, accountId={}, idempotencyKey={}, fraudDecision={}",
+        request.accountId(),
+        request.idempotencyKey(),
+        fraudDecision.toString());
     try {
-      return authorisationTransactionalExecutor.authoriseInTransaction(request, normalizedCurrency);
+      return authorisationTransactionalExecutor.authoriseInTransaction(
+          request, normalizedCurrency, fraudDecision, correlationId);
     } catch (ConcurrentIdempotencyRaceException e) {
       log.warn(
           "Resolving authorise idempotency after concurrent race, accountId={}, idempotencyKey={}",

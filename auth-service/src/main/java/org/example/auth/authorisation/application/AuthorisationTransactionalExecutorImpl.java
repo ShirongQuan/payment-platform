@@ -29,6 +29,7 @@ import org.example.auth.common.exception.AuthorisationIllegalStateException;
 import org.example.auth.common.exception.AuthorisationNotFoundException;
 import org.example.auth.common.exception.IdempotencyConflictException;
 import org.example.auth.common.exception.InsufficientFundException;
+import org.example.auth.fraud.FraudDecision;
 import org.example.auth.outbox.application.OutboxEventService;
 import org.example.auth.outbox.domain.EventType;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -69,7 +70,10 @@ public class AuthorisationTransactionalExecutorImpl implements AuthorisationTran
   @Override
   @Transactional(rollbackFor = Exception.class)
   public AuthorisationResponse authoriseInTransaction(
-      AuthorisationRequest request, String normalizedCurrency) {
+      AuthorisationRequest request,
+      String normalizedCurrency,
+      FraudDecision fraudDecision,
+      UUID correlationId) {
     log.debug(
         "Starting authorise transaction, accountId={}, idempotencyKey={}, amount={}, currency={}",
         request.accountId(),
@@ -88,58 +92,18 @@ public class AuthorisationTransactionalExecutorImpl implements AuthorisationTran
     Authorisation authorisation;
     AuthorisationEventEntity authorisationEventEntity;
     UUID eventId = UUID.randomUUID();
-    UUID correlationId = UUID.randomUUID();
-    try {
-      AccountEntity accountEntity =
-          accountRepository
-              .findById(request.accountId())
-              .orElseThrow(() -> new AccountNotFoundException(request.accountId()));
+    AccountEntity accountEntity =
+        accountRepository
+            .findById(request.accountId())
+            .orElseThrow(() -> new AccountNotFoundException(request.accountId()));
 
-      Account account = accountMapper.toAccount(accountEntity);
+    if (fraudDecision.isDeclined()) {
       log.debug(
-          "Loaded account for authorise, accountId={}, availableBalance={}, reservedBalance={}",
-          accountEntity.getId(),
-          accountEntity.getAvailableBalance(),
-          accountEntity.getReservedBalance());
-      account.reserve(request.amount(), normalizedCurrency);
-
-      accountEntity.setAvailableBalance(account.getAvailableBalance());
-      accountEntity.setReservedBalance(account.getReservedBalance());
-      log.debug(
-          "Reserved amount for authorise, accountId={}, availableBalance={}, reservedBalance={}",
-          accountEntity.getId(),
-          accountEntity.getAvailableBalance(),
-          accountEntity.getReservedBalance());
-      // send sql to trigger DB constraint validation earlier
-      accountRepository.flush();
-
-      authorisation =
-          new Authorisation(
-              request.accountId(),
-              request.amount(),
-              normalizedCurrency,
-              request.merchantReference(),
-              AuthorisationStatus.AUTHORISED);
-
-      authorisationEventEntity =
-          new AuthorisationEventEntity(
-              eventId,
-              authorisation.getId(),
-              request.accountId(),
-              EventType.AUTHORISATION_AUTHORISED,
-              request.idempotencyKey(),
-              request.amount(),
-              normalizedCurrency,
-              AuthorisationEventReason.NONE,
-              correlationId,
-              OffsetDateTime.now());
-
-    } catch (InsufficientFundException ife) {
-      log.debug(
-          "Authorise declined due to insufficient funds, accountId={}, requestedAmount={}",
+          "Authorise declined by fraud pre-check, accountId={}, riskScore={}, reasons={}, correlationId={}",
           request.accountId(),
-          request.amount());
-      // in this case, Account in DB will remain intact and the Authorisation will persist
+          fraudDecision.riskScore(),
+          fraudDecision.reasons(),
+          correlationId);
       authorisation =
           new Authorisation(
               request.accountId(),
@@ -157,9 +121,77 @@ public class AuthorisationTransactionalExecutorImpl implements AuthorisationTran
               request.idempotencyKey(),
               request.amount(),
               normalizedCurrency,
-              AuthorisationEventReason.INSUFFICIENT_FUNDS,
+              AuthorisationEventReason.FRAUD_DECLINED,
               correlationId,
               OffsetDateTime.now());
+    } else {
+      try {
+        Account account = accountMapper.toAccount(accountEntity);
+        log.debug(
+            "Loaded account for authorise, accountId={}, availableBalance={}, reservedBalance={}",
+            accountEntity.getId(),
+            accountEntity.getAvailableBalance(),
+            accountEntity.getReservedBalance());
+        account.reserve(request.amount(), normalizedCurrency);
+
+        accountEntity.setAvailableBalance(account.getAvailableBalance());
+        accountEntity.setReservedBalance(account.getReservedBalance());
+        log.debug(
+            "Reserved amount for authorise, accountId={}, availableBalance={}, reservedBalance={}",
+            accountEntity.getId(),
+            accountEntity.getAvailableBalance(),
+            accountEntity.getReservedBalance());
+        // send sql to trigger DB constraint validation earlier
+        accountRepository.flush();
+
+        authorisation =
+            new Authorisation(
+                request.accountId(),
+                request.amount(),
+                normalizedCurrency,
+                request.merchantReference(),
+                AuthorisationStatus.AUTHORISED);
+
+        authorisationEventEntity =
+            new AuthorisationEventEntity(
+                eventId,
+                authorisation.getId(),
+                request.accountId(),
+                EventType.AUTHORISATION_AUTHORISED,
+                request.idempotencyKey(),
+                request.amount(),
+                normalizedCurrency,
+                AuthorisationEventReason.NONE,
+                correlationId,
+                OffsetDateTime.now());
+
+      } catch (InsufficientFundException ife) {
+        log.debug(
+            "Authorise declined due to insufficient funds, accountId={}, requestedAmount={}",
+            request.accountId(),
+            request.amount());
+        // in this case, Account in DB will remain intact and the Authorisation will persist
+        authorisation =
+            new Authorisation(
+                request.accountId(),
+                request.amount(),
+                normalizedCurrency,
+                request.merchantReference(),
+                AuthorisationStatus.DECLINED);
+
+        authorisationEventEntity =
+            new AuthorisationEventEntity(
+                eventId,
+                authorisation.getId(),
+                request.accountId(),
+                EventType.AUTHORISATION_DECLINED,
+                request.idempotencyKey(),
+                request.amount(),
+                normalizedCurrency,
+                AuthorisationEventReason.INSUFFICIENT_FUNDS,
+                correlationId,
+                OffsetDateTime.now());
+      }
     }
     AuthorisationEntity authorisationEntity = authorisationMapper.toEntity(authorisation);
     try {

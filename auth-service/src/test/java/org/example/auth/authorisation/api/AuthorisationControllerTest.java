@@ -1,6 +1,7 @@
 package org.example.auth.authorisation.api;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -19,6 +20,7 @@ import org.example.auth.authorisation.application.AuthorisationService;
 import org.example.auth.authorisation.domain.AuthorisationEventReason;
 import org.example.auth.authorisation.domain.AuthorisationStatus;
 import org.example.auth.common.OperationType;
+import org.example.auth.common.exception.AuthExceptionHandler;
 import org.example.auth.common.exception.AccountNotFoundException;
 import org.example.auth.common.exception.AuthorisationNotFoundException;
 import org.example.auth.common.exception.CurrencyMismatchException;
@@ -29,10 +31,12 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.http.MediaType;
+import org.springframework.context.annotation.Import;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
 @WebMvcTest
+@Import(AuthExceptionHandler.class)
 class AuthorisationControllerTest {
   @Autowired private MockMvc mockMVC;
 
@@ -46,7 +50,7 @@ class AuthorisationControllerTest {
     UUID authorisationId = UUID.randomUUID();
     OffsetDateTime createdAt = OffsetDateTime.now().minusDays(2);
     OffsetDateTime updatedAt = OffsetDateTime.now().minusDays(1);
-    when(authorisationService.authorise(any(AuthorisationRequest.class)))
+    when(authorisationService.authorise(any(AuthorisationRequest.class), anyString()))
         .thenReturn(
             new AuthorisationResponse(
                 authorisationId,
@@ -85,7 +89,7 @@ class AuthorisationControllerTest {
         .andExpect(jsonPath("$.createdAt").isNotEmpty())
         .andExpect(jsonPath("$.updatedAt").isNotEmpty());
 
-    verify(authorisationService, times(1)).authorise(any(AuthorisationRequest.class));
+    verify(authorisationService, times(1)).authorise(any(AuthorisationRequest.class), anyString());
   }
 
   @Test
@@ -107,7 +111,7 @@ class AuthorisationControllerTest {
         .andExpect(status().isBadRequest())
         .andExpect(content().string(""));
 
-    verify(authorisationService, never()).authorise(any(AuthorisationRequest.class));
+    verify(authorisationService, never()).authorise(any(AuthorisationRequest.class), anyString());
   }
 
   @Test
@@ -129,13 +133,13 @@ class AuthorisationControllerTest {
         .andExpect(status().isBadRequest())
         .andExpect(content().string(""));
 
-    verify(authorisationService, never()).authorise(any(AuthorisationRequest.class));
+    verify(authorisationService, never()).authorise(any(AuthorisationRequest.class), anyString());
   }
 
   @Test
   void shouldReturn404WhenAccountNotFoundDuringAuthorise() throws Exception {
     UUID accountId = UUID.fromString("3fa85f64-5717-4562-b3fc-2c963f66afa6");
-    when(authorisationService.authorise(any(AuthorisationRequest.class)))
+    when(authorisationService.authorise(any(AuthorisationRequest.class), anyString()))
         .thenThrow(new AccountNotFoundException(accountId));
 
     mockMVC
@@ -162,7 +166,7 @@ class AuthorisationControllerTest {
 
   @Test
   void shouldReturn400WhenCurrencyMismatchDuringAuthorise() throws Exception {
-    when(authorisationService.authorise(any(AuthorisationRequest.class)))
+    when(authorisationService.authorise(any(AuthorisationRequest.class), anyString()))
         .thenThrow(new CurrencyMismatchException("GBP", "USD"));
 
     mockMVC
@@ -190,7 +194,7 @@ class AuthorisationControllerTest {
 
   @Test
   void shouldReturn400WhenInsufficientFundsDuringAuthorise() throws Exception {
-    when(authorisationService.authorise(any(AuthorisationRequest.class)))
+    when(authorisationService.authorise(any(AuthorisationRequest.class), anyString()))
         .thenThrow(
             new InsufficientFundException(
                 OperationType.AUTHORISE, BigDecimal.valueOf(5), BigDecimal.valueOf(10)));
@@ -220,7 +224,7 @@ class AuthorisationControllerTest {
 
   @Test
   void shouldReturn409WhenIdempotencyConflictDuringAuthorise() throws Exception {
-    when(authorisationService.authorise(any(AuthorisationRequest.class)))
+    when(authorisationService.authorise(any(AuthorisationRequest.class), anyString()))
         .thenThrow(new IdempotencyConflictException());
 
     mockMVC

@@ -37,6 +37,7 @@ import org.example.auth.common.exception.AccountNotFoundException;
 import org.example.auth.common.exception.AuthorisationIllegalStateException;
 import org.example.auth.common.exception.AuthorisationNotFoundException;
 import org.example.auth.common.exception.IdempotencyConflictException;
+import org.example.auth.fraud.FraudDecision;
 import org.example.auth.outbox.application.OutboxEventService;
 import org.example.auth.outbox.domain.EventType;
 import org.junit.jupiter.api.Test;
@@ -79,7 +80,7 @@ class AuthorisationTransactionalExecutorTest {
             accountId, idempotencyKey))
         .thenReturn(Optional.of(existing));
 
-    AuthorisationResponse response = executor.authoriseInTransaction(request, "USD");
+    AuthorisationResponse response = authorise(request, "USD");
 
     assertThat(response.accountId()).isEqualTo(accountId);
     assertThat(response.idempotencyKey()).isEqualTo(idempotencyKey);
@@ -111,7 +112,7 @@ class AuthorisationTransactionalExecutorTest {
         .thenReturn(Optional.of(existing));
 
     assertThatExceptionOfType(IdempotencyConflictException.class)
-        .isThrownBy(() -> executor.authoriseInTransaction(request, "USD"));
+        .isThrownBy(() -> authorise(request, "USD"));
 
     verify(accountRepository, never()).findById(any(UUID.class));
     verify(authorisationRepository, never()).saveAndFlush(any(AuthorisationEntity.class));
@@ -135,7 +136,7 @@ class AuthorisationTransactionalExecutorTest {
 
     AccountNotFoundException exception =
         assertThrows(
-            AccountNotFoundException.class, () -> executor.authoriseInTransaction(request, "USD"));
+            AccountNotFoundException.class, () -> authorise(request, "USD"));
     assertThat(exception.getAccountId()).isEqualTo(accountId);
 
     verify(authorisationRepository, never()).saveAndFlush(any(AuthorisationEntity.class));
@@ -167,7 +168,7 @@ class AuthorisationTransactionalExecutorTest {
     accountEntity.setUpdatedAt(OffsetDateTime.now());
     when(accountRepository.findById(accountId)).thenReturn(Optional.of(accountEntity));
 
-    AuthorisationResponse response = executor.authoriseInTransaction(request, "USD");
+    AuthorisationResponse response = authorise(request, "USD");
 
     assertThat(response.status()).isEqualTo(AuthorisationStatus.DECLINED);
 
@@ -219,7 +220,7 @@ class AuthorisationTransactionalExecutorTest {
     ConcurrentIdempotencyRaceException ex =
         assertThrows(
             ConcurrentIdempotencyRaceException.class,
-            () -> executor.authoriseInTransaction(request, "USD"));
+            () -> authorise(request, "USD"));
     assertThat(ex.getCause()).isEqualTo(cause);
 
     assertThat(accountEntity.getAvailableBalance()).isEqualByComparingTo("990.00");
@@ -251,7 +252,7 @@ class AuthorisationTransactionalExecutorTest {
 
     AuthorisationRequest request =
         new AuthorisationRequest(accountId, "key", BigDecimal.TEN, "gbp", "reference");
-    AuthorisationResponse authResponse = executor.authoriseInTransaction(request, "gbp");
+    AuthorisationResponse authResponse = authorise(request, "gbp");
 
     assertThat(authResponse).isNotNull();
     assertThat(authResponse.accountId()).isEqualTo(accountId);
@@ -641,6 +642,14 @@ class AuthorisationTransactionalExecutorTest {
     when(entity.getCreatedAt()).thenReturn(now);
     when(entity.getUpdatedAt()).thenReturn(now);
     return entity;
+  }
+
+  private AuthorisationResponse authorise(AuthorisationRequest request, String normalizedCurrency) {
+    return executor.authoriseInTransaction(
+        request,
+        normalizedCurrency,
+        FraudDecision.approve(0, java.util.List.of()),
+        UUID.randomUUID());
   }
 
   private AccountEntity mockExistingAccountEntity() {

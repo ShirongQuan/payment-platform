@@ -2,6 +2,7 @@ package org.example.auth.authorisation.api;
 
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotNull;
+import jakarta.servlet.http.HttpServletRequest;
 import java.util.UUID;
 import lombok.extern.slf4j.Slf4j;
 import org.example.auth.authorisation.application.AuthorisationService;
@@ -24,12 +25,21 @@ public class AuthorisationController {
   }
 
   @PostMapping
-  public AuthorisationResponse authorise(@RequestBody @Valid AuthorisationRequest request) {
+  public AuthorisationResponse authorise(
+      @RequestBody @Valid AuthorisationRequest request, HttpServletRequest servletRequest) {
+    String clientIpAddress = extractClientIpAddress(servletRequest);
     log.debug(
-        "Received authorise request, accountId={}, idempotencyKey={}",
+        "Received authorise request, accountId={}, idempotencyKey={}, clientIpAddress={}",
         request.accountId(),
-        request.idempotencyKey());
-    return this.authorisationService.authorise(request);
+        request.idempotencyKey(),
+        clientIpAddress);
+    return this.authorisationService.authorise(request, clientIpAddress);
+  }
+
+  private String extractClientIpAddress(HttpServletRequest request) {
+    // Forwarded headers are handled by Spring/server strategy when enabled.
+    String remoteAddr = request.getRemoteAddr();
+    return (remoteAddr == null || remoteAddr.isBlank()) ? "0.0.0.0" : remoteAddr;
   }
 
   @GetMapping("/{authorisationId}")
