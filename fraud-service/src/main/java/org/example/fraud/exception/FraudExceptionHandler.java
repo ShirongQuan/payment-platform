@@ -1,11 +1,10 @@
 package org.example.fraud.exception;
 
-import java.net.URI;
+import org.example.shared.error.ProblemDetails;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
-import org.springframework.web.context.request.ServletWebRequest;
 import org.springframework.web.context.request.WebRequest;
 
 /**
@@ -22,12 +21,22 @@ public class FraudExceptionHandler {
   @ExceptionHandler(IdempotencyConflictException.class)
   public ProblemDetail handleIdempotencyConflictException(
       IdempotencyConflictException e, WebRequest request) {
-    ProblemDetail pd = ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, e.getMessage());
-    pd.setTitle(e.getErrorCode().getDefaultMessage());
-    if (request instanceof ServletWebRequest servletWebRequest) {
-      pd.setInstance(URI.create(servletWebRequest.getRequest().getRequestURI()));
-    }
-    pd.setProperty("errorCode", e.getErrorCode().name());
-    return pd;
+    return conflict(e, request);
+  }
+
+  @ExceptionHandler(FraudEvaluationInProgressException.class)
+  public ProblemDetail handleFraudEvaluationInProgressException(
+      FraudEvaluationInProgressException e, WebRequest request) {
+    return conflict(e, request);
+  }
+
+  private static <T extends RuntimeException & CodedException> ProblemDetail conflict(
+      T e, WebRequest request) {
+    return ProblemDetails.from(
+        HttpStatus.CONFLICT,
+        e.getErrorCode().getDefaultMessage(),
+        e.getMessage(),
+        e.getErrorCode().name(),
+        request);
   }
 }

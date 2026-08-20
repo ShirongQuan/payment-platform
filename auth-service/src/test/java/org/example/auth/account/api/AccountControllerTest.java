@@ -91,7 +91,7 @@ class AccountControllerTest {
     mockMvc
         .perform(get("/accounts/{accountId}", accountId))
         .andExpect(status().isNotFound())
-        .andExpect(content().contentTypeCompatibleWith("application/problem+json"))
+        .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
         .andExpect(jsonPath("$.title").value("Account not found"))
         .andExpect(jsonPath("$.instance").value("/accounts/" + accountId))
         .andExpect(jsonPath("$.accountId").value(accountId.toString()))
@@ -186,7 +186,7 @@ class AccountControllerTest {
                     {"amount":10.00, "currencyCode":"GBP"}
                     """))
         .andExpect(status().isNotFound())
-        .andExpect(content().contentTypeCompatibleWith("application/problem+json"))
+        .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
         .andExpect(jsonPath("$.title").value("Account not found"))
         .andExpect(jsonPath("$.instance").value("/accounts/" + accountId + "/deposits"))
         .andExpect(jsonPath("$.accountId").value(accountId.toString()))

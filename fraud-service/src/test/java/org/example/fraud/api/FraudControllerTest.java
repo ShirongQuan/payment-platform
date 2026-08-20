@@ -12,6 +12,7 @@ import java.util.UUID;
 import org.example.fraud.application.FraudService;
 import org.example.fraud.domain.FraudDecision;
 import org.example.fraud.domain.RuleResult;
+import org.example.fraud.exception.FraudEvaluationInProgressException;
 import org.example.fraud.exception.FraudExceptionHandler;
 import org.example.fraud.exception.IdempotencyConflictException;
 import org.junit.jupiter.api.Test;
@@ -49,18 +50,17 @@ class FraudControllerTest {
   }
 
   @Test
-  void shouldReturn202WhenFraudCheckStillPending() throws Exception {
-    UUID evaluationId = UUID.randomUUID();
+  void shouldReturn409WhenFraudCheckStillInProgress() throws Exception {
     when(fraudService.check(any(FraudCheckRequest.class)))
-        .thenReturn(new FraudPendingResponse(evaluationId, "idem-key", "pending"));
+        .thenThrow(
+            new FraudEvaluationInProgressException(
+                UUID.fromString("3fa85f64-5717-4562-b3fc-2c963f66afa6"), "idem-key"));
 
     mockMvc
         .perform(post("/fraud/check").contentType(MediaType.APPLICATION_JSON).content(validRequestJson()))
-        .andExpect(status().isAccepted())
-        .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
-        .andExpect(jsonPath("$.evaluationId").value(evaluationId.toString()))
-        .andExpect(jsonPath("$.idempotencyKey").value("idem-key"))
-        .andExpect(jsonPath("$.status").value("pending"));
+        .andExpect(status().isConflict())
+        .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
+        .andExpect(jsonPath("$.errorCode").value("FRAUD_EVALUATION_IN_PROGRESS"));
   }
 
   @Test
@@ -70,7 +70,7 @@ class FraudControllerTest {
     mockMvc
         .perform(post("/fraud/check").contentType(MediaType.APPLICATION_JSON).content(validRequestJson()))
         .andExpect(status().isConflict())
-        .andExpect(content().contentTypeCompatibleWith("application/problem+json"))
+        .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
         .andExpect(jsonPath("$.errorCode").value("IDEMPOTENCY_CONFLICT"));
   }
 

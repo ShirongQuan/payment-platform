@@ -1,4 +1,4 @@
-package org.example.auth.common.validation;
+package org.example.shared.currency;
 
 import jakarta.validation.Constraint;
 import jakarta.validation.Payload;
@@ -13,7 +13,7 @@ import java.lang.annotation.Target;
  * code.
  *
  * <p>Usage: annotate any {@code String} field or parameter with {@code @ValidCurrencyCode}.
- * Validation is delegated to {@link CurrencyCodeValidator}.
+ * Validation is delegated to {@link org.example.shared.currency.CurrencyCodeValidator}.
  *
  * <pre>{@code
  * public record CreateAccountRequest(@ValidCurrencyCode String currencyCode) {}

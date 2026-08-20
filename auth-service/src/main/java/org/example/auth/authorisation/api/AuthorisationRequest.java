@@ -6,7 +6,7 @@ import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import java.math.BigDecimal;
 import java.util.UUID;
-import org.example.auth.common.validation.ValidCurrencyCode;
+import org.example.shared.currency.ValidCurrencyCode;
 
 public record AuthorisationRequest(
     @NotNull UUID accountId,

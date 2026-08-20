@@ -130,6 +130,11 @@
             <artifactId>lombok</artifactId>
             <scope>provided</scope>
         </dependency>
+
+        <dependency>
+            <groupId>org.example</groupId>
+            <artifactId>shared-spring-lib</artifactId>
+        </dependency>
     </dependencies>
 
     <build>

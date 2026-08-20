@@ -15,13 +15,14 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import org.example.shared.idempotency.RequestHashing;
 import org.example.fraud.api.FraudCheckRequest;
 import org.example.fraud.api.FraudCheckResponse;
 import org.example.fraud.api.FraudCheckResult;
-import org.example.fraud.api.FraudPendingResponse;
 import org.example.fraud.domain.FraudDecision;
 import org.example.fraud.domain.RiskReport;
 import org.example.fraud.domain.RuleResult;
+import org.example.fraud.exception.FraudEvaluationInProgressException;
 import org.example.fraud.exception.IdempotencyConflictException;
 import org.example.fraud.failure.FailureModeService;
 import org.example.fraud.infrastructure.FraudEvaluationEntity;
@@ -130,7 +131,7 @@ class FraudServiceImplTest {
   }
 
   @Test
-  void shouldReturnPendingResponseWhenDuplicateHasSameHashAndPendingDecision() {
+  void shouldThrowInProgressWhenDuplicateHasSameHashAndPendingDecision() {
     FraudCheckRequest request = request();
     String requestHash = requestHash(request);
     FraudEvaluationEntity existing =
@@ -169,26 +170,22 @@ class FraudServiceImplTest {
             request.accountId(), request.idempotencyKey()))
         .thenReturn(Optional.of(existing));
 
-    FraudCheckResult result = fraudService.check(request);
-
-    assertThat(result).isInstanceOf(FraudPendingResponse.class);
-    FraudPendingResponse pending = (FraudPendingResponse) result;
-    assertThat(pending.evaluationId()).isEqualTo(existing.getId());
-    assertThat(pending.idempotencyKey()).isEqualTo(request.idempotencyKey());
-    assertThat(pending.status()).isEqualTo("pending");
+    assertThatThrownBy(() -> fraudService.check(request))
+        .isInstanceOf(FraudEvaluationInProgressException.class)
+        .hasMessageContaining(existing.getId().toString())
+        .hasMessageContaining(request.idempotencyKey());
     verify(riskScoringEngine, never()).evaluate(any(FraudCheckRequest.class));
   }
 
   private String requestHash(FraudCheckRequest request) {
     String canonical =
-        String.join(
-            "|",
-            request.accountId() == null ? "" : request.accountId().toString(),
-            request.amount().toPlainString(),
-            java.util.Objects.toString(request.currencyCode(), ""),
-            java.util.Objects.toString(request.merchantReference(), ""),
-            java.util.Objects.toString(request.ipAddress(), ""));
-    return FraudServiceImpl.sha256Hex(canonical);
+        RequestHashing.canonicalJoin(
+            request.accountId() == null ? null : request.accountId().toString(),
+            request.amount() == null ? null : request.amount().toPlainString(),
+            request.currencyCode(),
+            request.merchantReference(),
+            request.ipAddress());
+    return RequestHashing.sha256Hex(canonical);
   }
 
   @Test

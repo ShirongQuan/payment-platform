@@ -157,7 +157,7 @@ class AuthorisationControllerTest {
                     }
                     """))
         .andExpect(status().isNotFound())
-        .andExpect(content().contentTypeCompatibleWith("application/problem+json"))
+        .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
         .andExpect(jsonPath("$.title").value("Account not found"))
         .andExpect(jsonPath("$.instance").value("/authorisations"))
         .andExpect(jsonPath("$.accountId").value(accountId.toString()))
@@ -184,7 +184,7 @@ class AuthorisationControllerTest {
                     }
                     """))
         .andExpect(status().isBadRequest())
-        .andExpect(content().contentTypeCompatibleWith("application/problem+json"))
+        .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
         .andExpect(jsonPath("$.title").value("Currency mismatch"))
         .andExpect(jsonPath("$.instance").value("/authorisations"))
         .andExpect(jsonPath("$.expectedCurrency").value("GBP"))
@@ -214,7 +214,7 @@ class AuthorisationControllerTest {
                     }
                     """))
         .andExpect(status().isBadRequest())
-        .andExpect(content().contentTypeCompatibleWith("application/problem+json"))
+        .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
         .andExpect(jsonPath("$.title").value("Insufficient funds"))
         .andExpect(jsonPath("$.instance").value("/authorisations"))
         .andExpect(jsonPath("$.availableAmount").value(5.00))
@@ -242,7 +242,7 @@ class AuthorisationControllerTest {
                     }
                     """))
         .andExpect(status().isConflict())
-        .andExpect(content().contentTypeCompatibleWith("application/problem+json"))
+        .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
         .andExpect(jsonPath("$.title").value("Idempotency key conflict"))
         .andExpect(jsonPath("$.instance").value("/authorisations"))
         .andExpect(jsonPath("$.errorCode").value(ErrorCode.IDEMPOTENCY_CONFLICT.name()));
@@ -286,7 +286,7 @@ class AuthorisationControllerTest {
     mockMVC
         .perform(get("/authorisations/{authorisationId}", authorisationId))
         .andExpect(status().isNotFound())
-        .andExpect(content().contentTypeCompatibleWith("application/problem+json"))
+        .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
         .andExpect(jsonPath("$.title").value("Authorisation not found"))
         .andExpect(jsonPath("$.instance").value("/authorisations/" + authorisationId))
         .andExpect(jsonPath("$.authorisationId").value(authorisationId.toString()))
@@ -367,7 +367,7 @@ class AuthorisationControllerTest {
                     }
                     """))
         .andExpect(status().isNotFound())
-        .andExpect(content().contentTypeCompatibleWith("application/problem+json"))
+        .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
         .andExpect(jsonPath("$.errorCode").value(ErrorCode.AUTHORISATION_NOT_FOUND.name()));
   }
 
@@ -388,7 +388,7 @@ class AuthorisationControllerTest {
                     }
                     """))
         .andExpect(status().isConflict())
-        .andExpect(content().contentTypeCompatibleWith("application/problem+json"))
+        .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
         .andExpect(jsonPath("$.errorCode").value(ErrorCode.IDEMPOTENCY_CONFLICT.name()));
   }
 
@@ -471,7 +471,7 @@ class AuthorisationControllerTest {
                     }
                     """))
         .andExpect(status().isNotFound())
-        .andExpect(content().contentTypeCompatibleWith("application/problem+json"))
+        .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
         .andExpect(jsonPath("$.errorCode").value(ErrorCode.AUTHORISATION_NOT_FOUND.name()));
   }
 
@@ -493,7 +493,7 @@ class AuthorisationControllerTest {
                     }
                     """))
         .andExpect(status().isConflict())
-        .andExpect(content().contentTypeCompatibleWith("application/problem+json"))
+        .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
         .andExpect(jsonPath("$.errorCode").value(ErrorCode.IDEMPOTENCY_CONFLICT.name()));
   }
 }

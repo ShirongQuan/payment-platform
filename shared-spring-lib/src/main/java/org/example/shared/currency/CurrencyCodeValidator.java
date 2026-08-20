@@ -1,4 +1,4 @@
-package org.example.auth.common.validation;
+package org.example.shared.currency;
 
 import jakarta.validation.ConstraintValidator;
 import jakarta.validation.ConstraintValidatorContext;
@@ -6,11 +6,11 @@ import java.util.Currency;
 import java.util.Locale;
 
 /**
- * Bean Validation implementation for {@link ValidCurrencyCode}.
+ * Bean Validation implementation for {@link org.example.shared.currency.ValidCurrencyCode}.
  *
  * <p>Accepts any non-blank string that resolves to a valid ISO 4217 currency via {@link
- * Currency#getInstance(String)}. The value is trimmed and uppercased before checking, so "usd" and
- * " USD " are both accepted.
+ * java.util.Currency#getInstance(String)}. The value is trimmed and uppercased before checking, so
+ * "usd" and " USD " are both accepted.
  */
 public class CurrencyCodeValidator implements ConstraintValidator<ValidCurrencyCode, String> {
   @Override

@@ -19,9 +19,6 @@ public class FraudController {
   @PostMapping("/check")
   public ResponseEntity<FraudCheckResult> check(@Valid @RequestBody FraudCheckRequest request) {
     FraudCheckResult result = fraudService.check(request);
-    if (result instanceof FraudPendingResponse) {
-      return ResponseEntity.accepted().body(result);
-    }
     return ResponseEntity.ok(result);
   }
 }

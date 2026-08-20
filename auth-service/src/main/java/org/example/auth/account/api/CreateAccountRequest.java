@@ -2,7 +2,7 @@ package org.example.auth.account.api;
 
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Pattern;
-import org.example.auth.common.validation.ValidCurrencyCode;
+import org.example.shared.currency.ValidCurrencyCode;
 
 // ^ = start of the string
 // {3} = exactly 3 of the previous token

@@ -1,7 +1,11 @@
 package org.example.fraud.exception;
 
+import lombok.Getter;
+
+@Getter
 public enum ErrorCode {
-  IDEMPOTENCY_CONFLICT("Idempotency key conflict");
+  IDEMPOTENCY_CONFLICT("Idempotency key conflict"),
+  FRAUD_EVALUATION_IN_PROGRESS("Fraud evaluation in progress");
 
   private final String defaultMessage;
 
@@ -9,7 +13,4 @@ public enum ErrorCode {
     this.defaultMessage = defaultMessage;
   }
 
-  public String getDefaultMessage() {
-    return defaultMessage;
-  }
 }

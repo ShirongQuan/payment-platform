@@ -1,11 +1,10 @@
 package org.example.auth.common.exception;
 
-import java.net.URI;
+import org.example.shared.error.ProblemDetails;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
-import org.springframework.web.context.request.ServletWebRequest;
 import org.springframework.web.context.request.WebRequest;
 
 /**
@@ -22,95 +21,94 @@ public class AuthExceptionHandler {
   @ExceptionHandler(InvalidCurrencyException.class)
   public ProblemDetail handleInvalidCurrencyException(
       InvalidCurrencyException e, WebRequest request) {
-    ProblemDetail pd = ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, e.getMessage());
-    pd.setTitle(e.getErrorCode().getDefaultMessage());
-    if (request instanceof ServletWebRequest servletWebRequest) {
-      pd.setInstance(URI.create(servletWebRequest.getRequest().getRequestURI()));
-    }
-    pd.setProperty("currencyCode", e.getCurrencyCode());
-    pd.setProperty("errorCode", e.getErrorCode().name());
-    return pd;
+    return ProblemDetails.from(
+        HttpStatus.BAD_REQUEST,
+        e.getErrorCode().getDefaultMessage(),
+        e.getMessage(),
+        e.getErrorCode().name(),
+        request,
+        "currencyCode",
+        e.getCurrencyCode());
   }
 
   /** Returns 400 when a deposit or operation currency does not match the account's currency. */
   @ExceptionHandler(CurrencyMismatchException.class)
   public ProblemDetail handleCurrencyMismatchException(
       CurrencyMismatchException e, WebRequest request) {
-    ProblemDetail pd = ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, e.getMessage());
-    pd.setTitle(e.getErrorCode().getDefaultMessage());
-    if (request instanceof ServletWebRequest servletWebRequest) {
-      pd.setInstance(URI.create(servletWebRequest.getRequest().getRequestURI()));
-    }
-    pd.setProperty("expectedCurrency", e.getExpected());
-    pd.setProperty("providedCurrency", e.getProvided());
-    pd.setProperty("errorCode", e.getErrorCode().name());
-    return pd;
+    return ProblemDetails.from(
+        HttpStatus.BAD_REQUEST,
+        e.getErrorCode().getDefaultMessage(),
+        e.getMessage(),
+        e.getErrorCode().name(),
+        request,
+        "expectedCurrency",
+        e.getExpected(),
+        "providedCurrency",
+        e.getProvided());
   }
 
   /** Returns 400 when a requested amount exceeds the account's available balance. */
   @ExceptionHandler(InsufficientFundException.class)
   public ProblemDetail handleInsufficientFundException(
       InsufficientFundException e, WebRequest request) {
-    ProblemDetail pd = ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, e.getMessage());
-    pd.setTitle(e.getErrorCode().getDefaultMessage());
-    if (request instanceof ServletWebRequest servletWebRequest) {
-      pd.setInstance(URI.create(servletWebRequest.getRequest().getRequestURI()));
-    }
-    pd.setProperty("availableAmount", e.getAvailableAmount());
-    pd.setProperty("requestedAmount", e.getRequestedAmount());
-    pd.setProperty("errorCode", e.getErrorCode().name());
-    return pd;
+    return ProblemDetails.from(
+        HttpStatus.BAD_REQUEST,
+        e.getErrorCode().getDefaultMessage(),
+        e.getMessage(),
+        e.getErrorCode().name(),
+        request,
+        "availableAmount",
+        e.getAvailableAmount(),
+        "requestedAmount",
+        e.getRequestedAmount());
   }
 
   /** Returns 404 when no account exists for the requested ID. */
   @ExceptionHandler(AccountNotFoundException.class)
   public ProblemDetail handleAccountNotFoundException(
       AccountNotFoundException e, WebRequest request) {
-    ProblemDetail pd = ProblemDetail.forStatusAndDetail(HttpStatus.NOT_FOUND, e.getMessage());
-    pd.setTitle(e.getErrorCode().getDefaultMessage());
-    if (request instanceof ServletWebRequest servletWebRequest) {
-      pd.setInstance(URI.create(servletWebRequest.getRequest().getRequestURI()));
-    }
-    pd.setProperty("accountId", e.getAccountId());
-    pd.setTitle("Account not found");
-    pd.setProperty("errorCode", e.getErrorCode().name());
-    return pd;
+    return ProblemDetails.from(
+        HttpStatus.NOT_FOUND,
+        "Account not found",
+        e.getMessage(),
+        e.getErrorCode().name(),
+        request,
+        "accountId",
+        e.getAccountId());
   }
 
   @ExceptionHandler(AuthorisationNotFoundException.class)
   public ProblemDetail handleAuthorisationNotFoundException(
       AuthorisationNotFoundException e, WebRequest request) {
-    ProblemDetail pd = ProblemDetail.forStatusAndDetail(HttpStatus.NOT_FOUND, e.getMessage());
-    pd.setTitle(e.getErrorCode().getDefaultMessage());
-    if (request instanceof ServletWebRequest servletWebRequest) {
-      pd.setInstance(URI.create(servletWebRequest.getRequest().getRequestURI()));
-    }
-    pd.setProperty("authorisationId", e.getAuthorisationId());
-    pd.setProperty("errorCode", e.getErrorCode().name());
-    return pd;
+    return ProblemDetails.from(
+        HttpStatus.NOT_FOUND,
+        e.getErrorCode().getDefaultMessage(),
+        e.getMessage(),
+        e.getErrorCode().name(),
+        request,
+        "authorisationId",
+        e.getAuthorisationId());
   }
 
   @ExceptionHandler(IdempotencyConflictException.class)
   public ProblemDetail handleIdempotencyConflictException(
       IdempotencyConflictException e, WebRequest request) {
-    ProblemDetail pd = ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, e.getMessage());
-    pd.setTitle(e.getErrorCode().getDefaultMessage());
-    if (request instanceof ServletWebRequest servletWebRequest) {
-      pd.setInstance(URI.create(servletWebRequest.getRequest().getRequestURI()));
-    }
-    pd.setProperty("errorCode", e.getErrorCode().name());
-    return pd;
+    return ProblemDetails.from(
+        HttpStatus.CONFLICT,
+        e.getErrorCode().getDefaultMessage(),
+        e.getMessage(),
+        e.getErrorCode().name(),
+        request);
   }
 
   @ExceptionHandler(AuthorisationIllegalStateException.class)
   public ProblemDetail handleAuthorisationIllegalStateException(
       AuthorisationIllegalStateException e, WebRequest request) {
-    ProblemDetail pd = ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, e.getMessage());
-    pd.setTitle(e.getErrorCode().getDefaultMessage());
-    if (request instanceof ServletWebRequest servletWebRequest) {
-      pd.setInstance(URI.create(servletWebRequest.getRequest().getRequestURI()));
-    }
-    pd.setProperty("errorCode", e.getErrorCode().name());
-    return pd;
+    return ProblemDetails.from(
+        HttpStatus.CONFLICT,
+        e.getErrorCode().getDefaultMessage(),
+        e.getMessage(),
+        e.getErrorCode().name(),
+        request);
   }
 }
