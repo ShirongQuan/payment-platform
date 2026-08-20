@@ -1,4 +1,5 @@
-package org.example.auth.common.validation;
+package org.example.shared.currency;
+
 
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
