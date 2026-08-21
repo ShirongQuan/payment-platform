@@ -36,8 +36,7 @@ class FraudOrchestratorTest {
         .thenReturn(FraudDecision.unavailable("FRAUD_TIMEOUT"));
     when(failOpenPolicy.allow(request.accountId(), request.amount())).thenReturn(true);
 
-    FraudDecision decision =
-        orchestrator.evaluate(request, request.currencyCode(), CLIENT_IP, UUID.randomUUID());
+    FraudDecision decision = orchestrator.evaluate(request, request.currencyCode(), CLIENT_IP);
 
     assertThat(decision.outcome()).isEqualTo(FraudOutcome.APPROVE);
     assertThat(decision.reasons()).contains("FRAUD_SERVICE_UNAVAILABLE", "FRAUD_TIMEOUT");
@@ -52,8 +51,7 @@ class FraudOrchestratorTest {
         .thenReturn(FraudDecision.unavailable("FRAUD_TIMEOUT"));
     when(failOpenPolicy.allow(request.accountId(), request.amount())).thenReturn(false);
 
-    FraudDecision decision =
-        orchestrator.evaluate(request, request.currencyCode(), CLIENT_IP, UUID.randomUUID());
+    FraudDecision decision = orchestrator.evaluate(request, request.currencyCode(), CLIENT_IP);
 
     assertThat(decision.outcome()).isEqualTo(FraudOutcome.DECLINE);
     assertThat(decision.reasons()).contains("FRAUD_SERVICE_UNAVAILABLE", "FRAUD_TIMEOUT");
@@ -65,8 +63,7 @@ class FraudOrchestratorTest {
     FraudDecision raw = FraudDecision.approve(7, java.util.List.of("LOW_RISK"));
     when(fraudClient.check(any(FraudCheckRequest.class))).thenReturn(raw);
 
-    FraudDecision decision =
-        orchestrator.evaluate(request, request.currencyCode(), CLIENT_IP, UUID.randomUUID());
+    FraudDecision decision = orchestrator.evaluate(request, request.currencyCode(), CLIENT_IP);
 
     assertThat(decision).isEqualTo(raw);
   }
@@ -76,4 +73,3 @@ class FraudOrchestratorTest {
         UUID.randomUUID(), "idem-key", new BigDecimal("2.50"), "USD", "merchant-1");
   }
 }
-

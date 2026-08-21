@@ -83,6 +83,6 @@ class AmountDeviationRuleTest {
 
   private FraudCheckRequest request(BigDecimal amount) {
     return new FraudCheckRequest(
-        UUID.randomUUID(), "idem-key", amount, "GBP", "merchant-ref", "1.2.3.4", UUID.randomUUID());
+        UUID.randomUUID(), "idem-key", amount, "GBP", "merchant-ref", "1.2.3.4");
   }
 }

@@ -19,6 +19,7 @@ import org.example.auth.common.validation.ValidationHelpers;
 import org.example.auth.fraud.FraudDecision;
 import org.example.auth.fraud.FraudOrchestrator;
 import org.example.auth.outbox.domain.EventType;
+import org.example.shared.correlation.CorrelationIdResolver;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -35,16 +36,19 @@ public class AuthorisationServiceImpl implements AuthorisationService {
   private final AuthorisationRepository authorisationRepository;
   private final AuthorisationEventRepository authorisationEventRepository;
   private final FraudOrchestrator fraudOrchestrator;
+  private final CorrelationIdResolver correlationIdResolver;
 
   public AuthorisationServiceImpl(
       AuthorisationTransactionalExecutor authorisationTransactionalExecutor,
       AuthorisationRepository authorisationRepository,
       AuthorisationEventRepository authorisationEventRepository,
-      FraudOrchestrator fraudOrchestrator) {
+      FraudOrchestrator fraudOrchestrator,
+      CorrelationIdResolver correlationIdResolver) {
     this.authorisationTransactionalExecutor = authorisationTransactionalExecutor;
     this.authorisationRepository = authorisationRepository;
     this.authorisationEventRepository = authorisationEventRepository;
     this.fraudOrchestrator = fraudOrchestrator;
+    this.correlationIdResolver = correlationIdResolver;
   }
 
   @Override
@@ -57,9 +61,9 @@ public class AuthorisationServiceImpl implements AuthorisationService {
         request.idempotencyKey(),
         normalizedCurrency,
         clientIpAddress);
-    UUID correlationId = UUID.randomUUID();
+    UUID correlationId = correlationIdResolver.resolveOrCreate();
     FraudDecision fraudDecision =
-        fraudOrchestrator.evaluate(request, normalizedCurrency, clientIpAddress, correlationId);
+        fraudOrchestrator.evaluate(request, normalizedCurrency, clientIpAddress);
     log.debug(
         "Fraud decision evaluated, accountId={}, idempotencyKey={}, fraudDecision={}",
         request.accountId(),
@@ -113,6 +117,7 @@ public class AuthorisationServiceImpl implements AuthorisationService {
         && entity.getCurrencyCode().equals(normalizedCurrency)
         && Objects.equals(entity.getMerchantReference(), request.merchantReference());
   }
+
 
   @Override
   @Transactional(readOnly = true)

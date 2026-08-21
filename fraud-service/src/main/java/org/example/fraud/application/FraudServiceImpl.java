@@ -9,6 +9,7 @@ import java.util.Objects;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.example.shared.correlation.CorrelationIdResolver;
 import org.example.shared.idempotency.RequestHashing;
 import org.example.fraud.api.FraudCheckRequest;
 import org.example.fraud.api.FraudCheckResponse;
@@ -41,6 +42,7 @@ public class FraudServiceImpl implements FraudService {
 
   private final AmountDeviationRuleCacheService amountDeviationRuleCacheService;
   private final AmountDeviationRuleProperties amountDeviationRuleProperties;
+  private final CorrelationIdResolver correlationIdResolver;
 
   @Transactional
   @Override
@@ -58,6 +60,7 @@ public class FraudServiceImpl implements FraudService {
             Objects.toString(request.merchantReference(), ""),
             Objects.toString(request.ipAddress(), ""));
     String requestHash = RequestHashing.sha256Hex(canonical);
+    UUID correlationId = correlationIdResolver.resolveOrCreate();
 
     int insertPendingResult =
         fraudEvaluationRepository.tryInsertPending(
@@ -72,7 +75,7 @@ public class FraudServiceImpl implements FraudService {
             riskProperties.rulesVersion(),
             "[]",
             request.ipAddress(),
-            request.correlationId(),
+            correlationId,
             OffsetDateTime.now());
 
     if (insertPendingResult == 0) {
@@ -145,5 +148,6 @@ public class FraudServiceImpl implements FraudService {
 
     return new FraudCheckResponse(existing.getDecision(), existing.getRiskScore(), ruleResultList);
   }
+
 
 }

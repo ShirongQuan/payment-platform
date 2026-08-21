@@ -78,6 +78,8 @@ logging:
     org.hibernate.orm.jdbc.bind: ERROR
     org.flywaydb: INFO
     org.springframework.jdbc: INFO
+  pattern:
+    console: "%d{yyyy-MM-dd'T'HH:mm:ss.SSSXXX} %5p ${PID:- } --- [${spring.application.name:-}] [%15.15thread] [%X{correlationId:-}] %-40.40logger{39} : %m%n"
 
 fraud:
   base-url: http://localhost:9010

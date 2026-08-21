@@ -56,8 +56,7 @@ class HttpFraudClientTest {
         new BigDecimal("2.50"),
         "USD",
         "merchant-1",
-        "203.0.113.10",
-        UUID.randomUUID());
+        "203.0.113.10");
   }
 }
 

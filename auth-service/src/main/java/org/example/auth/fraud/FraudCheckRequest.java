@@ -9,5 +9,4 @@ public record FraudCheckRequest(
     BigDecimal amount,
     String currencyCode,
     String merchantReference,
-    String ipAddress,
-    UUID correlationId) {}
+    String ipAddress) {}

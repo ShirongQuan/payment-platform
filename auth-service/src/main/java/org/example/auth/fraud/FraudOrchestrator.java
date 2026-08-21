@@ -2,7 +2,6 @@ package org.example.auth.fraud;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.example.auth.authorisation.api.AuthorisationRequest;
@@ -23,10 +22,7 @@ public class FraudOrchestrator {
   private final FailOpenPolicy failOpenPolicy;
 
   public FraudDecision evaluate(
-      AuthorisationRequest request,
-      String normalizedCurrency,
-      String ipAddress,
-      UUID correlationId) {
+      AuthorisationRequest request, String normalizedCurrency, String ipAddress) {
     FraudCheckRequest fraudReq =
         new FraudCheckRequest(
             request.accountId(),
@@ -34,8 +30,7 @@ public class FraudOrchestrator {
             request.amount(),
             normalizedCurrency,
             request.merchantReference(),
-            ipAddress,
-            correlationId);
+            ipAddress);
 
     FraudDecision raw = fraudClient.check(fraudReq);
 

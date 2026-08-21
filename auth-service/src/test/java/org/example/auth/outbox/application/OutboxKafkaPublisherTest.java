@@ -18,6 +18,7 @@ import org.example.auth.outbox.configuration.OutboxKafkaProperties;
 import org.example.auth.outbox.domain.AggregateType;
 import org.example.auth.outbox.domain.EventType;
 import org.example.auth.outbox.domain.OutboxEvent;
+import org.example.shared.correlation.CorrelationIdConstants;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -67,7 +68,7 @@ class OutboxKafkaPublisherTest {
     assertHeader(record, "aggregateId", event.getAggregateId().toString());
     assertHeader(record, "eventType", event.getEventType().name());
     assertHeader(record, "occurredAt", event.getCreatedAt().toString());
-    assertHeader(record, "correlationId", event.getCorrelationId().toString());
+    assertHeader(record, CorrelationIdConstants.CORRELATION_ID_MDC_KEY, event.getCorrelationId().toString());
     assertHeader(record, "schemaVersion", "1");
   }
 

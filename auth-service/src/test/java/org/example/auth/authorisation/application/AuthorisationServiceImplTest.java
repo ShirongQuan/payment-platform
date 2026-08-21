@@ -34,6 +34,7 @@ import org.example.auth.common.exception.IdempotencyConflictException;
 import org.example.auth.fraud.FraudDecision;
 import org.example.auth.fraud.FraudOrchestrator;
 import org.example.auth.outbox.domain.EventType;
+import org.example.shared.correlation.CorrelationIdResolver;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -49,6 +50,7 @@ class AuthorisationServiceImplTest {
   @Mock private AuthorisationRepository authorisationRepository;
   @Mock private AuthorisationEventRepository authorisationEventRepository;
   @Mock private FraudOrchestrator fraudOrchestrator;
+  @Mock private CorrelationIdResolver correlationIdResolver;
 
   private AuthorisationServiceImpl service;
 
@@ -59,9 +61,11 @@ class AuthorisationServiceImplTest {
             transactionalExecutor,
             authorisationRepository,
             authorisationEventRepository,
-            fraudOrchestrator);
-    lenient().when(fraudOrchestrator.evaluate(any(), any(), any(), any()))
+            fraudOrchestrator,
+            correlationIdResolver);
+    lenient().when(fraudOrchestrator.evaluate(any(), any(), any()))
         .thenReturn(FraudDecision.approve(0, java.util.List.of()));
+    lenient().when(correlationIdResolver.resolveOrCreate()).thenReturn(UUID.randomUUID());
   }
 
   @Test
@@ -172,7 +176,7 @@ class AuthorisationServiceImplTest {
     verify(transactionalExecutor)
         .authoriseInTransaction(any(AuthorisationRequest.class), any(), any(FraudDecision.class), any(UUID.class));
     verify(fraudOrchestrator)
-        .evaluate(any(AuthorisationRequest.class), anyString(), eq(CLIENT_IP), any(UUID.class));
+        .evaluate(any(AuthorisationRequest.class), anyString(), eq(CLIENT_IP));
     verify(authorisationRepository, never())
         .findByAccountIdAndAuthoriseEventTypesAndIdempotencyKey(any(), any());
   }
@@ -204,6 +208,72 @@ class AuthorisationServiceImplTest {
     assertThat(service.authorise(request, CLIENT_IP)).isSameAs(executorResponse);
     verify(authorisationRepository, never())
         .findByAccountIdAndAuthoriseEventTypesAndIdempotencyKey(any(), any());
+  }
+
+  @Test
+  void authorise_shouldReuseCorrelationIdFromMdc() {
+    UUID accountId = UUID.randomUUID();
+    String idempotencyKey = "idem-correlation";
+    AuthorisationRequest request =
+        new AuthorisationRequest(
+            accountId, idempotencyKey, new BigDecimal("10.00"), "USD", "merchant-1");
+    UUID correlationId = UUID.randomUUID();
+
+    AuthorisationResponse executorResponse =
+        new AuthorisationResponse(
+            UUID.randomUUID(),
+            accountId,
+            idempotencyKey,
+            new BigDecimal("10.00"),
+            "USD",
+            "merchant-1",
+            AuthorisationStatus.AUTHORISED,
+            OffsetDateTime.now(),
+            OffsetDateTime.now());
+
+    when(transactionalExecutor.authoriseInTransaction(
+            any(AuthorisationRequest.class), any(), any(FraudDecision.class), eq(correlationId)))
+        .thenReturn(executorResponse);
+
+    when(correlationIdResolver.resolveOrCreate()).thenReturn(correlationId);
+
+    assertThat(service.authorise(request, CLIENT_IP)).isSameAs(executorResponse);
+
+    verify(fraudOrchestrator)
+        .evaluate(any(AuthorisationRequest.class), anyString(), eq(CLIENT_IP));
+    verify(transactionalExecutor)
+        .authoriseInTransaction(any(AuthorisationRequest.class), any(), any(FraudDecision.class), eq(correlationId));
+  }
+
+  @Test
+  void authorise_shouldWriteGeneratedCorrelationIdBackToMdcWhenMissing() {
+    UUID accountId = UUID.randomUUID();
+    String idempotencyKey = "idem-generated-correlation";
+    AuthorisationRequest request =
+        new AuthorisationRequest(
+            accountId, idempotencyKey, new BigDecimal("10.00"), "USD", "merchant-1");
+
+    AuthorisationResponse executorResponse =
+        new AuthorisationResponse(
+            UUID.randomUUID(),
+            accountId,
+            idempotencyKey,
+            new BigDecimal("10.00"),
+            "USD",
+            "merchant-1",
+            AuthorisationStatus.AUTHORISED,
+            OffsetDateTime.now(),
+            OffsetDateTime.now());
+
+    UUID generatedCorrelationId = UUID.randomUUID();
+    when(correlationIdResolver.resolveOrCreate()).thenReturn(generatedCorrelationId);
+    when(transactionalExecutor.authoriseInTransaction(
+            any(AuthorisationRequest.class), any(), any(FraudDecision.class), eq(generatedCorrelationId)))
+        .thenReturn(executorResponse);
+
+    service.authorise(request, CLIENT_IP);
+
+    verify(correlationIdResolver).resolveOrCreate();
   }
 
   @Test

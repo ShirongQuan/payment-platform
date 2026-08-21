@@ -9,6 +9,7 @@ import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.header.internals.RecordHeader;
 import org.example.auth.outbox.configuration.OutboxKafkaProperties;
 import org.example.auth.outbox.domain.OutboxEvent;
+import org.example.shared.correlation.CorrelationIdConstants;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.kafka.support.SendResult;
 import org.springframework.stereotype.Service;
@@ -66,7 +67,7 @@ public class OutboxKafkaPublisher {
         .headers()
         .add(
             new RecordHeader(
-                "correlationId",
+                CorrelationIdConstants.CORRELATION_ID_MDC_KEY,
                 event.getCorrelationId().toString().getBytes(StandardCharsets.UTF_8)));
     record.headers().add(new RecordHeader("schemaVersion", "1".getBytes(StandardCharsets.UTF_8)));
     log.debug(

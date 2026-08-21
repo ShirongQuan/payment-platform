@@ -54,7 +54,6 @@ class IpRuleTest {
         new BigDecimal("10.00"),
         "GBP",
         "merchant-ref",
-        "1.2.3.4",
-        UUID.randomUUID());
+        "1.2.3.4");
   }
 }

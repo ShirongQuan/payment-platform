@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -15,6 +16,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import org.example.shared.correlation.CorrelationIdResolver;
 import org.example.shared.idempotency.RequestHashing;
 import org.example.fraud.api.FraudCheckRequest;
 import org.example.fraud.api.FraudCheckResponse;
@@ -39,10 +41,13 @@ import tools.jackson.databind.ObjectMapper;
 @ExtendWith(MockitoExtension.class)
 class FraudServiceImplTest {
 
+  private static final UUID CORRELATION_ID = UUID.randomUUID();
+
   @Mock private FailureModeService failureModeService;
   @Mock private RiskScoringEngine riskScoringEngine;
   @Mock private FraudEvaluationRepository fraudEvaluationRepository;
   @Mock private AmountDeviationRuleCacheService amountDeviationRuleCacheService;
+  @Mock private CorrelationIdResolver correlationIdResolver;
 
   private FraudServiceImpl fraudService;
 
@@ -56,7 +61,9 @@ class FraudServiceImplTest {
             new RiskProperties("v1.0", 70),
             fraudEvaluationRepository,
             amountDeviationRuleCacheService,
-            new AmountDeviationRuleProperties(true, 3, 30, 200, 5, 30, 25, "AMOUNT_DEVIATION"));
+            new AmountDeviationRuleProperties(true, 3, 30, 200, 5, 30, 25, "AMOUNT_DEVIATION"),
+            correlationIdResolver);
+    when(correlationIdResolver.resolveOrCreate()).thenReturn(CORRELATION_ID);
   }
 
   @Test
@@ -148,7 +155,7 @@ class FraudServiceImplTest {
             FraudDecision.PENDING,
             List.of(),
             request.ipAddress(),
-            request.correlationId(),
+            CORRELATION_ID,
             OffsetDateTime.now());
 
     when(fraudEvaluationRepository.tryInsertPending(
@@ -210,7 +217,7 @@ class FraudServiceImplTest {
                     "score", 40,
                     "reason", "IP_VELOCITY_EXCEEDED in 30s")),
             request.ipAddress(),
-            request.correlationId(),
+            CORRELATION_ID,
             OffsetDateTime.now());
 
     when(fraudEvaluationRepository.tryInsertPending(
@@ -260,7 +267,7 @@ class FraudServiceImplTest {
             FraudDecision.PENDING,
             List.of(),
             request.ipAddress(),
-            request.correlationId(),
+            CORRELATION_ID,
             OffsetDateTime.now());
 
     when(fraudEvaluationRepository.tryInsertPending(
@@ -287,6 +294,51 @@ class FraudServiceImplTest {
     verify(riskScoringEngine, never()).evaluate(any(FraudCheckRequest.class));
   }
 
+  @Test
+  void shouldPersistCorrelationIdFromResolver() {
+    FraudCheckRequest request = request();
+    UUID correlationId = UUID.randomUUID();
+    when(fraudEvaluationRepository.tryInsertPending(
+            any(UUID.class),
+            any(UUID.class),
+            any(BigDecimal.class),
+            anyString(),
+            anyString(),
+            anyString(),
+            anyString(),
+            anyString(),
+            anyString(),
+            anyString(),
+            anyString(),
+            any(UUID.class),
+            any(OffsetDateTime.class)))
+        .thenReturn(1);
+    when(riskScoringEngine.evaluate(request)).thenReturn(new RiskReport(5, List.of()));
+    when(fraudEvaluationRepository.finalizeEvaluation(
+            any(UUID.class), anyInt(), anyString(), anyString()))
+        .thenReturn(1);
+
+    when(correlationIdResolver.resolveOrCreate()).thenReturn(correlationId);
+
+    fraudService.check(request);
+
+    verify(fraudEvaluationRepository)
+        .tryInsertPending(
+            any(UUID.class),
+            any(UUID.class),
+            any(BigDecimal.class),
+            anyString(),
+            anyString(),
+            anyString(),
+            anyString(),
+            anyString(),
+            anyString(),
+            anyString(),
+            anyString(),
+            eq(correlationId),
+            any(OffsetDateTime.class));
+  }
+
   private FraudCheckRequest request() {
     return new FraudCheckRequest(
         UUID.randomUUID(),
@@ -294,7 +346,6 @@ class FraudServiceImplTest {
         new BigDecimal("10.00"),
         "GBP",
         "merchant-ref",
-        "1.2.3.4",
-        UUID.randomUUID());
+        "1.2.3.4");
   }
 }

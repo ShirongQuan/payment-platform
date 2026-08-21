@@ -13,5 +13,4 @@ public record FraudCheckRequest(
     @NotNull @DecimalMin(value = "0.01") BigDecimal amount,
     @NotBlank @ValidCurrencyCode String currencyCode,
     @NotBlank String merchantReference,
-    @NotBlank String ipAddress,
-    @NotNull UUID correlationId) {}
+    @NotBlank String ipAddress) {}

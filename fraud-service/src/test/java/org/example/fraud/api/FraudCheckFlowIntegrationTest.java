@@ -63,8 +63,7 @@ class FraudCheckFlowIntegrationTest {
           "amount":100.00,
           "currencyCode":"GBP",
           "merchantReference":"merchant-ref",
-          "ipAddress":"1.2.3.4",
-          "correlationId":"f190f5de-22aa-4ef6-b0f4-541f45e8451e"
+          "ipAddress":"1.2.3.4"
         }
         """
             .formatted(accountId, idempotencyKey);

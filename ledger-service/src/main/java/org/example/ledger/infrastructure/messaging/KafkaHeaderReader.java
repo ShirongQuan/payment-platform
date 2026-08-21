@@ -6,6 +6,7 @@ import java.util.UUID;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.header.Headers;
+import org.example.shared.correlation.CorrelationIdConstants;
 import org.example.ledger.domain.EventMetadata;
 import org.springframework.stereotype.Component;
 
@@ -22,7 +23,7 @@ public class KafkaHeaderReader {
         UUID.fromString(header(headers, "aggregateId")),
         header(headers, "eventType"),
         OffsetDateTime.parse(header(headers, "occurredAt")),
-        UUID.fromString(header(headers, "correlationId")));
+        UUID.fromString(header(headers, CorrelationIdConstants.CORRELATION_ID_MDC_KEY)));
     log.debug(
         "Parsed Kafka headers into metadata, eventId={}, eventType={}, aggregateId={}",
         metadata.eventId(),

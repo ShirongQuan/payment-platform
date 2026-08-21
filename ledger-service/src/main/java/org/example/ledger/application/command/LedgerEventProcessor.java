@@ -42,8 +42,16 @@ public class LedgerEventProcessor {
         authorisationReversedHandler.handle(metadata, rawPayload);
         log.debug("Handled AUTHORISATION_REVERSED event, eventId={}", metadata.eventId());
       }
+      case AUTHORISATION_DECLINED -> {
+        log.debug(
+            "Ignoring AUTHORISATION_DECLINED event, eventId={}, no action taken",
+            metadata.eventId());
+      }
       default -> {
-        log.error("Unsupported event type received, eventId={}, eventType={}", metadata.eventId(), eventType);
+        log.error(
+            "Unsupported event type received, eventId={}, eventType={}",
+            metadata.eventId(),
+            eventType);
         throw new IllegalArgumentException("Unsupported event type: " + metadata.eventType());
       }
     }

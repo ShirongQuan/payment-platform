@@ -5,25 +5,44 @@ import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
 import io.github.resilience4j.timelimiter.annotation.TimeLimiter;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.Executor;
 import java.util.concurrent.TimeoutException;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.example.shared.correlation.CorrelationIdConstants;
+import org.slf4j.MDC;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.http.converter.HttpMessageConversionException;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 
 @Slf4j
 @Component
-@RequiredArgsConstructor
 public class ResilientFraudGateway {
 
   private final RestClient fraudRestClient;
+  private final Executor fraudMdcExecutor;
+
+  public ResilientFraudGateway(
+      RestClient fraudRestClient, @Qualifier("fraudMdcExecutor") Executor fraudMdcExecutor) {
+    this.fraudRestClient = fraudRestClient;
+    this.fraudMdcExecutor = fraudMdcExecutor;
+  }
 
   @TimeLimiter(name = "fraudService")
   @CircuitBreaker(name = "fraudService", fallbackMethod = "fallback")
   public CompletableFuture<FraudDecision> checkAsync(FraudCheckRequest request) {
+    log.debug(
+        "Dispatching async fraud call, accountId={}, idempotencyKey={}, correlationId={}",
+        request.accountId(),
+        request.idempotencyKey(),
+        MDC.get(CorrelationIdConstants.CORRELATION_ID_MDC_KEY));
     return CompletableFuture.supplyAsync(
         () -> {
+          log.debug(
+              "Executing fraud HTTP call on async executor, accountId={}, idempotencyKey={}, correlationId={}",
+              request.accountId(),
+              request.idempotencyKey(),
+              MDC.get(CorrelationIdConstants.CORRELATION_ID_MDC_KEY));
           FraudCheckResponse resp =
               fraudRestClient
                   .post()
@@ -43,7 +62,8 @@ public class ResilientFraudGateway {
           }
           return FraudDecision.approve(
               resp.riskScore(), resp.reasons().stream().map(Record::toString).toList());
-        });
+        },
+        fraudMdcExecutor);
   }
 
   @SuppressWarnings("unused")

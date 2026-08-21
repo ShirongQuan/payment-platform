@@ -8,6 +8,7 @@ import java.time.OffsetDateTime;
 import java.util.UUID;
 import org.apache.kafka.common.header.internals.RecordHeader;
 import org.apache.kafka.common.header.internals.RecordHeaders;
+import org.example.shared.correlation.CorrelationIdConstants;
 import org.example.ledger.domain.EventMetadata;
 import org.junit.jupiter.api.Test;
 
@@ -30,7 +31,9 @@ class KafkaHeaderReaderTest {
         new RecordHeader("eventType", "AUTHORISATION_AUTHORISED".getBytes(StandardCharsets.UTF_8)));
     headers.add(new RecordHeader("occurredAt", occurredAt.toString().getBytes(StandardCharsets.UTF_8)));
     headers.add(
-        new RecordHeader("correlationId", correlationId.toString().getBytes(StandardCharsets.UTF_8)));
+        new RecordHeader(
+            CorrelationIdConstants.CORRELATION_ID_MDC_KEY,
+            correlationId.toString().getBytes(StandardCharsets.UTF_8)));
 
     EventMetadata metadata = kafkaHeaderReader.read(headers);
 
