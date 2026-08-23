@@ -7,13 +7,16 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import java.math.BigDecimal;
+import java.time.Duration;
 import java.time.OffsetDateTime;
 import java.util.Optional;
 import java.util.UUID;
@@ -33,8 +36,14 @@ import org.example.auth.common.exception.AuthorisationNotFoundException;
 import org.example.auth.common.exception.IdempotencyConflictException;
 import org.example.auth.fraud.FraudDecision;
 import org.example.auth.fraud.FraudOrchestrator;
+import org.example.auth.idempotency.CachedAuthorisationResponse;
+import org.example.auth.idempotency.CachedCaptureResponse;
+import org.example.auth.idempotency.CachedReverseResponse;
+import org.example.auth.idempotency.IdempotencyProperties;
+import org.example.auth.idempotency.IdempotencyService;
 import org.example.auth.outbox.domain.EventType;
 import org.example.shared.correlation.CorrelationIdResolver;
+import org.example.shared.idempotency.RequestHashing;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -51,6 +60,8 @@ class AuthorisationServiceImplTest {
   @Mock private AuthorisationEventRepository authorisationEventRepository;
   @Mock private FraudOrchestrator fraudOrchestrator;
   @Mock private CorrelationIdResolver correlationIdResolver;
+  @Mock private IdempotencyProperties idempotencyProperties;
+  @Mock private IdempotencyService idempotencyService;
 
   private AuthorisationServiceImpl service;
 
@@ -62,10 +73,308 @@ class AuthorisationServiceImplTest {
             authorisationRepository,
             authorisationEventRepository,
             fraudOrchestrator,
-            correlationIdResolver);
-    lenient().when(fraudOrchestrator.evaluate(any(), any(), any()))
+            correlationIdResolver,
+            idempotencyProperties,
+            idempotencyService);
+    lenient()
+        .when(fraudOrchestrator.evaluate(any(), any(), any()))
         .thenReturn(FraudDecision.approve(0, java.util.List.of()));
     lenient().when(correlationIdResolver.resolveOrCreate()).thenReturn(UUID.randomUUID());
+    lenient().when(idempotencyProperties.ttl()).thenReturn(Duration.ofHours(24));
+  }
+
+  @Test
+  void authorise_shouldReturnCachedResponse_withoutHittingRepositoriesOrExecutor() {
+    UUID accountId = UUID.randomUUID();
+    String idempotencyKey = "idem-cached";
+    AuthorisationRequest request =
+        new AuthorisationRequest(
+            accountId, idempotencyKey, new BigDecimal("10.00"), "USD", "merchant-1");
+
+    AuthorisationResponse cachedResponse =
+        new AuthorisationResponse(
+            UUID.randomUUID(),
+            accountId,
+            idempotencyKey,
+            new BigDecimal("10.00"),
+            "USD",
+            "merchant-1",
+            AuthorisationStatus.AUTHORISED,
+            OffsetDateTime.now(),
+            OffsetDateTime.now());
+
+    when(idempotencyService.get(
+            eq(org.example.auth.common.OperationType.AUTHORISE),
+            eq(accountId),
+            eq(idempotencyKey),
+            eq(CachedAuthorisationResponse.class)))
+        .thenReturn(
+            Optional.of(
+                new CachedAuthorisationResponse(fingerprintFor(request, "USD"), cachedResponse)));
+
+    AuthorisationResponse response = service.authorise(request, CLIENT_IP);
+
+    assertThat(response).isSameAs(cachedResponse);
+    verifyNoInteractions(authorisationRepository);
+    verifyNoInteractions(authorisationEventRepository);
+    verifyNoInteractions(transactionalExecutor);
+    verify(idempotencyService, never())
+        .store(any(), any(UUID.class), anyString(), any(CachedAuthorisationResponse.class), any());
+  }
+
+  @Test
+  void authorise_shouldThrowConflict_whenCachedFingerprintMismatchesRequest() {
+    UUID accountId = UUID.randomUUID();
+    String idempotencyKey = "idem-cached-conflict";
+    AuthorisationRequest request =
+        new AuthorisationRequest(
+            accountId, idempotencyKey, new BigDecimal("10.00"), "USD", "merchant-1");
+
+    AuthorisationResponse cachedResponse =
+        new AuthorisationResponse(
+            UUID.randomUUID(),
+            accountId,
+            idempotencyKey,
+            new BigDecimal("10.00"),
+            "USD",
+            "merchant-1",
+            AuthorisationStatus.AUTHORISED,
+            OffsetDateTime.now(),
+            OffsetDateTime.now());
+
+    when(idempotencyService.get(
+            eq(org.example.auth.common.OperationType.AUTHORISE),
+            eq(accountId),
+            eq(idempotencyKey),
+            eq(CachedAuthorisationResponse.class)))
+        .thenReturn(Optional.of(new CachedAuthorisationResponse("mismatch", cachedResponse)));
+
+    assertThrows(IdempotencyConflictException.class, () -> service.authorise(request, CLIENT_IP));
+
+    verifyNoInteractions(transactionalExecutor);
+    verify(idempotencyService, never())
+        .store(any(), any(UUID.class), anyString(), any(CachedAuthorisationResponse.class), any());
+  }
+
+  @Test
+  void authorise_shouldFallBackToTransaction_whenCachedPayloadIsLegacyWithoutFingerprint() {
+    UUID accountId = UUID.randomUUID();
+    String idempotencyKey = "idem-legacy-payload";
+    AuthorisationRequest request =
+        new AuthorisationRequest(
+            accountId, idempotencyKey, new BigDecimal("10.00"), "USD", "merchant-1");
+
+    AuthorisationResponse executorResponse =
+        new AuthorisationResponse(
+            UUID.randomUUID(),
+            accountId,
+            idempotencyKey,
+            new BigDecimal("10.00"),
+            "USD",
+            "merchant-1",
+            AuthorisationStatus.AUTHORISED,
+            OffsetDateTime.now(),
+            OffsetDateTime.now());
+
+    when(idempotencyService.get(
+            eq(org.example.auth.common.OperationType.AUTHORISE),
+            eq(accountId),
+            eq(idempotencyKey),
+            eq(CachedAuthorisationResponse.class)))
+        .thenReturn(Optional.of(new CachedAuthorisationResponse(null, null)));
+    when(transactionalExecutor.authoriseInTransaction(
+            any(AuthorisationRequest.class), any(), any(FraudDecision.class), any(UUID.class)))
+        .thenReturn(executorResponse);
+
+    AuthorisationResponse response = service.authorise(request, CLIENT_IP);
+
+    assertThat(response).isSameAs(executorResponse);
+  }
+
+  @Test
+  void authorise_shouldStoreResponseInCache_afterSuccessfulTransaction() {    UUID accountId = UUID.randomUUID();
+    String idempotencyKey = "idem-store-success";
+    AuthorisationRequest request =
+        new AuthorisationRequest(
+            accountId, idempotencyKey, new BigDecimal("42.00"), "USD", "merchant-1");
+
+    AuthorisationResponse executorResponse =
+        new AuthorisationResponse(
+            UUID.randomUUID(),
+            accountId,
+            idempotencyKey,
+            new BigDecimal("42.00"),
+            "USD",
+            "merchant-1",
+            AuthorisationStatus.AUTHORISED,
+            OffsetDateTime.now(),
+            OffsetDateTime.now());
+
+    when(transactionalExecutor.authoriseInTransaction(
+            any(AuthorisationRequest.class), any(), any(FraudDecision.class), any(UUID.class)))
+        .thenReturn(executorResponse);
+
+    AuthorisationResponse response = service.authorise(request, CLIENT_IP);
+
+    assertThat(response).isSameAs(executorResponse);
+    verify(idempotencyService)
+        .store(
+            eq(org.example.auth.common.OperationType.AUTHORISE),
+            eq(accountId),
+            eq(idempotencyKey),
+            any(CachedAuthorisationResponse.class),
+            eq(Duration.ofHours(24)));
+  }
+
+  @Test
+  void authorise_shouldFallbackToTransaction_whenCacheReadFails() {
+    UUID accountId = UUID.randomUUID();
+    String idempotencyKey = "idem-cache-read-error";
+    AuthorisationRequest request =
+        new AuthorisationRequest(
+            accountId, idempotencyKey, new BigDecimal("42.00"), "USD", "merchant-1");
+
+    AuthorisationResponse executorResponse =
+        new AuthorisationResponse(
+            UUID.randomUUID(),
+            accountId,
+            idempotencyKey,
+            new BigDecimal("42.00"),
+            "USD",
+            "merchant-1",
+            AuthorisationStatus.AUTHORISED,
+            OffsetDateTime.now(),
+            OffsetDateTime.now());
+
+    when(idempotencyService.get(
+            eq(org.example.auth.common.OperationType.AUTHORISE),
+            eq(accountId),
+            eq(idempotencyKey),
+            eq(CachedAuthorisationResponse.class)))
+        .thenThrow(new RuntimeException("redis unavailable"));
+
+    when(transactionalExecutor.authoriseInTransaction(
+            any(AuthorisationRequest.class), any(), any(FraudDecision.class), any(UUID.class)))
+        .thenReturn(executorResponse);
+
+    AuthorisationResponse response = service.authorise(request, CLIENT_IP);
+
+    assertThat(response).isSameAs(executorResponse);
+    verify(transactionalExecutor)
+        .authoriseInTransaction(
+            any(AuthorisationRequest.class), any(), any(FraudDecision.class), any(UUID.class));
+    verify(idempotencyService)
+        .store(
+            eq(org.example.auth.common.OperationType.AUTHORISE),
+            eq(accountId),
+            eq(idempotencyKey),
+            any(CachedAuthorisationResponse.class),
+            eq(Duration.ofHours(24)));
+  }
+
+  @Test
+  void authorise_shouldPropagateTransactionFailure_whenCacheReadFails() {
+    UUID accountId = UUID.randomUUID();
+    String idempotencyKey = "idem-cache-read-and-transaction-failure";
+    AuthorisationRequest request =
+        new AuthorisationRequest(
+            accountId, idempotencyKey, new BigDecimal("42.00"), "USD", "merchant-1");
+
+    when(idempotencyService.get(
+            eq(org.example.auth.common.OperationType.AUTHORISE),
+            eq(accountId),
+            eq(idempotencyKey),
+            eq(CachedAuthorisationResponse.class)))
+        .thenThrow(new RuntimeException("redis unavailable"));
+
+    when(transactionalExecutor.authoriseInTransaction(
+            any(AuthorisationRequest.class), any(), any(FraudDecision.class), any(UUID.class)))
+        .thenThrow(new RuntimeException("transaction failed"));
+
+    assertThrows(RuntimeException.class, () -> service.authorise(request, CLIENT_IP));
+
+    verify(idempotencyService, never())
+        .store(any(), any(UUID.class), anyString(), any(CachedAuthorisationResponse.class), any());
+  }
+
+  @Test
+  void authorise_shouldNotStoreInCache_whenTransactionFails() {
+    UUID accountId = UUID.randomUUID();
+    String idempotencyKey = "idem-store-failure";
+    AuthorisationRequest request =
+        new AuthorisationRequest(
+            accountId, idempotencyKey, new BigDecimal("42.00"), "USD", "merchant-1");
+
+    when(transactionalExecutor.authoriseInTransaction(
+            any(AuthorisationRequest.class), any(), any(FraudDecision.class), any(UUID.class)))
+        .thenThrow(new RuntimeException("transaction failed"));
+
+    assertThrows(RuntimeException.class, () -> service.authorise(request, CLIENT_IP));
+
+    verify(idempotencyService, never())
+        .store(any(), any(UUID.class), anyString(), any(CachedAuthorisationResponse.class), any());
+  }
+
+  @Test
+  void authorise_shouldSucceed_whenCacheStoreFailsAfterSuccessfulTransaction() {
+    UUID accountId = UUID.randomUUID();
+    String idempotencyKey = "idem-cache-store-error";
+    AuthorisationRequest request =
+        new AuthorisationRequest(
+            accountId, idempotencyKey, new BigDecimal("42.00"), "USD", "merchant-1");
+
+    AuthorisationResponse executorResponse =
+        new AuthorisationResponse(
+            UUID.randomUUID(),
+            accountId,
+            idempotencyKey,
+            new BigDecimal("42.00"),
+            "USD",
+            "merchant-1",
+            AuthorisationStatus.AUTHORISED,
+            OffsetDateTime.now(),
+            OffsetDateTime.now());
+
+    when(transactionalExecutor.authoriseInTransaction(
+            any(AuthorisationRequest.class), any(), any(FraudDecision.class), any(UUID.class)))
+        .thenReturn(executorResponse);
+
+    doThrow(new RuntimeException("redis unavailable"))
+        .when(idempotencyService)
+        .store(any(), any(UUID.class), anyString(), any(CachedAuthorisationResponse.class), any());
+
+    AuthorisationResponse response = service.authorise(request, CLIENT_IP);
+
+    assertThat(response).isSameAs(executorResponse);
+  }
+
+  @Test
+  void authorise_shouldReturnResolvedResponse_whenCacheStoreFailsAfterRaceResolution() {
+    UUID accountId = UUID.randomUUID();
+    String idempotencyKey = "idem-race-cache-store-error";
+    AuthorisationRequest request =
+        new AuthorisationRequest(
+            accountId, idempotencyKey, new BigDecimal("10.00"), "USD", "merchant-1");
+
+    when(transactionalExecutor.authoriseInTransaction(
+            any(AuthorisationRequest.class), any(), any(FraudDecision.class), any(UUID.class)))
+        .thenThrow(new ConcurrentIdempotencyRaceException(new RuntimeException("duplicate key")));
+
+    AuthorisationEntity existing =
+        existingAuthorisation(accountId, idempotencyKey, new BigDecimal("10.00"), "USD", "merchant-1");
+    when(authorisationRepository.findByAccountIdAndAuthoriseEventTypesAndIdempotencyKey(
+            accountId, idempotencyKey))
+        .thenReturn(Optional.of(existing));
+
+    doThrow(new RuntimeException("redis unavailable"))
+        .when(idempotencyService)
+        .store(any(), any(UUID.class), anyString(), any(CachedAuthorisationResponse.class), any());
+
+    AuthorisationResponse response = service.authorise(request, CLIENT_IP);
+
+    assertThat(response.accountId()).isEqualTo(accountId);
+    assertThat(response.idempotencyKey()).isEqualTo(idempotencyKey);
+    assertThat(response.status()).isEqualTo(AuthorisationStatus.AUTHORISED);
   }
 
   @Test
@@ -103,16 +412,18 @@ class AuthorisationServiceImplTest {
             accountId, idempotencyKey, new BigDecimal("10.00"), "usd", "merchant-1");
 
     when(transactionalExecutor.authoriseInTransaction(
-            any(AuthorisationRequest.class), anyString(), any(FraudDecision.class), any(UUID.class)))
+            any(AuthorisationRequest.class),
+            anyString(),
+            any(FraudDecision.class),
+            any(UUID.class)))
         .thenThrow(new ConcurrentIdempotencyRaceException(new RuntimeException("duplicate key")));
 
     AuthorisationEntity existing =
         existingAuthorisation(
             accountId, idempotencyKey, new BigDecimal("10.00"), "USD", "merchant-1");
 
-    when(
-            authorisationRepository.findByAccountIdAndAuthoriseEventTypesAndIdempotencyKey(
-                accountId, idempotencyKey))
+    when(authorisationRepository.findByAccountIdAndAuthoriseEventTypesAndIdempotencyKey(
+            accountId, idempotencyKey))
         .thenReturn(Optional.of(existing));
 
     AuthorisationResponse response = service.authorise(request, CLIENT_IP);
@@ -138,9 +449,8 @@ class AuthorisationServiceImplTest {
 
     AuthorisationEntity existing = conflictingAuthorisation(new BigDecimal("99.00"));
 
-    when(
-            authorisationRepository.findByAccountIdAndAuthoriseEventTypesAndIdempotencyKey(
-                accountId, idempotencyKey))
+    when(authorisationRepository.findByAccountIdAndAuthoriseEventTypesAndIdempotencyKey(
+            accountId, idempotencyKey))
         .thenReturn(Optional.of(existing));
 
     assertThrows(IdempotencyConflictException.class, () -> service.authorise(request, CLIENT_IP));
@@ -174,9 +484,9 @@ class AuthorisationServiceImplTest {
 
     assertThat(response.currencyCode()).isEqualTo("USD");
     verify(transactionalExecutor)
-        .authoriseInTransaction(any(AuthorisationRequest.class), any(), any(FraudDecision.class), any(UUID.class));
-    verify(fraudOrchestrator)
-        .evaluate(any(AuthorisationRequest.class), anyString(), eq(CLIENT_IP));
+        .authoriseInTransaction(
+            any(AuthorisationRequest.class), any(), any(FraudDecision.class), any(UUID.class));
+    verify(fraudOrchestrator).evaluate(any(AuthorisationRequest.class), anyString(), eq(CLIENT_IP));
     verify(authorisationRepository, never())
         .findByAccountIdAndAuthoriseEventTypesAndIdempotencyKey(any(), any());
   }
@@ -239,10 +549,10 @@ class AuthorisationServiceImplTest {
 
     assertThat(service.authorise(request, CLIENT_IP)).isSameAs(executorResponse);
 
-    verify(fraudOrchestrator)
-        .evaluate(any(AuthorisationRequest.class), anyString(), eq(CLIENT_IP));
+    verify(fraudOrchestrator).evaluate(any(AuthorisationRequest.class), anyString(), eq(CLIENT_IP));
     verify(transactionalExecutor)
-        .authoriseInTransaction(any(AuthorisationRequest.class), any(), any(FraudDecision.class), eq(correlationId));
+        .authoriseInTransaction(
+            any(AuthorisationRequest.class), any(), any(FraudDecision.class), eq(correlationId));
   }
 
   @Test
@@ -268,7 +578,10 @@ class AuthorisationServiceImplTest {
     UUID generatedCorrelationId = UUID.randomUUID();
     when(correlationIdResolver.resolveOrCreate()).thenReturn(generatedCorrelationId);
     when(transactionalExecutor.authoriseInTransaction(
-            any(AuthorisationRequest.class), any(), any(FraudDecision.class), eq(generatedCorrelationId)))
+            any(AuthorisationRequest.class),
+            any(),
+            any(FraudDecision.class),
+            eq(generatedCorrelationId)))
         .thenReturn(executorResponse);
 
     service.authorise(request, CLIENT_IP);
@@ -287,9 +600,8 @@ class AuthorisationServiceImplTest {
     when(transactionalExecutor.authoriseInTransaction(
             any(AuthorisationRequest.class), any(), any(FraudDecision.class), any(UUID.class)))
         .thenThrow(new ConcurrentIdempotencyRaceException(new RuntimeException("duplicate key")));
-    when(
-            authorisationRepository.findByAccountIdAndAuthoriseEventTypesAndIdempotencyKey(
-                accountId, idempotencyKey))
+    when(authorisationRepository.findByAccountIdAndAuthoriseEventTypesAndIdempotencyKey(
+            accountId, idempotencyKey))
         .thenReturn(Optional.empty());
 
     assertThatExceptionOfType(IllegalStateException.class)
@@ -312,9 +624,8 @@ class AuthorisationServiceImplTest {
     AuthorisationEntity existing = mock(AuthorisationEntity.class);
     when(existing.getAmount()).thenReturn(new BigDecimal("10.00"));
     when(existing.getCurrencyCode()).thenReturn("EUR");
-    when(
-            authorisationRepository.findByAccountIdAndAuthoriseEventTypesAndIdempotencyKey(
-                accountId, idempotencyKey))
+    when(authorisationRepository.findByAccountIdAndAuthoriseEventTypesAndIdempotencyKey(
+            accountId, idempotencyKey))
         .thenReturn(Optional.of(existing));
 
     assertThrows(IdempotencyConflictException.class, () -> service.authorise(request, CLIENT_IP));
@@ -334,9 +645,8 @@ class AuthorisationServiceImplTest {
 
     AuthorisationEntity existing =
         raceWinnerAuthorisation(new BigDecimal("10.00"), "USD", "merchant-other");
-    when(
-            authorisationRepository.findByAccountIdAndAuthoriseEventTypesAndIdempotencyKey(
-                accountId, idempotencyKey))
+    when(authorisationRepository.findByAccountIdAndAuthoriseEventTypesAndIdempotencyKey(
+            accountId, idempotencyKey))
         .thenReturn(Optional.of(existing));
 
     assertThrows(IdempotencyConflictException.class, () -> service.authorise(request, CLIENT_IP));
@@ -355,9 +665,8 @@ class AuthorisationServiceImplTest {
 
     AuthorisationEntity existing =
         existingAuthorisation(accountId, idempotencyKey, new BigDecimal("10.00"), "USD", null);
-    when(
-            authorisationRepository.findByAccountIdAndAuthoriseEventTypesAndIdempotencyKey(
-                accountId, idempotencyKey))
+    when(authorisationRepository.findByAccountIdAndAuthoriseEventTypesAndIdempotencyKey(
+            accountId, idempotencyKey))
         .thenReturn(Optional.of(existing));
 
     AuthorisationResponse response = service.authorise(request, CLIENT_IP);
@@ -380,7 +689,9 @@ class AuthorisationServiceImplTest {
             AuthorisationStatus.CAPTURED,
             OffsetDateTime.now());
 
-    when(transactionalExecutor.captureInTransaction(authorisationId, request)).thenReturn(response);
+    when(transactionalExecutor.captureInTransaction(
+            eq(authorisationId), eq(request), any(UUID.class)))
+        .thenReturn(response);
 
     assertThat(service.capture(authorisationId, request)).isSameAs(response);
     verify(authorisationRepository, never()).findById(any(UUID.class));
@@ -395,7 +706,8 @@ class AuthorisationServiceImplTest {
     UUID accountId = UUID.randomUUID();
     CaptureRequest request = new CaptureRequest("capture-key");
 
-    when(transactionalExecutor.captureInTransaction(authorisationId, request))
+    when(transactionalExecutor.captureInTransaction(
+            eq(authorisationId), eq(request), any(UUID.class)))
         .thenThrow(new ConcurrentIdempotencyRaceException(new RuntimeException("duplicate key")));
 
     AuthorisationEntity authorisationEntity = mock(AuthorisationEntity.class);
@@ -426,7 +738,8 @@ class AuthorisationServiceImplTest {
     UUID accountId = UUID.randomUUID();
     CaptureRequest request = new CaptureRequest("capture-key");
 
-    when(transactionalExecutor.captureInTransaction(authorisationId, request))
+    when(transactionalExecutor.captureInTransaction(
+            eq(authorisationId), eq(request), any(UUID.class)))
         .thenThrow(new ConcurrentIdempotencyRaceException(new RuntimeException("duplicate key")));
 
     AuthorisationEntity authorisationEntity = mock(AuthorisationEntity.class);
@@ -446,12 +759,263 @@ class AuthorisationServiceImplTest {
     UUID authorisationId = UUID.randomUUID();
     CaptureRequest request = new CaptureRequest("capture-key");
 
-    when(transactionalExecutor.captureInTransaction(authorisationId, request))
+    when(transactionalExecutor.captureInTransaction(
+            eq(authorisationId), eq(request), any(UUID.class)))
         .thenThrow(new ConcurrentIdempotencyRaceException(new RuntimeException("duplicate key")));
     when(authorisationRepository.findById(authorisationId)).thenReturn(Optional.empty());
 
     assertThrows(
         AuthorisationNotFoundException.class, () -> service.capture(authorisationId, request));
+  }
+
+  @Test
+  void capture_shouldReturnCachedResponse_withoutHittingExecutorOrRepositories() {
+    UUID authorisationId = UUID.randomUUID();
+    CaptureRequest request = new CaptureRequest("capture-cached-key");
+
+    CaptureResponse cachedResponse =
+        new CaptureResponse(
+            authorisationId,
+            request.idempotencyKey(),
+            new BigDecimal("10.00"),
+            "USD",
+            AuthorisationStatus.CAPTURED,
+            OffsetDateTime.now());
+
+    when(idempotencyService.get(
+            eq(org.example.auth.common.OperationType.CAPTURE),
+            eq(authorisationId),
+            eq(request.idempotencyKey()),
+            eq(CachedCaptureResponse.class)))
+        .thenReturn(
+            Optional.of(
+                new CachedCaptureResponse(captureFingerprintFor(authorisationId), cachedResponse)));
+
+    CaptureResponse response = service.capture(authorisationId, request);
+
+    assertThat(response).isSameAs(cachedResponse);
+    verifyNoInteractions(transactionalExecutor);
+    verify(authorisationRepository, never()).findById(any());
+    verify(idempotencyService, never())
+        .store(any(), any(UUID.class), anyString(), any(CachedCaptureResponse.class), any());
+  }
+
+  @Test
+  void capture_shouldThrowConflict_whenCachedFingerprintMismatchesRequest() {
+    UUID authorisationId = UUID.randomUUID();
+    CaptureRequest request = new CaptureRequest("capture-conflict-key");
+
+    CaptureResponse cachedResponse =
+        new CaptureResponse(
+            authorisationId,
+            request.idempotencyKey(),
+            new BigDecimal("10.00"),
+            "USD",
+            AuthorisationStatus.CAPTURED,
+            OffsetDateTime.now());
+
+    when(idempotencyService.get(
+            eq(org.example.auth.common.OperationType.CAPTURE),
+            eq(authorisationId),
+            eq(request.idempotencyKey()),
+            eq(CachedCaptureResponse.class)))
+        .thenReturn(Optional.of(new CachedCaptureResponse("mismatch", cachedResponse)));
+
+    assertThrows(
+        IdempotencyConflictException.class, () -> service.capture(authorisationId, request));
+
+    verifyNoInteractions(transactionalExecutor);
+  }
+
+  @Test
+  void capture_shouldStoreResponseInCache_afterSuccessfulTransaction() {
+    UUID authorisationId = UUID.randomUUID();
+    CaptureRequest request = new CaptureRequest("capture-store-key");
+
+    CaptureResponse executorResponse =
+        new CaptureResponse(
+            authorisationId,
+            request.idempotencyKey(),
+            new BigDecimal("10.00"),
+            "USD",
+            AuthorisationStatus.CAPTURED,
+            OffsetDateTime.now());
+
+    when(transactionalExecutor.captureInTransaction(
+            eq(authorisationId), eq(request), any(UUID.class)))
+        .thenReturn(executorResponse);
+
+    CaptureResponse response = service.capture(authorisationId, request);
+
+    assertThat(response).isSameAs(executorResponse);
+    verify(idempotencyService)
+        .store(
+            eq(org.example.auth.common.OperationType.CAPTURE),
+            eq(authorisationId),
+            eq(request.idempotencyKey()),
+            any(CachedCaptureResponse.class),
+            eq(Duration.ofHours(24)));
+  }
+
+  @Test
+  void capture_shouldNotStoreInCache_whenTransactionFails() {
+    UUID authorisationId = UUID.randomUUID();
+    CaptureRequest request = new CaptureRequest("capture-failure-key");
+
+    when(transactionalExecutor.captureInTransaction(
+            eq(authorisationId), eq(request), any(UUID.class)))
+        .thenThrow(new RuntimeException("transaction failed"));
+
+    assertThrows(RuntimeException.class, () -> service.capture(authorisationId, request));
+
+    verify(idempotencyService, never())
+        .store(any(), any(UUID.class), anyString(), any(CachedCaptureResponse.class), any());
+  }
+
+  @Test
+  void capture_shouldFallbackToTransaction_whenCacheReadFails() {
+    UUID authorisationId = UUID.randomUUID();
+    CaptureRequest request = new CaptureRequest("capture-cache-read-error-key");
+
+    CaptureResponse executorResponse =
+        new CaptureResponse(
+            authorisationId,
+            request.idempotencyKey(),
+            new BigDecimal("10.00"),
+            "USD",
+            AuthorisationStatus.CAPTURED,
+            OffsetDateTime.now());
+
+    when(idempotencyService.get(
+            eq(org.example.auth.common.OperationType.CAPTURE),
+            eq(authorisationId),
+            eq(request.idempotencyKey()),
+            eq(CachedCaptureResponse.class)))
+        .thenThrow(new RuntimeException("redis unavailable"));
+    when(transactionalExecutor.captureInTransaction(
+            eq(authorisationId), eq(request), any(UUID.class)))
+        .thenReturn(executorResponse);
+
+    CaptureResponse response = service.capture(authorisationId, request);
+
+    assertThat(response).isSameAs(executorResponse);
+    verify(idempotencyService)
+        .store(
+            eq(org.example.auth.common.OperationType.CAPTURE),
+            eq(authorisationId),
+            eq(request.idempotencyKey()),
+            any(CachedCaptureResponse.class),
+            eq(Duration.ofHours(24)));
+  }
+
+  @Test
+  void capture_shouldPropagateTransactionFailure_whenCacheReadAlsoFails() {
+    UUID authorisationId = UUID.randomUUID();
+    CaptureRequest request = new CaptureRequest("capture-cache-read-and-tx-failure-key");
+
+    when(idempotencyService.get(
+            eq(org.example.auth.common.OperationType.CAPTURE),
+            eq(authorisationId),
+            eq(request.idempotencyKey()),
+            eq(CachedCaptureResponse.class)))
+        .thenThrow(new RuntimeException("redis unavailable"));
+    when(transactionalExecutor.captureInTransaction(
+            eq(authorisationId), eq(request), any(UUID.class)))
+        .thenThrow(new RuntimeException("transaction failed"));
+
+    assertThrows(RuntimeException.class, () -> service.capture(authorisationId, request));
+
+    verify(idempotencyService, never())
+        .store(any(), any(UUID.class), anyString(), any(CachedCaptureResponse.class), any());
+  }
+
+  @Test
+  void capture_shouldSucceed_whenCacheStoreFailsAfterSuccessfulTransaction() {
+    UUID authorisationId = UUID.randomUUID();
+    CaptureRequest request = new CaptureRequest("capture-store-error-key");
+
+    CaptureResponse executorResponse =
+        new CaptureResponse(
+            authorisationId,
+            request.idempotencyKey(),
+            new BigDecimal("10.00"),
+            "USD",
+            AuthorisationStatus.CAPTURED,
+            OffsetDateTime.now());
+
+    when(transactionalExecutor.captureInTransaction(
+            eq(authorisationId), eq(request), any(UUID.class)))
+        .thenReturn(executorResponse);
+    doThrow(new RuntimeException("redis unavailable"))
+        .when(idempotencyService)
+        .store(any(), any(UUID.class), anyString(), any(CachedCaptureResponse.class), any());
+
+    CaptureResponse response = service.capture(authorisationId, request);
+
+    assertThat(response).isSameAs(executorResponse);
+  }
+
+  @Test
+  void capture_shouldReturnResolvedResponse_whenCacheStoreFailsAfterRaceResolution() {
+    UUID authorisationId = UUID.randomUUID();
+    UUID accountId = UUID.randomUUID();
+    CaptureRequest request = new CaptureRequest("capture-race-store-error-key");
+
+    when(transactionalExecutor.captureInTransaction(
+            eq(authorisationId), eq(request), any(UUID.class)))
+        .thenThrow(new ConcurrentIdempotencyRaceException(new RuntimeException("duplicate key")));
+
+    AuthorisationEntity authorisationEntity = mock(AuthorisationEntity.class);
+    OffsetDateTime updatedAt = OffsetDateTime.now().minusSeconds(2);
+    when(authorisationEntity.getAccountId()).thenReturn(accountId);
+    when(authorisationEntity.getAmount()).thenReturn(new BigDecimal("10.00"));
+    when(authorisationEntity.getCurrencyCode()).thenReturn("USD");
+    when(authorisationEntity.getUpdatedAt()).thenReturn(updatedAt);
+    when(authorisationRepository.findById(authorisationId))
+        .thenReturn(Optional.of(authorisationEntity));
+
+    AuthorisationEventEntity capturedEvent = mock(AuthorisationEventEntity.class);
+    when(authorisationEventRepository.findByAccountIdAndEventTypeAndIdempotencyKey(
+            accountId, request.idempotencyKey(), EventType.AUTHORISATION_CAPTURED.toString()))
+        .thenReturn(Optional.of(capturedEvent));
+
+    doThrow(new RuntimeException("redis unavailable"))
+        .when(idempotencyService)
+        .store(any(), any(UUID.class), anyString(), any(CachedCaptureResponse.class), any());
+
+    CaptureResponse response = service.capture(authorisationId, request);
+
+    assertThat(response.authorisationId()).isEqualTo(authorisationId);
+    assertThat(response.status()).isEqualTo(AuthorisationStatus.CAPTURED);
+  }
+
+  @Test
+  void capture_shouldFallBackToTransaction_whenCachedPayloadIsLegacyWithoutFingerprint() {
+    UUID authorisationId = UUID.randomUUID();
+    CaptureRequest request = new CaptureRequest("capture-legacy-payload-key");
+
+    CaptureResponse executorResponse =
+        new CaptureResponse(
+            authorisationId,
+            request.idempotencyKey(),
+            new BigDecimal("10.00"),
+            "USD",
+            AuthorisationStatus.CAPTURED,
+            OffsetDateTime.now());
+
+    when(idempotencyService.get(
+            eq(org.example.auth.common.OperationType.CAPTURE),
+            eq(authorisationId),
+            eq(request.idempotencyKey()),
+            eq(CachedCaptureResponse.class)))
+        .thenReturn(Optional.of(new CachedCaptureResponse(null, null)));
+    when(transactionalExecutor.captureInTransaction(
+            eq(authorisationId), eq(request), any(UUID.class)))
+        .thenReturn(executorResponse);
+
+    CaptureResponse response = service.capture(authorisationId, request);
+
+    assertThat(response).isSameAs(executorResponse);
   }
 
   @Test
@@ -470,7 +1034,9 @@ class AuthorisationServiceImplTest {
             AuthorisationEventReason.CUSTOMER_REQUEST,
             OffsetDateTime.now());
 
-    when(transactionalExecutor.reverseInTransaction(authorisationId, request)).thenReturn(response);
+    when(transactionalExecutor.reverseInTransaction(
+            eq(authorisationId), eq(request), any(UUID.class)))
+        .thenReturn(response);
 
     assertThat(service.reverse(authorisationId, request)).isSameAs(response);
     verify(authorisationRepository, never()).findById(any(UUID.class));
@@ -486,7 +1052,8 @@ class AuthorisationServiceImplTest {
     ReverseRequest request =
         new ReverseRequest("reverse-key", AuthorisationEventReason.CUSTOMER_REQUEST);
 
-    when(transactionalExecutor.reverseInTransaction(authorisationId, request))
+    when(transactionalExecutor.reverseInTransaction(
+            eq(authorisationId), eq(request), any(UUID.class)))
         .thenThrow(new ConcurrentIdempotencyRaceException(new RuntimeException("duplicate key")));
 
     AuthorisationEntity authorisationEntity = mock(AuthorisationEntity.class);
@@ -520,7 +1087,8 @@ class AuthorisationServiceImplTest {
     ReverseRequest request =
         new ReverseRequest("reverse-key", AuthorisationEventReason.CUSTOMER_REQUEST);
 
-    when(transactionalExecutor.reverseInTransaction(authorisationId, request))
+    when(transactionalExecutor.reverseInTransaction(
+            eq(authorisationId), eq(request), any(UUID.class)))
         .thenThrow(new ConcurrentIdempotencyRaceException(new RuntimeException("duplicate key")));
 
     AuthorisationEntity authorisationEntity = mock(AuthorisationEntity.class);
@@ -541,12 +1109,286 @@ class AuthorisationServiceImplTest {
     ReverseRequest request =
         new ReverseRequest("reverse-key", AuthorisationEventReason.CUSTOMER_REQUEST);
 
-    when(transactionalExecutor.reverseInTransaction(authorisationId, request))
+    when(transactionalExecutor.reverseInTransaction(
+            eq(authorisationId), eq(request), any(UUID.class)))
         .thenThrow(new ConcurrentIdempotencyRaceException(new RuntimeException("duplicate key")));
     when(authorisationRepository.findById(authorisationId)).thenReturn(Optional.empty());
 
     assertThrows(
         AuthorisationNotFoundException.class, () -> service.reverse(authorisationId, request));
+  }
+
+  @Test
+  void reverse_shouldReturnCachedResponse_withoutHittingExecutorOrRepositories() {
+    UUID authorisationId = UUID.randomUUID();
+    ReverseRequest request =
+        new ReverseRequest("reverse-cached-key", AuthorisationEventReason.CUSTOMER_REQUEST);
+
+    ReverseResponse cachedResponse =
+        new ReverseResponse(
+            authorisationId,
+            request.idempotencyKey(),
+            new BigDecimal("10.00"),
+            "USD",
+            AuthorisationStatus.REVERSED,
+            AuthorisationEventReason.CUSTOMER_REQUEST,
+            OffsetDateTime.now());
+
+    when(idempotencyService.get(
+            eq(org.example.auth.common.OperationType.REVERSE),
+            eq(authorisationId),
+            eq(request.idempotencyKey()),
+            eq(CachedReverseResponse.class)))
+        .thenReturn(
+            Optional.of(
+                new CachedReverseResponse(
+                    reverseFingerprintFor(authorisationId, request.reasonCode()), cachedResponse)));
+
+    ReverseResponse response = service.reverse(authorisationId, request);
+
+    assertThat(response).isSameAs(cachedResponse);
+    verifyNoInteractions(transactionalExecutor);
+    verify(authorisationRepository, never()).findById(any());
+    verify(idempotencyService, never())
+        .store(any(), any(UUID.class), anyString(), any(CachedReverseResponse.class), any());
+  }
+
+  @Test
+  void reverse_shouldThrowConflict_whenCachedReasonCodeDiffersFromRequest() {
+    UUID authorisationId = UUID.randomUUID();
+    ReverseRequest request =
+        new ReverseRequest("reverse-conflict-key", AuthorisationEventReason.CUSTOMER_REQUEST);
+
+    ReverseResponse cachedResponse =
+        new ReverseResponse(
+            authorisationId,
+            request.idempotencyKey(),
+            new BigDecimal("10.00"),
+            "USD",
+            AuthorisationStatus.REVERSED,
+            AuthorisationEventReason.FRAUD_DECLINED,
+            OffsetDateTime.now());
+
+    when(idempotencyService.get(
+            eq(org.example.auth.common.OperationType.REVERSE),
+            eq(authorisationId),
+            eq(request.idempotencyKey()),
+            eq(CachedReverseResponse.class)))
+        .thenReturn(
+            Optional.of(
+                new CachedReverseResponse(
+                    reverseFingerprintFor(authorisationId, AuthorisationEventReason.FRAUD_DECLINED),
+                    cachedResponse)));
+
+    assertThrows(
+        IdempotencyConflictException.class, () -> service.reverse(authorisationId, request));
+
+    verifyNoInteractions(transactionalExecutor);
+  }
+
+  @Test
+  void reverse_shouldStoreResponseInCache_afterSuccessfulTransaction() {
+    UUID authorisationId = UUID.randomUUID();
+    ReverseRequest request =
+        new ReverseRequest("reverse-store-key", AuthorisationEventReason.CUSTOMER_REQUEST);
+
+    ReverseResponse executorResponse =
+        new ReverseResponse(
+            authorisationId,
+            request.idempotencyKey(),
+            new BigDecimal("10.00"),
+            "USD",
+            AuthorisationStatus.REVERSED,
+            AuthorisationEventReason.CUSTOMER_REQUEST,
+            OffsetDateTime.now());
+
+    when(transactionalExecutor.reverseInTransaction(
+            eq(authorisationId), eq(request), any(UUID.class)))
+        .thenReturn(executorResponse);
+
+    ReverseResponse response = service.reverse(authorisationId, request);
+
+    assertThat(response).isSameAs(executorResponse);
+    verify(idempotencyService)
+        .store(
+            eq(org.example.auth.common.OperationType.REVERSE),
+            eq(authorisationId),
+            eq(request.idempotencyKey()),
+            any(CachedReverseResponse.class),
+            eq(Duration.ofHours(24)));
+  }
+
+  @Test
+  void reverse_shouldNotStoreInCache_whenTransactionFails() {
+    UUID authorisationId = UUID.randomUUID();
+    ReverseRequest request =
+        new ReverseRequest("reverse-failure-key", AuthorisationEventReason.CUSTOMER_REQUEST);
+
+    when(transactionalExecutor.reverseInTransaction(
+            eq(authorisationId), eq(request), any(UUID.class)))
+        .thenThrow(new RuntimeException("transaction failed"));
+
+    assertThrows(RuntimeException.class, () -> service.reverse(authorisationId, request));
+
+    verify(idempotencyService, never())
+        .store(any(), any(UUID.class), anyString(), any(CachedReverseResponse.class), any());
+  }
+
+  @Test
+  void reverse_shouldFallbackToTransaction_whenCacheReadFails() {
+    UUID authorisationId = UUID.randomUUID();
+    ReverseRequest request =
+        new ReverseRequest(
+            "reverse-cache-read-error-key", AuthorisationEventReason.CUSTOMER_REQUEST);
+
+    ReverseResponse executorResponse =
+        new ReverseResponse(
+            authorisationId,
+            request.idempotencyKey(),
+            new BigDecimal("10.00"),
+            "USD",
+            AuthorisationStatus.REVERSED,
+            AuthorisationEventReason.CUSTOMER_REQUEST,
+            OffsetDateTime.now());
+
+    when(idempotencyService.get(
+            eq(org.example.auth.common.OperationType.REVERSE),
+            eq(authorisationId),
+            eq(request.idempotencyKey()),
+            eq(CachedReverseResponse.class)))
+        .thenThrow(new RuntimeException("redis unavailable"));
+    when(transactionalExecutor.reverseInTransaction(
+            eq(authorisationId), eq(request), any(UUID.class)))
+        .thenReturn(executorResponse);
+
+    ReverseResponse response = service.reverse(authorisationId, request);
+
+    assertThat(response).isSameAs(executorResponse);
+    verify(idempotencyService)
+        .store(
+            eq(org.example.auth.common.OperationType.REVERSE),
+            eq(authorisationId),
+            eq(request.idempotencyKey()),
+            any(CachedReverseResponse.class),
+            eq(Duration.ofHours(24)));
+  }
+
+  @Test
+  void reverse_shouldPropagateTransactionFailure_whenCacheReadAlsoFails() {
+    UUID authorisationId = UUID.randomUUID();
+    ReverseRequest request =
+        new ReverseRequest(
+            "reverse-cache-read-and-tx-failure-key", AuthorisationEventReason.CUSTOMER_REQUEST);
+
+    when(idempotencyService.get(
+            eq(org.example.auth.common.OperationType.REVERSE),
+            eq(authorisationId),
+            eq(request.idempotencyKey()),
+            eq(CachedReverseResponse.class)))
+        .thenThrow(new RuntimeException("redis unavailable"));
+    when(transactionalExecutor.reverseInTransaction(
+            eq(authorisationId), eq(request), any(UUID.class)))
+        .thenThrow(new RuntimeException("transaction failed"));
+
+    assertThrows(RuntimeException.class, () -> service.reverse(authorisationId, request));
+
+    verify(idempotencyService, never())
+        .store(any(), any(UUID.class), anyString(), any(CachedReverseResponse.class), any());
+  }
+
+  @Test
+  void reverse_shouldSucceed_whenCacheStoreFailsAfterSuccessfulTransaction() {
+    UUID authorisationId = UUID.randomUUID();
+    ReverseRequest request =
+        new ReverseRequest("reverse-store-error-key", AuthorisationEventReason.CUSTOMER_REQUEST);
+
+    ReverseResponse executorResponse =
+        new ReverseResponse(
+            authorisationId,
+            request.idempotencyKey(),
+            new BigDecimal("10.00"),
+            "USD",
+            AuthorisationStatus.REVERSED,
+            AuthorisationEventReason.CUSTOMER_REQUEST,
+            OffsetDateTime.now());
+
+    when(transactionalExecutor.reverseInTransaction(
+            eq(authorisationId), eq(request), any(UUID.class)))
+        .thenReturn(executorResponse);
+    doThrow(new RuntimeException("redis unavailable"))
+        .when(idempotencyService)
+        .store(any(), any(UUID.class), anyString(), any(CachedReverseResponse.class), any());
+
+    ReverseResponse response = service.reverse(authorisationId, request);
+
+    assertThat(response).isSameAs(executorResponse);
+  }
+
+  @Test
+  void reverse_shouldReturnResolvedResponse_whenCacheStoreFailsAfterRaceResolution() {
+    UUID authorisationId = UUID.randomUUID();
+    UUID accountId = UUID.randomUUID();
+    ReverseRequest request =
+        new ReverseRequest("reverse-race-store-error-key", AuthorisationEventReason.CUSTOMER_REQUEST);
+
+    when(transactionalExecutor.reverseInTransaction(
+            eq(authorisationId), eq(request), any(UUID.class)))
+        .thenThrow(new ConcurrentIdempotencyRaceException(new RuntimeException("duplicate key")));
+
+    AuthorisationEntity authorisationEntity = mock(AuthorisationEntity.class);
+    OffsetDateTime updatedAt = OffsetDateTime.now().minusSeconds(2);
+    when(authorisationEntity.getAccountId()).thenReturn(accountId);
+    when(authorisationEntity.getAmount()).thenReturn(new BigDecimal("10.00"));
+    when(authorisationEntity.getCurrencyCode()).thenReturn("USD");
+    when(authorisationEntity.getUpdatedAt()).thenReturn(updatedAt);
+    when(authorisationRepository.findById(authorisationId))
+        .thenReturn(Optional.of(authorisationEntity));
+
+    AuthorisationEventEntity reversedEvent = mock(AuthorisationEventEntity.class);
+    when(reversedEvent.getReasonCode()).thenReturn(AuthorisationEventReason.CUSTOMER_REQUEST);
+    when(authorisationEventRepository.findByAccountIdAndEventTypeAndIdempotencyKey(
+            accountId, request.idempotencyKey(), EventType.AUTHORISATION_REVERSED.toString()))
+        .thenReturn(Optional.of(reversedEvent));
+
+    doThrow(new RuntimeException("redis unavailable"))
+        .when(idempotencyService)
+        .store(any(), any(UUID.class), anyString(), any(CachedReverseResponse.class), any());
+
+    ReverseResponse response = service.reverse(authorisationId, request);
+
+    assertThat(response.authorisationId()).isEqualTo(authorisationId);
+    assertThat(response.status()).isEqualTo(AuthorisationStatus.REVERSED);
+  }
+
+  @Test
+  void reverse_shouldFallBackToTransaction_whenCachedPayloadIsLegacyWithoutFingerprint() {
+    UUID authorisationId = UUID.randomUUID();
+    ReverseRequest request =
+        new ReverseRequest("reverse-legacy-payload-key", AuthorisationEventReason.CUSTOMER_REQUEST);
+
+    ReverseResponse executorResponse =
+        new ReverseResponse(
+            authorisationId,
+            request.idempotencyKey(),
+            new BigDecimal("10.00"),
+            "USD",
+            AuthorisationStatus.REVERSED,
+            AuthorisationEventReason.CUSTOMER_REQUEST,
+            OffsetDateTime.now());
+
+    when(idempotencyService.get(
+            eq(org.example.auth.common.OperationType.REVERSE),
+            eq(authorisationId),
+            eq(request.idempotencyKey()),
+            eq(CachedReverseResponse.class)))
+        .thenReturn(Optional.of(new CachedReverseResponse(null, null)));
+    when(transactionalExecutor.reverseInTransaction(
+            eq(authorisationId), eq(request), any(UUID.class)))
+        .thenReturn(executorResponse);
+
+    ReverseResponse response = service.reverse(authorisationId, request);
+
+    assertThat(response).isSameAs(executorResponse);
   }
 
   private static AuthorisationEntity existingAuthorisation(
@@ -581,5 +1423,28 @@ class AuthorisationServiceImplTest {
     when(entity.getCurrencyCode()).thenReturn(currencyCode);
     when(entity.getMerchantReference()).thenReturn(merchantReference);
     return entity;
+  }
+
+  private static String fingerprintFor(AuthorisationRequest request, String normalizedCurrency) {
+    String canonicalRequest =
+        RequestHashing.canonicalJoin(
+            request.accountId().toString(),
+            request.amount().stripTrailingZeros().toPlainString(),
+            normalizedCurrency,
+            request.merchantReference());
+    return "v1:" + RequestHashing.sha256Hex(canonicalRequest);
+  }
+
+  private static String captureFingerprintFor(UUID authorisationId) {
+    String canonicalRequest = RequestHashing.canonicalJoin(authorisationId.toString());
+    return "v1:" + RequestHashing.sha256Hex(canonicalRequest);
+  }
+
+  private static String reverseFingerprintFor(
+      UUID authorisationId, AuthorisationEventReason reasonCode) {
+    String canonicalRequest =
+        RequestHashing.canonicalJoin(
+            authorisationId.toString(), reasonCode == null ? null : reasonCode.name());
+    return "v1:" + RequestHashing.sha256Hex(canonicalRequest);
   }
 }

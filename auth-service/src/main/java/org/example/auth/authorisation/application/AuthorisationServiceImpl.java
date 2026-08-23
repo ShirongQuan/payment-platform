@@ -1,7 +1,9 @@
 package org.example.auth.authorisation.application;
 
 import java.util.Objects;
+import java.util.Optional;
 import java.util.UUID;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.example.auth.authorisation.api.AuthorisationRequest;
 import org.example.auth.authorisation.api.AuthorisationResponse;
@@ -9,17 +11,26 @@ import org.example.auth.authorisation.api.CaptureRequest;
 import org.example.auth.authorisation.api.CaptureResponse;
 import org.example.auth.authorisation.api.ReverseRequest;
 import org.example.auth.authorisation.api.ReverseResponse;
+import org.example.auth.authorisation.domain.AuthorisationEventReason;
 import org.example.auth.authorisation.domain.AuthorisationStatus;
 import org.example.auth.authorisation.infrastructure.AuthorisationEntity;
 import org.example.auth.authorisation.infrastructure.AuthorisationEventRepository;
 import org.example.auth.authorisation.infrastructure.AuthorisationRepository;
+import org.example.auth.common.OperationType;
 import org.example.auth.common.exception.AuthorisationNotFoundException;
 import org.example.auth.common.exception.IdempotencyConflictException;
 import org.example.auth.common.validation.ValidationHelpers;
 import org.example.auth.fraud.FraudDecision;
 import org.example.auth.fraud.FraudOrchestrator;
+import org.example.auth.idempotency.CachedAuthorisationResponse;
+import org.example.auth.idempotency.CachedCaptureResponse;
+import org.example.auth.idempotency.CachedIdempotentResponse;
+import org.example.auth.idempotency.CachedReverseResponse;
+import org.example.auth.idempotency.IdempotencyProperties;
+import org.example.auth.idempotency.IdempotencyService;
 import org.example.auth.outbox.domain.EventType;
 import org.example.shared.correlation.CorrelationIdResolver;
+import org.example.shared.idempotency.RequestHashing;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -31,25 +42,15 @@ import org.springframework.transaction.annotation.Transactional;
  */
 @Slf4j
 @Service
+@RequiredArgsConstructor
 public class AuthorisationServiceImpl implements AuthorisationService {
   private final AuthorisationTransactionalExecutor authorisationTransactionalExecutor;
   private final AuthorisationRepository authorisationRepository;
   private final AuthorisationEventRepository authorisationEventRepository;
   private final FraudOrchestrator fraudOrchestrator;
   private final CorrelationIdResolver correlationIdResolver;
-
-  public AuthorisationServiceImpl(
-      AuthorisationTransactionalExecutor authorisationTransactionalExecutor,
-      AuthorisationRepository authorisationRepository,
-      AuthorisationEventRepository authorisationEventRepository,
-      FraudOrchestrator fraudOrchestrator,
-      CorrelationIdResolver correlationIdResolver) {
-    this.authorisationTransactionalExecutor = authorisationTransactionalExecutor;
-    this.authorisationRepository = authorisationRepository;
-    this.authorisationEventRepository = authorisationEventRepository;
-    this.fraudOrchestrator = fraudOrchestrator;
-    this.correlationIdResolver = correlationIdResolver;
-  }
+  private final IdempotencyProperties idempotencyProperties;
+  private final IdempotencyService idempotencyService;
 
   @Override
   public AuthorisationResponse authorise(AuthorisationRequest request, String clientIpAddress) {
@@ -61,6 +62,24 @@ public class AuthorisationServiceImpl implements AuthorisationService {
         request.idempotencyKey(),
         normalizedCurrency,
         clientIpAddress);
+
+    // if the authorisation response is already in the cache, just return it
+    String expectedFingerprint = buildAuthoriseRequestFingerprint(request, normalizedCurrency);
+    Optional<AuthorisationResponse> authorisationResponseOpt =
+        getCachedResponse(
+            OperationType.AUTHORISE,
+            request.accountId(),
+            request.idempotencyKey(),
+            CachedAuthorisationResponse.class,
+            expectedFingerprint);
+    if (authorisationResponseOpt.isPresent()) {
+      log.debug(
+          "Found authorisationResponse in cache for operation=authorise, accountId={}, idempotencyKey={}",
+          request.accountId(),
+          request.idempotencyKey());
+      return authorisationResponseOpt.get();
+    }
+
     UUID correlationId = correlationIdResolver.resolveOrCreate();
     FraudDecision fraudDecision =
         fraudOrchestrator.evaluate(request, normalizedCurrency, clientIpAddress);
@@ -70,8 +89,15 @@ public class AuthorisationServiceImpl implements AuthorisationService {
         request.idempotencyKey(),
         fraudDecision.toString());
     try {
-      return authorisationTransactionalExecutor.authoriseInTransaction(
-          request, normalizedCurrency, fraudDecision, correlationId);
+      AuthorisationResponse authorisationResponse =
+          authorisationTransactionalExecutor.authoriseInTransaction(
+              request, normalizedCurrency, fraudDecision, correlationId);
+      saveResponseToCache(
+          OperationType.AUTHORISE,
+          request.accountId(),
+          request.idempotencyKey(),
+          new CachedAuthorisationResponse(expectedFingerprint, authorisationResponse));
+      return authorisationResponse;
     } catch (ConcurrentIdempotencyRaceException e) {
       log.warn(
           "Resolving authorise idempotency after concurrent race, accountId={}, idempotencyKey={}",
@@ -97,18 +123,102 @@ public class AuthorisationServiceImpl implements AuthorisationService {
   private AuthorisationResponse validateAndBuildIdempotentResponse(
       AuthorisationEntity entity, AuthorisationRequest request, String normalizedCurrency) {
     if (isSameIdempotentRequest(entity, request, normalizedCurrency)) {
-      return new AuthorisationResponse(
-          entity.getId(),
+      AuthorisationResponse authorisationResponse =
+          new AuthorisationResponse(
+              entity.getId(),
+              entity.getAccountId(),
+              request.idempotencyKey(),
+              entity.getAmount(),
+              entity.getCurrencyCode(),
+              entity.getMerchantReference(),
+              entity.getStatus(),
+              entity.getCreatedAt(),
+              entity.getUpdatedAt());
+      saveResponseToCache(
+          OperationType.AUTHORISE,
           entity.getAccountId(),
           request.idempotencyKey(),
-          entity.getAmount(),
-          entity.getCurrencyCode(),
-          entity.getMerchantReference(),
-          entity.getStatus(),
-          entity.getCreatedAt(),
-          entity.getUpdatedAt());
+          new CachedAuthorisationResponse(
+              buildAuthoriseRequestFingerprint(request, normalizedCurrency), authorisationResponse));
+      return authorisationResponse;
     }
     throw new IdempotencyConflictException();
+  }
+
+  /**
+   * Generic best-effort read for a cached idempotency response. Returns {@link Optional#empty()}
+   * on a cache miss or on any cache read failure (Redis unavailable, deserialization error, etc.)
+   * so callers fall back to the normal transactional path. Throws {@link
+   * IdempotencyConflictException} when a cached entry exists but its request fingerprint doesn't
+   * match the current request, since that is a genuine business conflict rather than a caching
+   * concern.
+   */
+  private <C extends CachedIdempotentResponse<R>, R> Optional<R> getCachedResponse(
+      OperationType operationType,
+      UUID scopeId,
+      String idempotencyKey,
+      Class<C> cacheType,
+      String expectedFingerprint) {
+    Optional<C> cachedOpt;
+    try {
+      cachedOpt = idempotencyService.get(operationType, scopeId, idempotencyKey, cacheType);
+    } catch (Exception e) {
+      log.warn(
+          "Failed to read idempotency cache entry, operationType={}, scopeId={}, idempotencyKey={}",
+          operationType,
+          scopeId,
+          idempotencyKey,
+          e);
+      return Optional.empty();
+    }
+
+    if (cachedOpt.isEmpty()) {
+      return Optional.empty();
+    }
+
+    C cached = cachedOpt.get();
+    String cachedFingerprint = cached.requestFingerprint();
+    R cachedResponse = cached.response();
+    if (cachedFingerprint == null || cachedResponse == null) {
+      // Backward compatibility for old cache payloads that may not include fingerprint wrapper.
+      return Optional.empty();
+    }
+
+    if (!Objects.equals(cachedFingerprint, expectedFingerprint)) {
+      throw new IdempotencyConflictException();
+    }
+
+    return Optional.of(cachedResponse);
+  }
+
+  /** Generic best-effort store of a cached idempotency response; failures are logged and swallowed. */
+  private void saveResponseToCache(
+      OperationType operationType,
+      UUID scopeId,
+      String idempotencyKey,
+      CachedIdempotentResponse<?> cachedPayload) {
+    try {
+      idempotencyService.store(
+          operationType, scopeId, idempotencyKey, cachedPayload, idempotencyProperties.ttl());
+    } catch (Exception e) {
+      log.warn(
+          "Failed to store idempotency cache entry, operationType={}, scopeId={}, idempotencyKey={}",
+          operationType,
+          scopeId,
+          idempotencyKey,
+          e);
+    }
+  }
+
+  private String buildAuthoriseRequestFingerprint(
+      AuthorisationRequest request, String normalizedCurrency) {
+    String canonicalRequest =
+        RequestHashing.canonicalJoin(
+            request.accountId().toString(),
+            request.amount().stripTrailingZeros().toPlainString(),
+            normalizedCurrency,
+            request.merchantReference());
+    return "v1:" + RequestHashing.sha256Hex(canonicalRequest);
   }
 
   private boolean isSameIdempotentRequest(
@@ -117,7 +227,6 @@ public class AuthorisationServiceImpl implements AuthorisationService {
         && entity.getCurrencyCode().equals(normalizedCurrency)
         && Objects.equals(entity.getMerchantReference(), request.merchantReference());
   }
-
 
   @Override
   @Transactional(readOnly = true)
@@ -140,23 +249,59 @@ public class AuthorisationServiceImpl implements AuthorisationService {
   }
 
   @Override
-  @Transactional
   public CaptureResponse capture(UUID authorisationId, CaptureRequest captureRequest) {
     log.debug(
         "Handling capture request, authorisationId={}, idempotencyKey={}",
         authorisationId,
         captureRequest.idempotencyKey());
+
+    String expectedFingerprint = buildCaptureRequestFingerprint(authorisationId);
+    Optional<CaptureResponse> cachedResponseOpt =
+        getCachedResponse(
+            OperationType.CAPTURE,
+            authorisationId,
+            captureRequest.idempotencyKey(),
+            CachedCaptureResponse.class,
+            expectedFingerprint);
+    if (cachedResponseOpt.isPresent()) {
+      log.debug(
+          "Found captureResponse in cache for operation=capture, authorisationId={}, idempotencyKey={}",
+          authorisationId,
+          captureRequest.idempotencyKey());
+      return cachedResponseOpt.get();
+    }
+
+    UUID correlationId = correlationIdResolver.resolveOrCreate();
     try {
-      return authorisationTransactionalExecutor.captureInTransaction(
-          authorisationId, captureRequest);
+      CaptureResponse captureResponse =
+          authorisationTransactionalExecutor.captureInTransaction(
+              authorisationId, captureRequest, correlationId);
+      saveResponseToCache(
+          OperationType.CAPTURE,
+          authorisationId,
+          captureRequest.idempotencyKey(),
+          new CachedCaptureResponse(expectedFingerprint, captureResponse));
+      return captureResponse;
     } catch (ConcurrentIdempotencyRaceException e) {
       log.warn(
           "Resolving capture idempotency after concurrent race, authorisationId={}, idempotencyKey={}",
           authorisationId,
           captureRequest.idempotencyKey(),
           e);
-      return resolveIdempotencyAfterCaptureRollback(authorisationId, captureRequest);
+      CaptureResponse resolvedResponse =
+          resolveIdempotencyAfterCaptureRollback(authorisationId, captureRequest);
+      saveResponseToCache(
+          OperationType.CAPTURE,
+          authorisationId,
+          captureRequest.idempotencyKey(),
+          new CachedCaptureResponse(expectedFingerprint, resolvedResponse));
+      return resolvedResponse;
     }
+  }
+
+  private String buildCaptureRequestFingerprint(UUID authorisationId) {
+    String canonicalRequest = RequestHashing.canonicalJoin(authorisationId.toString());
+    return "v1:" + RequestHashing.sha256Hex(canonicalRequest);
   }
 
   private CaptureResponse resolveIdempotencyAfterCaptureRollback(
@@ -187,24 +332,64 @@ public class AuthorisationServiceImpl implements AuthorisationService {
   }
 
   @Override
-  @Transactional
   public ReverseResponse reverse(UUID authorisationId, ReverseRequest reverseRequest) {
     log.debug(
         "Handling reverse request, authorisationId={}, idempotencyKey={}, reasonCode={}",
         authorisationId,
         reverseRequest.idempotencyKey(),
         reverseRequest.reasonCode());
+
+    String expectedFingerprint =
+        buildReverseRequestFingerprint(authorisationId, reverseRequest.reasonCode());
+    Optional<ReverseResponse> cachedResponseOpt =
+        getCachedResponse(
+            OperationType.REVERSE,
+            authorisationId,
+            reverseRequest.idempotencyKey(),
+            CachedReverseResponse.class,
+            expectedFingerprint);
+    if (cachedResponseOpt.isPresent()) {
+      log.debug(
+          "Found reverseResponse in cache for operation=reverse, authorisationId={}, idempotencyKey={}",
+          authorisationId,
+          reverseRequest.idempotencyKey());
+      return cachedResponseOpt.get();
+    }
+
+    UUID correlationId = correlationIdResolver.resolveOrCreate();
     try {
-      return authorisationTransactionalExecutor.reverseInTransaction(
-          authorisationId, reverseRequest);
+      ReverseResponse reverseResponse =
+          authorisationTransactionalExecutor.reverseInTransaction(
+              authorisationId, reverseRequest, correlationId);
+      saveResponseToCache(
+          OperationType.REVERSE,
+          authorisationId,
+          reverseRequest.idempotencyKey(),
+          new CachedReverseResponse(expectedFingerprint, reverseResponse));
+      return reverseResponse;
     } catch (ConcurrentIdempotencyRaceException e) {
       log.warn(
           "Resolving reverse idempotency after concurrent race, authorisationId={}, idempotencyKey={}",
           authorisationId,
           reverseRequest.idempotencyKey(),
           e);
-      return resolveIdempotencyAfterReverseRollback(authorisationId, reverseRequest);
+      ReverseResponse resolvedResponse =
+          resolveIdempotencyAfterReverseRollback(authorisationId, reverseRequest);
+      saveResponseToCache(
+          OperationType.REVERSE,
+          authorisationId,
+          reverseRequest.idempotencyKey(),
+          new CachedReverseResponse(expectedFingerprint, resolvedResponse));
+      return resolvedResponse;
     }
+  }
+
+  private String buildReverseRequestFingerprint(
+      UUID authorisationId, AuthorisationEventReason reasonCode) {
+    String canonicalRequest =
+        RequestHashing.canonicalJoin(
+            authorisationId.toString(), reasonCode == null ? null : reasonCode.name());
+    return "v1:" + RequestHashing.sha256Hex(canonicalRequest);
   }
 
   private ReverseResponse resolveIdempotencyAfterReverseRollback(

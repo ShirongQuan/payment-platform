@@ -12,9 +12,11 @@ import org.example.auth.fraud.FraudDecision;
 
 /** Transaction-scoped executor for authorisation lifecycle state transitions. */
 public interface AuthorisationTransactionalExecutor {
-  CaptureResponse captureInTransaction(UUID authorisationId, CaptureRequest captureRequest);
+  CaptureResponse captureInTransaction(
+      UUID authorisationId, CaptureRequest captureRequest, UUID correlationId);
 
-  ReverseResponse reverseInTransaction(UUID authorisationId, ReverseRequest reverseRequest);
+  ReverseResponse reverseInTransaction(
+      UUID authorisationId, ReverseRequest reverseRequest, UUID correlationId);
 
   AuthorisationResponse authoriseInTransaction(
       AuthorisationRequest request,

@@ -3,9 +3,9 @@ spring:
     name: auth-service
 
   datasource:
-    url: jdbc:postgresql://localhost:5432/auth_db
-    username: postgres
-    password: postgres
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/auth_db}
+    username: ${SPRING_DATASOURCE_USERNAME:postgres}
+    password: ${SPRING_DATASOURCE_PASSWORD:postgres}
 
   jpa:
     hibernate:
@@ -15,8 +15,14 @@ spring:
       hibernate:
         format_sql: true
 
+  data:
+    redis:
+      host: ${SPRING_DATA_REDIS_HOST:localhost}
+      port: ${SPRING_DATA_REDIS_PORT:6379}
+      database: ${SPRING_DATA_REDIS_DATABASE:0}
+
   kafka:
-    bootstrap-servers: localhost:9092
+    bootstrap-servers: ${SPRING_KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
     producer:
       # Delivery guarantees for outbox-driven publishing.
       acks: all
@@ -38,6 +44,10 @@ outbox:
     delay-ms: 10000ms  # 10 Seconds
     # Lease window for in-flight publish claims.
     claim-lease: 30s
+
+idempotency:
+  # Response cache retention in whole hours.
+  ttl-hours: 24
 
 
 server:
@@ -82,7 +92,7 @@ logging:
     console: "%d{yyyy-MM-dd'T'HH:mm:ss.SSSXXX} %5p ${PID:- } --- [${spring.application.name:-}] [%15.15thread] [%X{correlationId:-}] %-40.40logger{39} : %m%n"
 
 fraud:
-  base-url: http://localhost:9010
+  base-url: ${FRAUD_BASE_URL:http://localhost:9010}
   http:
     connect-timeout: 500ms
     read-timeout: 1000ms

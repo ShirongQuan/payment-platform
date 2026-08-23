@@ -4,6 +4,7 @@ import java.time.OffsetDateTime;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.example.auth.account.domain.Account;
 import org.example.auth.account.infrastructure.AccountEntity;
@@ -36,14 +37,15 @@ import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-@Slf4j
-@Service
 /**
  * Transactional boundary for authorise/capture state transitions.
  *
  * <p>This component executes idempotency checks, account balance mutations, event persistence, and
  * outbox enqueueing in one transaction so downstream consumers observe consistent business events.
  */
+@Slf4j
+@Service
+@RequiredArgsConstructor
 public class AuthorisationTransactionalExecutorImpl implements AuthorisationTransactionalExecutor {
   private final AccountRepository accountRepository;
   private final AuthorisationRepository authorisationRepository;
@@ -51,21 +53,6 @@ public class AuthorisationTransactionalExecutorImpl implements AuthorisationTran
   private final OutboxEventService outboxEventService;
   private final AccountMapper accountMapper;
   private final AuthorisationMapper authorisationMapper;
-
-  public AuthorisationTransactionalExecutorImpl(
-      AccountRepository accountRepository,
-      AuthorisationRepository authorisationRepository,
-      AuthorisationEventRepository authorisationEventRepository,
-      OutboxEventService outboxEventService,
-      AccountMapper accountMapper,
-      AuthorisationMapper authorisationMapper) {
-    this.accountRepository = accountRepository;
-    this.authorisationRepository = authorisationRepository;
-    this.authorisationEventRepository = authorisationEventRepository;
-    this.outboxEventService = outboxEventService;
-    this.accountMapper = accountMapper;
-    this.authorisationMapper = authorisationMapper;
-  }
 
   @Override
   @Transactional(rollbackFor = Exception.class)
@@ -80,10 +67,11 @@ public class AuthorisationTransactionalExecutorImpl implements AuthorisationTran
         request.idempotencyKey(),
         request.amount(),
         normalizedCurrency);
+
+    // check DB
     Optional<AuthorisationEntity> entityOpt =
         authorisationRepository.findByAccountIdAndAuthoriseEventTypesAndIdempotencyKey(
             request.accountId(), request.idempotencyKey());
-
     if (entityOpt.isPresent()) {
       log.debug("authorisation with the same idempotency key {} exist", request.idempotencyKey());
       return validateAndBuildIdempotentResponse(entityOpt.get(), request, normalizedCurrency);
@@ -259,7 +247,9 @@ public class AuthorisationTransactionalExecutorImpl implements AuthorisationTran
   }
 
   @Override
-  public CaptureResponse captureInTransaction(UUID authorisationId, CaptureRequest captureRequest) {
+  @Transactional(rollbackFor = Exception.class)
+  public CaptureResponse captureInTransaction(
+      UUID authorisationId, CaptureRequest captureRequest, UUID correlationId) {
     log.debug(
         "Starting capture transaction, authorisationId={}, idempotencyKey={}",
         authorisationId,
@@ -310,8 +300,6 @@ public class AuthorisationTransactionalExecutorImpl implements AuthorisationTran
       throw new AuthorisationIllegalStateException(authorisationId, status, "capture");
     }
 
-    // TODO: correlationId
-    UUID correlationId = UUID.randomUUID();
     // load account
     // move reserved balance out
     AccountEntity accountEntity =
@@ -380,7 +368,9 @@ public class AuthorisationTransactionalExecutorImpl implements AuthorisationTran
   }
 
   @Override
-  public ReverseResponse reverseInTransaction(UUID authorisationId, ReverseRequest reverseRequest) {
+  @Transactional
+  public ReverseResponse reverseInTransaction(
+      UUID authorisationId, ReverseRequest reverseRequest, UUID correlationId) {
     log.debug(
         "Starting reverse transaction, authorisationId={}, idempotencyKey={}, reasonCode={}",
         authorisationId,
@@ -431,7 +421,6 @@ public class AuthorisationTransactionalExecutorImpl implements AuthorisationTran
       throw new AuthorisationIllegalStateException(authorisationId, status, "reverse");
     }
 
-    UUID correlationId = UUID.randomUUID();
     AccountEntity accountEntity =
         accountRepository
             .findById(authorisationEntity.getAccountId())

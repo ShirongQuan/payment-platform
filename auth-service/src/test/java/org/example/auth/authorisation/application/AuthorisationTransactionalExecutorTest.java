@@ -135,8 +135,7 @@ class AuthorisationTransactionalExecutorTest {
     when(accountRepository.findById(accountId)).thenReturn(Optional.empty());
 
     AccountNotFoundException exception =
-        assertThrows(
-            AccountNotFoundException.class, () -> authorise(request, "USD"));
+        assertThrows(AccountNotFoundException.class, () -> authorise(request, "USD"));
     assertThat(exception.getAccountId()).isEqualTo(accountId);
 
     verify(authorisationRepository, never()).saveAndFlush(any(AuthorisationEntity.class));
@@ -218,9 +217,7 @@ class AuthorisationTransactionalExecutorTest {
     when(authorisationRepository.saveAndFlush(any(AuthorisationEntity.class))).thenThrow(cause);
 
     ConcurrentIdempotencyRaceException ex =
-        assertThrows(
-            ConcurrentIdempotencyRaceException.class,
-            () -> authorise(request, "USD"));
+        assertThrows(ConcurrentIdempotencyRaceException.class, () -> authorise(request, "USD"));
     assertThat(ex.getCause()).isEqualTo(cause);
 
     assertThat(accountEntity.getAvailableBalance()).isEqualByComparingTo("990.00");
@@ -301,7 +298,8 @@ class AuthorisationTransactionalExecutorTest {
     accountEntity.setUpdatedAt(OffsetDateTime.now());
     when(accountRepository.findById(accountId)).thenReturn(Optional.of(accountEntity));
 
-    CaptureResponse response = executor.captureInTransaction(authorisationId, captureRequest);
+    CaptureResponse response =
+        executor.captureInTransaction(authorisationId, captureRequest, UUID.randomUUID());
 
     assertThat(response.authorisationId()).isEqualTo(authorisationId);
     assertThat(response.idempotencyKey()).isEqualTo(captureRequest.idempotencyKey());
@@ -345,7 +343,8 @@ class AuthorisationTransactionalExecutorTest {
             EventType.AUTHORISATION_CAPTURED.toString()))
         .thenReturn(Optional.of(mock(AuthorisationEventEntity.class)));
 
-    CaptureResponse response = executor.captureInTransaction(authorisationId, captureRequest);
+    CaptureResponse response =
+        executor.captureInTransaction(authorisationId, captureRequest, UUID.randomUUID());
 
     assertThat(response.status()).isEqualTo(AuthorisationStatus.CAPTURED);
     assertThat(response.idempotencyKey()).isEqualTo(captureRequest.idempotencyKey());
@@ -376,7 +375,7 @@ class AuthorisationTransactionalExecutorTest {
 
     assertThrows(
         AuthorisationIllegalStateException.class,
-        () -> executor.captureInTransaction(authorisationId, captureRequest));
+        () -> executor.captureInTransaction(authorisationId, captureRequest, UUID.randomUUID()));
   }
 
   @Test
@@ -391,7 +390,7 @@ class AuthorisationTransactionalExecutorTest {
 
     assertThrows(
         AuthorisationIllegalStateException.class,
-        () -> executor.captureInTransaction(authorisationId, captureRequest));
+        () -> executor.captureInTransaction(authorisationId, captureRequest, UUID.randomUUID()));
   }
 
   @Test
@@ -401,7 +400,9 @@ class AuthorisationTransactionalExecutorTest {
 
     assertThrows(
         AuthorisationNotFoundException.class,
-        () -> executor.captureInTransaction(authorisationId, new CaptureRequest("capture-key")));
+        () ->
+            executor.captureInTransaction(
+                authorisationId, new CaptureRequest("capture-key"), UUID.randomUUID()));
   }
 
   @Test
@@ -435,7 +436,8 @@ class AuthorisationTransactionalExecutorTest {
     ConcurrentIdempotencyRaceException exception =
         assertThrows(
             ConcurrentIdempotencyRaceException.class,
-            () -> executor.captureInTransaction(authorisationId, captureRequest));
+            () ->
+                executor.captureInTransaction(authorisationId, captureRequest, UUID.randomUUID()));
 
     assertThat(exception.getCause()).isEqualTo(cause);
     verify(outboxEventService, never())
@@ -471,7 +473,8 @@ class AuthorisationTransactionalExecutorTest {
     accountEntity.setUpdatedAt(OffsetDateTime.now());
     when(accountRepository.findById(accountId)).thenReturn(Optional.of(accountEntity));
 
-    ReverseResponse response = executor.reverseInTransaction(authorisationId, reverseRequest);
+    ReverseResponse response =
+        executor.reverseInTransaction(authorisationId, reverseRequest, UUID.randomUUID());
 
     assertThat(response.authorisationId()).isEqualTo(authorisationId);
     assertThat(response.idempotencyKey()).isEqualTo(reverseRequest.idempotencyKey());
@@ -523,7 +526,8 @@ class AuthorisationTransactionalExecutorTest {
             EventType.AUTHORISATION_REVERSED.toString()))
         .thenReturn(Optional.of(reverseEvent));
 
-    ReverseResponse response = executor.reverseInTransaction(authorisationId, reverseRequest);
+    ReverseResponse response =
+        executor.reverseInTransaction(authorisationId, reverseRequest, UUID.randomUUID());
 
     assertThat(response.status()).isEqualTo(AuthorisationStatus.REVERSED);
     assertThat(response.idempotencyKey()).isEqualTo(reverseRequest.idempotencyKey());
@@ -556,7 +560,7 @@ class AuthorisationTransactionalExecutorTest {
 
     assertThrows(
         AuthorisationIllegalStateException.class,
-        () -> executor.reverseInTransaction(authorisationId, reverseRequest));
+        () -> executor.reverseInTransaction(authorisationId, reverseRequest, UUID.randomUUID()));
   }
 
   @Test
@@ -572,7 +576,7 @@ class AuthorisationTransactionalExecutorTest {
 
     assertThrows(
         AuthorisationIllegalStateException.class,
-        () -> executor.reverseInTransaction(authorisationId, reverseRequest));
+        () -> executor.reverseInTransaction(authorisationId, reverseRequest, UUID.randomUUID()));
   }
 
   @Test
@@ -585,7 +589,8 @@ class AuthorisationTransactionalExecutorTest {
         () ->
             executor.reverseInTransaction(
                 authorisationId,
-                new ReverseRequest("reverse-key", AuthorisationEventReason.CUSTOMER_REQUEST)));
+                new ReverseRequest("reverse-key", AuthorisationEventReason.CUSTOMER_REQUEST),
+                UUID.randomUUID()));
   }
 
   @Test
@@ -620,7 +625,8 @@ class AuthorisationTransactionalExecutorTest {
     ConcurrentIdempotencyRaceException exception =
         assertThrows(
             ConcurrentIdempotencyRaceException.class,
-            () -> executor.reverseInTransaction(authorisationId, reverseRequest));
+            () ->
+                executor.reverseInTransaction(authorisationId, reverseRequest, UUID.randomUUID()));
 
     assertThat(exception.getCause()).isEqualTo(cause);
     verify(outboxEventService, never())

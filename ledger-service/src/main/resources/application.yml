@@ -3,9 +3,10 @@ spring:
     name: ledger-service
 
   datasource:
-    url: jdbc:postgresql://localhost:5432/ledger_db
-    username: postgres
-    password: postgres
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/ledger_db}
+    username: ${SPRING_DATASOURCE_USERNAME:postgres}
+    password: ${SPRING_DATASOURCE_PASSWORD:postgres}
+
   jpa:
     hibernate:
       ddl-auto: validate
@@ -15,7 +16,7 @@ spring:
         format_sql: true
 
   kafka:
-    bootstrap-servers: localhost:9092
+    bootstrap-servers: ${SPRING_KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
     consumer:
       # Shared consumer group for ledger projection workers.
       group-id: ledger-service

@@ -124,8 +124,12 @@ class AuthorisationTransactionalExecutorConcurrencyTest {
     List<InvocationResult<CaptureResponse>> results =
         runConcurrently(
             List.of(
-                () -> executor.captureInTransaction(authorisationId, new CaptureRequest("capture-key-1")),
-                () -> executor.captureInTransaction(authorisationId, new CaptureRequest("capture-key-2"))));
+                () ->
+                    executor.captureInTransaction(
+                        authorisationId, new CaptureRequest("capture-key-1"), UUID.randomUUID()),
+                () ->
+                    executor.captureInTransaction(
+                        authorisationId, new CaptureRequest("capture-key-2"), UUID.randomUUID())));
 
     long successCount = results.stream().filter(InvocationResult::isSuccess).count();
     long failureCount = results.stream().filter(result -> !result.isSuccess()).count();
@@ -166,11 +170,13 @@ class AuthorisationTransactionalExecutorConcurrencyTest {
                 () ->
                     executor.reverseInTransaction(
                         authorisationId,
-                        new ReverseRequest("reverse-key-1", AuthorisationEventReason.CUSTOMER_REQUEST)),
+                        new ReverseRequest("reverse-key-1", AuthorisationEventReason.CUSTOMER_REQUEST),
+                        UUID.randomUUID()),
                 () ->
                     executor.reverseInTransaction(
                         authorisationId,
-                        new ReverseRequest("reverse-key-2", AuthorisationEventReason.CUSTOMER_REQUEST))));
+                        new ReverseRequest("reverse-key-2", AuthorisationEventReason.CUSTOMER_REQUEST),
+                        UUID.randomUUID())));
 
     long successCount = results.stream().filter(InvocationResult::isSuccess).count();
     long failureCount = results.stream().filter(result -> !result.isSuccess()).count();
@@ -241,8 +247,12 @@ class AuthorisationTransactionalExecutorConcurrencyTest {
     List<InvocationResult<CaptureResponse>> results =
         runConcurrently(
             List.of(
-                () -> executor.captureInTransaction(authorisationId, new CaptureRequest(idempotencyKey)),
-                () -> executor.captureInTransaction(authorisationId, new CaptureRequest(idempotencyKey))));
+                () ->
+                    executor.captureInTransaction(
+                        authorisationId, new CaptureRequest(idempotencyKey), UUID.randomUUID()),
+                () ->
+                    executor.captureInTransaction(
+                        authorisationId, new CaptureRequest(idempotencyKey), UUID.randomUUID())));
 
     long successCount = results.stream().filter(InvocationResult::isSuccess).count();
     assertThat(successCount).isGreaterThanOrEqualTo(1);
@@ -272,11 +282,13 @@ class AuthorisationTransactionalExecutorConcurrencyTest {
                 () ->
                     executor.reverseInTransaction(
                         authorisationId,
-                        new ReverseRequest(idempotencyKey, AuthorisationEventReason.CUSTOMER_REQUEST)),
+                        new ReverseRequest(idempotencyKey, AuthorisationEventReason.CUSTOMER_REQUEST),
+                        UUID.randomUUID()),
                 () ->
                     executor.reverseInTransaction(
                         authorisationId,
-                        new ReverseRequest(idempotencyKey, AuthorisationEventReason.CUSTOMER_REQUEST))));
+                        new ReverseRequest(idempotencyKey, AuthorisationEventReason.CUSTOMER_REQUEST),
+                        UUID.randomUUID())));
 
     long successCount = results.stream().filter(InvocationResult::isSuccess).count();
     assertThat(successCount).isGreaterThanOrEqualTo(1);
