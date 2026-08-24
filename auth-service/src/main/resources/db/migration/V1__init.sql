@@ -103,7 +103,7 @@ create table outbox_event (
     idempotency_key varchar(30) not null,
 
     -- Correlates events across services for tracing.
-    correlation_id uuid not null
+    correlation_id uuid not null,
     claimed_at timestamp with time zone,
     claim_until timestamp with time zone,
 
