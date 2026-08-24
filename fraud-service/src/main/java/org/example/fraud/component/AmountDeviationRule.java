@@ -13,6 +13,14 @@ import org.example.fraud.infrastructure.FraudEvaluationRepository;
 import org.example.fraud.properties.AmountDeviationRuleProperties;
 import org.springframework.stereotype.Component;
 
+/**
+ * Risk rule that flags a transaction whose amount significantly exceeds the account's historical
+ * average approved amount.
+ *
+ * <p>The average-amount baseline is read-through cached (Redis first, DB fallback via {@link
+ * AmountDeviationRuleCacheService}) since it's derived from an expensive rolling-window
+ * aggregate query and only needs to change when a new approved transaction occurs.
+ */
 @Slf4j
 @Component
 @RequiredArgsConstructor
@@ -61,6 +69,12 @@ public class AmountDeviationRule implements RiskRule {
                 .compareTo(
                     avgAmount.multiply(BigDecimal.valueOf(ruleProperties.amountMultiplier())))
             > 0)) {
+      log.debug(
+          "Amount deviation rule triggered, accountId={}, amount={}, baselineAvgAmount={}, score={}",
+          request.accountId(),
+          request.amount(),
+          avgAmount,
+          ruleProperties.score());
       return Optional.of(
           new RuleResult(name(), ruleProperties.score(), ruleProperties.reasonCode()));
     } else {

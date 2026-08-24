@@ -3,12 +3,18 @@ package org.example.fraud.component;
 import java.time.Duration;
 import java.util.Optional;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.example.fraud.api.FraudCheckRequest;
 import org.example.fraud.application.VelocityService;
 import org.example.fraud.domain.RuleResult;
 import org.example.fraud.properties.AccountVelocityRuleProperties;
 import org.springframework.stereotype.Component;
 
+/**
+ * Risk rule that flags an account issuing more than {@code threshold} requests within a
+ * configured sliding time window, using {@link VelocityService} for the actual frequency count.
+ */
+@Slf4j
 @Component
 @RequiredArgsConstructor
 public class AccountRule implements RiskRule {
@@ -35,6 +41,12 @@ public class AccountRule implements RiskRule {
         Duration.ofSeconds(ruleProperties.windowSeconds()))) {
 
       riskScore += ruleProperties.score();
+      log.debug(
+          "Account velocity rule triggered, accountId={}, threshold={}, windowSeconds={}, score={}",
+          fraudCheckRequest.accountId(),
+          ruleProperties.threshold(),
+          ruleProperties.windowSeconds(),
+          riskScore);
       return Optional.of(
           new RuleResult(
               name(),

@@ -15,6 +15,12 @@ import lombok.Setter;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 
+/**
+ * Raw, append-only audit log of every authorisation event received, keyed by event id.
+ *
+ * <p>Unlike {@link LedgerEntryEntity} (a business-level projection), this table stores the
+ * unmodified event payload/metadata for traceability and replay/debugging purposes.
+ */
 @Entity
 @Table(name = "ledger_event_log")
 @Getter
@@ -46,6 +52,7 @@ public class LedgerEventLogEntity {
   @Column(name = "occurred_at", nullable = false)
   private OffsetDateTime occurredAt;
 
+  /** Time this service received/processed the event, distinct from when it occurred upstream. */
   @Column(name = "received_at", nullable = false)
   private OffsetDateTime receivedAt;
 }

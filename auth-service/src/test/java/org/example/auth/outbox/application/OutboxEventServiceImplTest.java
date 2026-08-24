@@ -137,7 +137,8 @@ class OutboxEventServiceImplTest {
             any(UUID.class),
             any(OffsetDateTime.class),
             eq(OutboxEventStatus.PUBLISHED),
-            eq(OutboxEventStatus.PUBLISHING)))
+            eq(OutboxEventStatus.PUBLISHING),
+            any(OffsetDateTime.class)))
         .thenReturn(1);
 
     SendResult<UUID, Map<String, Object>> result = mock(SendResult.class);
@@ -166,7 +167,8 @@ class OutboxEventServiceImplTest {
             any(UUID.class),
             any(OffsetDateTime.class),
             eq(OutboxEventStatus.PUBLISHED),
-            eq(OutboxEventStatus.PUBLISHING));
+            eq(OutboxEventStatus.PUBLISHING),
+            any(OffsetDateTime.class));
   }
 
   @Test
@@ -225,7 +227,8 @@ class OutboxEventServiceImplTest {
             any(UUID.class),
             any(OffsetDateTime.class),
             any(OutboxEventStatus.class),
-            any(OutboxEventStatus.class));
+            any(OutboxEventStatus.class),
+            any(OffsetDateTime.class));
     verify(outboxEventRepository, times(0))
         .markRetry(
             any(UUID.class),
@@ -233,9 +236,16 @@ class OutboxEventServiceImplTest {
             any(OffsetDateTime.class),
             any(String.class),
             any(OutboxEventStatus.class),
-            any(OutboxEventStatus.class));
+            any(OutboxEventStatus.class),
+            any(OffsetDateTime.class));
     verify(outboxEventRepository, times(0))
-        .markFailed(any(UUID.class), any(Integer.class), any(String.class), any(), any());
+        .markFailed(
+            any(UUID.class),
+            any(Integer.class),
+            any(String.class),
+            any(),
+            any(),
+            any(OffsetDateTime.class));
   }
 
   @Test
@@ -272,15 +282,23 @@ class OutboxEventServiceImplTest {
             any(OffsetDateTime.class),
             any(String.class),
             eq(OutboxEventStatus.NEW),
-            eq(OutboxEventStatus.PUBLISHING));
+            eq(OutboxEventStatus.PUBLISHING),
+            any(OffsetDateTime.class));
     verify(outboxEventRepository, times(0))
-        .markFailed(any(UUID.class), any(Integer.class), any(String.class), any(), any());
+        .markFailed(
+            any(UUID.class),
+            any(Integer.class),
+            any(String.class),
+            any(),
+            any(),
+            any(OffsetDateTime.class));
     verify(outboxEventRepository, times(0))
         .markPublished(
             any(UUID.class),
             any(OffsetDateTime.class),
             any(OutboxEventStatus.class),
-            any(OutboxEventStatus.class));
+            any(OutboxEventStatus.class),
+            any(OffsetDateTime.class));
   }
 
   @Test
@@ -315,7 +333,8 @@ class OutboxEventServiceImplTest {
             eq(1),
             any(String.class),
             eq(OutboxEventStatus.FAILED),
-            eq(OutboxEventStatus.PUBLISHING));
+            eq(OutboxEventStatus.PUBLISHING),
+            any(OffsetDateTime.class));
     verify(outboxEventRepository, times(0))
         .markRetry(
             any(UUID.class),
@@ -323,13 +342,79 @@ class OutboxEventServiceImplTest {
             any(OffsetDateTime.class),
             any(String.class),
             any(OutboxEventStatus.class),
-            any(OutboxEventStatus.class));
+            any(OutboxEventStatus.class),
+            any(OffsetDateTime.class));
     verify(outboxEventRepository, times(0))
         .markPublished(
             any(UUID.class),
             any(OffsetDateTime.class),
             any(OutboxEventStatus.class),
-            any(OutboxEventStatus.class));
+            any(OutboxEventStatus.class),
+            any(OffsetDateTime.class));
+  }
+
+  @Test
+  void shouldNotThrow_whenMarkPublishedFailsBecauseClaimWasFencedOut() {
+    // Simulates a stale completion arriving after this claim's lease already expired and the
+    // row was reclaimed/re-claimed by a newer attempt (different claimedAt fencing token).
+    //
+    // Step by step:
+    // 1. claimLease/reclaimStalePublishing stubbed as normal (no expired claims this cycle) so
+    //    the test stays focused on the one scenario below.
+    // 2. One NEW event is returned by findNextBatch and successfully claimed (claimNewEvent=1),
+    //    so processEvent proceeds to actually publish it.
+    // 3. publishAsync succeeds (completed future) -> the "success" branch of the whenComplete
+    //    callback runs, which calls markPublished(...).
+    // 4. markPublished is stubbed to return 0, modeling the fencing check failing: by the time
+    //    this completion runs, the row's claimedAt no longer matches this attempt's claimedAt
+    //    because another poller/thread already reclaimed and re-claimed the same row.
+    // 5. publishNextBatch(10) must complete without throwing/propagating any exception - a
+    //    fenced-out (0 rows updated) markPublished is an expected, benign outcome (logged as a
+    //    warning), not an error that should crash the batch.
+    // 6. Verify markPublished was still called exactly once for this event, proving the flow
+    //    reached and executed the fencing-checked update and handled its "0 rows" result safely.
+    when(outboxPublisherProperties.claimLease()).thenReturn(java.time.Duration.ofSeconds(30));
+    when(outboxEventRepository.reclaimStalePublishing(
+            any(OffsetDateTime.class), eq(OutboxEventStatus.NEW), eq(OutboxEventStatus.PUBLISHING)))
+        .thenReturn(0);
+
+    OutboxEventEntity event = mockOutboxEventEntity(OutboxEventStatus.NEW);
+    when(outboxEventRepository.findNextBatch(
+            eq(OutboxEventStatus.NEW), any(OffsetDateTime.class), any(PageRequest.class)))
+        .thenReturn(List.of(event));
+    when(outboxEventRepository.claimNewEvent(
+            any(UUID.class),
+            any(OffsetDateTime.class),
+            any(OffsetDateTime.class),
+            eq(OutboxEventStatus.PUBLISHING),
+            eq(OutboxEventStatus.NEW)))
+        .thenReturn(1); // this attempt wins the claim
+
+    // Kafka send succeeds -> whenComplete's success branch runs and calls markPublished(...).
+    SendResult<UUID, Map<String, Object>> result = mock(SendResult.class);
+    when(outboxKafkaPublisher.publishAsync(any(OutboxEvent.class)))
+        .thenReturn(CompletableFuture.completedFuture(result));
+
+    // Fencing check fails: another (newer) claim owns the row now, so 0 rows are updated.
+    when(outboxEventRepository.markPublished(
+            any(UUID.class),
+            any(OffsetDateTime.class),
+            eq(OutboxEventStatus.PUBLISHED),
+            eq(OutboxEventStatus.PUBLISHING),
+            any(OffsetDateTime.class)))
+        .thenReturn(0);
+
+    // Must not throw despite markPublished reporting 0 rows updated.
+    service.publishNextBatch(10);
+
+    // markPublished was still attempted exactly once; its "0 rows" result was handled safely.
+    verify(outboxEventRepository, times(1))
+        .markPublished(
+            eq(event.getId()),
+            any(OffsetDateTime.class),
+            eq(OutboxEventStatus.PUBLISHED),
+            eq(OutboxEventStatus.PUBLISHING),
+            any(OffsetDateTime.class));
   }
 
   private OutboxEventEntity mockOutboxEventEntity(OutboxEventStatus status) {

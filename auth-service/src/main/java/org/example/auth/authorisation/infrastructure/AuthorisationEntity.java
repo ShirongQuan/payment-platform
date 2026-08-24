@@ -19,6 +19,14 @@ import lombok.Setter;
 import org.example.auth.authorisation.domain.AuthorisationStatus;
 import org.hibernate.annotations.UpdateTimestamp;
 
+/**
+ * JPA entity mapped to the {@code authorisation} table: the current-state row for an
+ * authorisation (one row per authorisation, mutated as its status changes).
+ *
+ * <p>This is a persistence-layer representation; business logic lives in {@link
+ * org.example.auth.authorisation.domain.Authorisation}. Compare with {@link
+ * AuthorisationEventEntity}, which is an append-only audit trail of every state transition.
+ */
 @Entity
 @Table(name = "authorisation")
 @Getter

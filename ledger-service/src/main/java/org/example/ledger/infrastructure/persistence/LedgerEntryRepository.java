@@ -14,6 +14,7 @@ import org.springframework.data.repository.query.Param;
  */
 public interface LedgerEntryRepository extends JpaRepository<LedgerEntryEntity, UUID> {
 
+  /** Returns the ledger entry timeline for a single authorisation, most recent first. */
   @Query(
 """
 select e
@@ -24,6 +25,7 @@ order by e.occurredAt desc
 """)
   List<LedgerEntryEntity> findAuthorisationsById(@Param("authorisationId") UUID authorisationId);
 
+  /** Returns a lightweight projection of all ledger events for an account, most recent first. */
   @Query(
 """
 select

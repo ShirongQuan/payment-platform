@@ -7,10 +7,16 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+/** Repository for the append-only {@link AuthorisationEventEntity} audit trail. */
 @Repository
 public interface AuthorisationEventRepository
     extends JpaRepository<AuthorisationEventEntity, UUID> {
 
+  /**
+   * Looks up a specific lifecycle event by its natural idempotency key, used to detect and
+   * replay duplicate capture/reverse requests once an authorisation has already reached the
+   * corresponding terminal status.
+   */
   @Query(
       value =
           """

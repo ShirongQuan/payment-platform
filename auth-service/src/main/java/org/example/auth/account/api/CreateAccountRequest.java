@@ -8,6 +8,7 @@ import org.example.shared.currency.ValidCurrencyCode;
 // {3} = exactly 3 of the previous token
 // $ = end of the string
 
+/** Request body to create a new account with a zero balance in the given currency. */
 public record CreateAccountRequest(
     @NotBlank
         @Pattern(regexp = "^[A-Za-z]{3}$", message = "currencyCode must contain exactly 3 letters")

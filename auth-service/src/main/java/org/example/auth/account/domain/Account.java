@@ -79,7 +79,7 @@ public class Account {
    * @throws IllegalArgumentException if amount is zero or negative
    */
   public void deposit(BigDecimal amount, String currencyCode) {
-    // TODO: validate account status
+    // TODO: validate account status (e.g. reject deposits into LOCKED/INACTIVE accounts)
     validateCurrency(currencyCode);
     validateAmount(amount);
     this.availableBalance = this.availableBalance.add(amount);
@@ -103,6 +103,14 @@ public class Account {
     reservedBalance = reservedBalance.add(amount);
   }
 
+  /**
+   * Moves a previously reserved amount out of the reserved balance permanently (funds captured /
+   * settled). Unlike {@link #reverse}, captured funds do not return to the available balance.
+   *
+   * @param amount must be positive and non-null, and must not exceed the current reserved balance
+   * @throws IllegalArgumentException if amount is zero or negative
+   * @throws InsufficientFundException if reserved balance is less than the requested amount
+   */
   public void capture(BigDecimal amount, String currencyCode) {
     // TODO: validate account status
     validateCurrency(currencyCode);
@@ -113,6 +121,14 @@ public class Account {
     reservedBalance = reservedBalance.subtract(amount);
   }
 
+  /**
+   * Releases a previously reserved amount back into the available balance (e.g. a declined or
+   * cancelled authorisation being reversed).
+   *
+   * @param amount must be positive and non-null, and must not exceed the current reserved balance
+   * @throws IllegalArgumentException if amount is zero or negative
+   * @throws InsufficientFundException if reserved balance is less than the requested amount
+   */
   public void reverse(BigDecimal amount, String currencyCode) {
     // TODO: validate account status
     validateCurrency(currencyCode);
@@ -124,6 +140,7 @@ public class Account {
     availableBalance = availableBalance.add(amount);
   }
 
+  /** Normalises the supplied currency and asserts it matches this account's currency. */
   void validateCurrency(String currencyCode) {
     String normalizedCurrency = normalizeAndValidateCurrency(currencyCode);
     if (!(this.currencyCode.equals(normalizedCurrency))) {

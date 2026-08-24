@@ -3,6 +3,10 @@ package org.example.auth.common.exception;
 import java.util.UUID;
 import org.example.auth.authorisation.domain.AuthorisationStatus;
 
+/**
+ * Thrown when an authorisation lifecycle operation (capture/reverse) is attempted while the
+ * authorisation is not in a valid status for that operation. Maps to HTTP 409.
+ */
 public class AuthorisationIllegalStateException extends RuntimeException implements CodedException {
 
   public AuthorisationIllegalStateException(

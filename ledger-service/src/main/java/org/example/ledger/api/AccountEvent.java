@@ -4,6 +4,7 @@ import java.math.BigDecimal;
 import java.time.OffsetDateTime;
 import java.util.UUID;
 
+/** A single ledger event entry shown in an account's event timeline. */
 public record AccountEvent(
     UUID eventId,
     String eventType,

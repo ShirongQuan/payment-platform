@@ -2,6 +2,7 @@ package org.example.auth.account.application;
 
 import java.time.OffsetDateTime;
 import java.util.UUID;
+import lombok.extern.slf4j.Slf4j;
 import org.example.auth.account.api.AccountResponse;
 import org.example.auth.account.api.CreateAccountRequest;
 import org.example.auth.account.api.DepositRequest;
@@ -24,6 +25,7 @@ import org.springframework.transaction.annotation.Transactional;
  * commit. This avoids the {@code DuplicateKeyException} that would occur if a new entity were
  * constructed with the same ID as an already-managed one.
  */
+@Slf4j
 @Service
 public class AccountServiceImpl implements AccountService {
 
@@ -42,9 +44,16 @@ public class AccountServiceImpl implements AccountService {
   @Override
   @Transactional(rollbackFor = Exception.class)
   public AccountResponse createAccount(CreateAccountRequest createAccountRequest) {
+    log.debug("Creating account, currencyCode={}", createAccountRequest.currencyCode());
+
+    // The domain object generates the id and default status/balances; validates currency.
     Account account = new Account(createAccountRequest.currencyCode());
 
     accountRepository.save(accountMapper.toEntity(account));
+    log.debug(
+        "Saved new account, accountId={}, currencyCode={}",
+        account.getId(),
+        account.getCurrencyCode());
 
     return new AccountResponse(
         account.getId(),
@@ -63,6 +72,7 @@ public class AccountServiceImpl implements AccountService {
   @Override
   @Transactional(readOnly = true)
   public AccountResponse getAccountById(UUID accountId) {
+    log.debug("Fetching account by id, accountId={}", accountId);
     AccountEntity account =
         accountRepository
             .findById(accountId)
@@ -89,6 +99,12 @@ public class AccountServiceImpl implements AccountService {
   @Override
   @Transactional(rollbackFor = Exception.class)
   public AccountResponse deposit(UUID accountId, DepositRequest depositRequest) {
+    log.debug(
+        "Handling deposit, accountId={}, amount={}, currencyCode={}",
+        accountId,
+        depositRequest.amount(),
+        depositRequest.currencyCode());
+
     // Fetch entity (attached to persistence context)
     AccountEntity entity =
         accountRepository
@@ -98,7 +114,7 @@ public class AccountServiceImpl implements AccountService {
     // Convert to business object for domain logic
     Account account = accountMapper.toAccount(entity);
 
-    // Execute business logic
+    // Execute business logic (validates currency match and positive amount)
     account.deposit(depositRequest.amount(), depositRequest.currencyCode());
 
     // Update the EXISTING entity with modified values (don't create a new one)
@@ -107,6 +123,10 @@ public class AccountServiceImpl implements AccountService {
     entity.setUpdatedAt(OffsetDateTime.now());
 
     // Save the SAME entity instance (Hibernate just persists changes)
+    log.debug(
+        "Deposit applied, accountId={}, newAvailableBalance={}",
+        accountId,
+        entity.getAvailableBalance());
 
     return new AccountResponse(
         entity.getId(),

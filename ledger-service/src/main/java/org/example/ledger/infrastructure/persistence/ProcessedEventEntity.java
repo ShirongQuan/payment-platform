@@ -15,6 +15,12 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 import org.example.ledger.domain.EventType;
 
+/**
+ * Marker row recording that an inbound event id has already been processed.
+ *
+ * <p>The unique primary key on {@code event_id} is what backs the idempotent
+ * "insert-or-do-nothing" check used by the command handlers to skip duplicate deliveries.
+ */
 @Entity
 @Table(name = "processed_event")
 @Getter

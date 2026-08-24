@@ -10,9 +10,11 @@ import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 import org.springframework.web.client.RestClient;
 
+/** Configures the HTTP client and dedicated executor used to call the external fraud service. */
 @Configuration
 public class FraudHttpClientConfig {
 
+  /** Builds the {@link RestClient} used by {@link ResilientFraudGateway} to call the fraud service. */
   @Bean
   RestClient fraudRestClient(
       FraudGatewayProperties properties, CorrelationIdInterceptor correlationIdInterceptor) {
@@ -27,6 +29,11 @@ public class FraudHttpClientConfig {
         .build();
   }
 
+  /**
+   * Dedicated executor for async fraud calls (used by {@code @TimeLimiter}/{@code
+   * @CircuitBreaker}). Propagates the calling thread's MDC (notably the correlation id) onto the
+   * executor thread so log lines from the async call can still be correlated back to the request.
+   */
   @Bean(name = "fraudMdcExecutor")
   Executor fraudMdcExecutor() {
     ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
@@ -36,8 +43,11 @@ public class FraudHttpClientConfig {
     executor.setQueueCapacity(1000);
     executor.setTaskDecorator(
         runnable -> {
+          // Capture the submitting thread's MDC context (e.g. correlationId) at submission time.
           Map<String, String> callerMdc = MDC.getCopyOfContextMap();
           return () -> {
+            // Swap in the caller's MDC for the duration of task execution, then restore
+            // whatever MDC this pooled thread had before (since threads are reused).
             Map<String, String> previous = MDC.getCopyOfContextMap();
             try {
               if (callerMdc == null || callerMdc.isEmpty()) {

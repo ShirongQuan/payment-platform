@@ -56,7 +56,6 @@ public class OutboxEventServiceImpl implements OutboxEventService {
     this.outboxEventMapper = outboxEventMapper;
   }
 
-  // TODO: improve thread safety
   // Enforce being called inside a transaction.
   @Transactional(propagation = Propagation.MANDATORY)
   @Override
@@ -179,9 +178,16 @@ public class OutboxEventServiceImpl implements OutboxEventService {
                         event.getId(),
                         OffsetDateTime.now(),
                         OutboxEventStatus.PUBLISHED,
-                        OutboxEventStatus.PUBLISHING);
+                        OutboxEventStatus.PUBLISHING,
+                        claimedAt);
                 if (markPublished == 0) {
-                  log.error("Failed to mark event id={} as published", event.getId());
+                  // Expected when this claim's lease already expired and the row was reclaimed
+                  // and re-published by another attempt before this (stale) completion arrived.
+                  log.warn(
+                      "Outbox event id={} was not marked published by this claim (claimedAt={});"
+                          + " likely reclaimed by a newer attempt after lease expiry",
+                      event.getId(),
+                      claimedAt);
                 }
               } else {
                 Throwable cause = (throwable.getCause() != null) ? throwable.getCause() : throwable;
@@ -196,9 +202,14 @@ public class OutboxEventServiceImpl implements OutboxEventService {
                           nextRetryCount,
                           error,
                           OutboxEventStatus.FAILED,
-                          OutboxEventStatus.PUBLISHING);
+                          OutboxEventStatus.PUBLISHING,
+                          claimedAt);
                   if (markFailed == 0) {
-                    log.error("Failed to mark event id={} as failed", event.getId());
+                    log.warn(
+                        "Outbox event id={} was not marked failed by this claim (claimedAt={});"
+                            + " likely reclaimed by a newer attempt after lease expiry",
+                        event.getId(),
+                        claimedAt);
                   }
                 } else {
                   int markRetry =
@@ -208,9 +219,14 @@ public class OutboxEventServiceImpl implements OutboxEventService {
                           backoffPolicy.nextAttempt(nextRetryCount),
                           error,
                           OutboxEventStatus.NEW,
-                          OutboxEventStatus.PUBLISHING);
+                          OutboxEventStatus.PUBLISHING,
+                          claimedAt);
                   if (markRetry == 0) {
-                    log.error("Failed to mark event id={} for retry", event.getId());
+                    log.warn(
+                        "Outbox event id={} was not marked for retry by this claim (claimedAt={});"
+                            + " likely reclaimed by a newer attempt after lease expiry",
+                        event.getId(),
+                        claimedAt);
                   }
                 }
               }

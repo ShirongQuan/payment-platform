@@ -30,6 +30,12 @@ spring:
       properties:
         # Prevent duplicate writes on producer retries.
         enable.idempotence: true
+        # Bound a single send's total retry/backoff budget (including request.timeout.ms) to
+        # comfortably less than outbox.publisher.claim-lease below. Otherwise a slow/retrying
+        # send can still be in-flight after the claim lease expires and the row gets reclaimed
+        # and re-published concurrently, causing a duplicate Kafka publish.
+        delivery.timeout.ms: 20000
+        request.timeout.ms: 8000
       key-serializer: org.apache.kafka.common.serialization.UUIDSerializer
       value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
 
@@ -42,7 +48,9 @@ outbox:
     batch-size: 10
     # Delay between polling cycles.
     delay-ms: 10000ms  # 10 Seconds
-    # Lease window for in-flight publish claims.
+    # Lease window for in-flight publish claims. Must exceed the Kafka producer's
+    # delivery.timeout.ms (above) with margin, so a claim is never reclaimed while its send is
+    # still legitimately in flight.
     claim-lease: 30s
 
 idempotency:

@@ -3,6 +3,7 @@ package org.example.auth.common.exception;
 import java.util.UUID;
 import lombok.Getter;
 
+/** Thrown when a requested authorisation ID does not exist in the database. Maps to HTTP 404. */
 @Getter
 public class AuthorisationNotFoundException extends RuntimeException implements CodedException {
 

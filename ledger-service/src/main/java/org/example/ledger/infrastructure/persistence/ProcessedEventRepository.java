@@ -15,6 +15,7 @@ import org.springframework.data.repository.query.Param;
  */
 public interface ProcessedEventRepository extends JpaRepository<ProcessedEventEntity, UUID> {
 
+  /** Atomically claims an event id for processing; returns 0 if it was already claimed. */
   @Modifying
   @Query(
       value =

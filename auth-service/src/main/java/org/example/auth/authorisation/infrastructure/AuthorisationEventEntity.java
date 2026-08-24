@@ -18,6 +18,14 @@ import lombok.Setter;
 import org.example.auth.authorisation.domain.AuthorisationEventReason;
 import org.example.auth.outbox.domain.EventType;
 
+/**
+ * JPA entity mapped to the {@code authorisation_event} table: an append-only audit trail of every
+ * authorisation lifecycle transition (authorised/declined/captured/reversed).
+ *
+ * <p>The unique constraint on {@code (account_id, event_type, idempotency_key)} is what backs
+ * idempotent replay detection for authorise/capture/reverse requests (see {@link
+ * AuthorisationEventRepository#findByAccountIdAndEventTypeAndIdempotencyKey}).
+ */
 @Entity
 @Table(name = "authorisation_event")
 @Getter

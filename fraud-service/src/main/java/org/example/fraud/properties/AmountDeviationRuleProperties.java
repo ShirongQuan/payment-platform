@@ -2,6 +2,7 @@ package org.example.fraud.properties;
 
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
+/** Config for the "Amount Deviation" rule (flags spend that deviates from an account's baseline). */
 @ConfigurationProperties(prefix = "risk.rules.amount-deviation")
 public record AmountDeviationRuleProperties(
     boolean enabled,

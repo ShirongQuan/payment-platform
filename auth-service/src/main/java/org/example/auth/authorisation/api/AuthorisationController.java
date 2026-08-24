@@ -24,6 +24,12 @@ public class AuthorisationController {
     this.authorisationService = authorisationService;
   }
 
+  /**
+   * Authorises (reserves) funds against an account.
+   *
+   * <p>Extracts the caller's IP address for fraud evaluation, then delegates to {@link
+   * AuthorisationService}, which is idempotent per {@code (accountId, idempotencyKey)}.
+   */
   @PostMapping
   public AuthorisationResponse authorise(
       @RequestBody @Valid AuthorisationRequest request, HttpServletRequest servletRequest) {
@@ -36,18 +42,24 @@ public class AuthorisationController {
     return this.authorisationService.authorise(request, clientIpAddress);
   }
 
+  /** Resolves the client's IP address from the request, falling back to a sentinel value. */
   private String extractClientIpAddress(HttpServletRequest request) {
     // Forwarded headers are handled by Spring/server strategy when enabled.
     String remoteAddr = request.getRemoteAddr();
     return (remoteAddr == null || remoteAddr.isBlank()) ? "0.0.0.0" : remoteAddr;
   }
 
+  /** Fetches an authorisation by its UUID. Returns 404 if not found. */
   @GetMapping("/{authorisationId}")
   public AuthorisationResponse getAuthorisationById(@PathVariable UUID authorisationId) {
     log.debug("Received get authorisation request, authorisationId={}", authorisationId);
     return authorisationService.getAuthorisationById(authorisationId);
   }
 
+  /**
+   * Captures (settles) a previously authorised amount. Idempotent per {@code
+   * (authorisationId, idempotencyKey)}.
+   */
   @PostMapping("/{authorisationId}/captures")
   public CaptureResponse capture(
       @PathVariable UUID authorisationId,
@@ -59,6 +71,10 @@ public class AuthorisationController {
     return authorisationService.capture(authorisationId, captureRequest);
   }
 
+  /**
+   * Reverses (releases) a previously authorised amount. Idempotent per {@code
+   * (authorisationId, idempotencyKey)}.
+   */
   @PostMapping("/{authorisationId}/reversals")
   public ReverseResponse reverse(
       @PathVariable UUID authorisationId,

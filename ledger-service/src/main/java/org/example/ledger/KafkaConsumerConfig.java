@@ -22,6 +22,8 @@ import org.springframework.util.backoff.FixedBackOff;
 public class KafkaConsumerConfig {
   @Bean
   public DefaultErrorHandler kafkaErrorHandler(KafkaTemplate<UUID, String> kafkaTemplate) {
+    // Route failed records to the same partition number on the ".dlt" topic so ordering
+    // per-partition is loosely preserved and the failure can be traced back to its origin.
     DeadLetterPublishingRecoverer recoverer =
         new DeadLetterPublishingRecoverer(
             kafkaTemplate,
@@ -32,6 +34,8 @@ public class KafkaConsumerConfig {
     DefaultErrorHandler errorHandler =
         new DefaultErrorHandler(recoverer, new FixedBackOff(2000L, 3L));
 
+    // Payload/contract errors (e.g. invalid JSON, missing headers) are deterministic and will
+    // never succeed on retry, so send them straight to the DLT instead of wasting retry attempts.
     errorHandler.addNotRetryableExceptions(IllegalArgumentException.class);
     log.debug("Configured Kafka error handler, fixedBackOffMs=2000, maxRetries=3, dlt=auth.events.ledger.dlt");
     return errorHandler;

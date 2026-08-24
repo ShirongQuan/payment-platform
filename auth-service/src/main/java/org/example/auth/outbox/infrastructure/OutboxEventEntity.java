@@ -73,7 +73,6 @@ public class OutboxEventEntity {
   @Column(name = "idempotency_key", nullable = false)
   private String idempotencyKey;
 
-  // TODO: set to not null
-  @Column(name = "correlation_id", nullable = true)
+  @Column(name = "correlation_id", nullable = false)
   private UUID correlationId;
 }

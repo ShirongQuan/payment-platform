@@ -77,6 +77,7 @@ public class AuthExceptionHandler {
         e.getAccountId());
   }
 
+  /** Returns 404 when no authorisation exists for the requested ID. */
   @ExceptionHandler(AuthorisationNotFoundException.class)
   public ProblemDetail handleAuthorisationNotFoundException(
       AuthorisationNotFoundException e, WebRequest request) {
@@ -90,6 +91,7 @@ public class AuthExceptionHandler {
         e.getAuthorisationId());
   }
 
+  /** Returns 409 when an idempotency key is reused with different business parameters. */
   @ExceptionHandler(IdempotencyConflictException.class)
   public ProblemDetail handleIdempotencyConflictException(
       IdempotencyConflictException e, WebRequest request) {
@@ -101,6 +103,7 @@ public class AuthExceptionHandler {
         request);
   }
 
+  /** Returns 409 when a capture/reverse is attempted while the authorisation is in an invalid state. */
   @ExceptionHandler(AuthorisationIllegalStateException.class)
   public ProblemDetail handleAuthorisationIllegalStateException(
       AuthorisationIllegalStateException e, WebRequest request) {

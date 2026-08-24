@@ -2,6 +2,12 @@ package org.example.auth.fraud;
 
 import java.util.List;
 
+/**
+ * Outcome of a fraud check for an authorisation request.
+ *
+ * <p>Use the static factories to construct instances: {@link #approve}, {@link #decline}, or
+ * {@link #unavailable} when the fraud service could not be reached (risk score {@code -1}).
+ */
 public record FraudDecision(FraudOutcome outcome, int riskScore, List<String> reasons) {
   public static FraudDecision approve(int riskScore, List<String> reasons) {
     return new FraudDecision(FraudOutcome.APPROVE, riskScore, reasons);

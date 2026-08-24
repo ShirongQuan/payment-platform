@@ -3,6 +3,7 @@ package org.example.auth.account.api;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotNull;
 import java.util.UUID;
+import lombok.extern.slf4j.Slf4j;
 import org.example.auth.account.application.AccountService;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -18,6 +19,7 @@ import org.springframework.web.bind.annotation.RestController;
  * Validation ({@code @Valid}); error responses are shaped by {@link
  * org.example.auth.common.exception.AuthExceptionHandler}.
  */
+@Slf4j
 @RestController
 @RequestMapping("/accounts")
 public class AccountController {
@@ -31,12 +33,17 @@ public class AccountController {
   @PostMapping
   public AccountResponse createAccount(
       @RequestBody @NotNull @Valid CreateAccountRequest createAccountRequest) {
-    return accountService.createAccount(createAccountRequest);
+    log.debug(
+        "Received create account request, currencyCode={}", createAccountRequest.currencyCode());
+    AccountResponse response = accountService.createAccount(createAccountRequest);
+    log.debug("Created account, accountId={}", response.accountId());
+    return response;
   }
 
   /** Fetches an account by its UUID. Returns 404 if not found. */
   @GetMapping("/{accountId}")
   public AccountResponse getAccountById(@PathVariable UUID accountId) {
+    log.debug("Received get account request, accountId={}", accountId);
     return accountService.getAccountById(accountId);
   }
 
@@ -44,6 +51,16 @@ public class AccountController {
   @PostMapping("/{accountId}/deposits")
   public AccountResponse deposit(
       @PathVariable UUID accountId, @RequestBody @NotNull @Valid DepositRequest depositRequest) {
-    return accountService.deposit(accountId, depositRequest);
+    log.debug(
+        "Received deposit request, accountId={}, amount={}, currencyCode={}",
+        accountId,
+        depositRequest.amount(),
+        depositRequest.currencyCode());
+    AccountResponse response = accountService.deposit(accountId, depositRequest);
+    log.debug(
+        "Deposit applied, accountId={}, newAvailableBalance={}",
+        accountId,
+        response.availableBalance());
+    return response;
   }
 }

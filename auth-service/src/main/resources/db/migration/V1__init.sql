@@ -92,6 +92,7 @@ create table outbox_event (
     aggregate_id uuid not null,
     event_type varchar(30) not null,
     payload jsonb not null,
+
     -- State machine: NEW -> PUBLISHING -> PUBLISHED/FAILED.
     status varchar(30) not null,
     retry_count int not null default 0,
@@ -100,8 +101,9 @@ create table outbox_event (
     published_at timestamp with time zone,
     next_attempt_at timestamp with time zone not null,
     idempotency_key varchar(30) not null,
+
     -- Correlates events across services for tracing.
-    correlation_id uuid,  -- TODO not null,  generate the correlation_id in the app and save to the table
+    correlation_id uuid not null
     claimed_at timestamp with time zone,
     claim_until timestamp with time zone,
 

@@ -8,6 +8,7 @@ import java.math.BigDecimal;
 import java.util.UUID;
 import org.example.shared.currency.ValidCurrencyCode;
 
+/** Request body to authorise (reserve) funds against an account. */
 public record AuthorisationRequest(
     @NotNull UUID accountId,
     @NotBlank @Size(max = 20) String idempotencyKey,

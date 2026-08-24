@@ -4,10 +4,21 @@ import java.time.Duration;
 import java.util.Collections;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.script.RedisScript;
 import org.springframework.stereotype.Service;
 
+/**
+ * Redis-backed sliding-window rate limiter used by velocity-based risk rules (e.g. account/IP
+ * request frequency).
+ *
+ * <p>Delegates the add-trim-count sequence to a Lua script ({@code
+ * scripts/sliding_window_rate_limit.lua}, registered in {@link org.example.fraud.RedisLuaConfig})
+ * so the whole operation executes atomically server-side in Redis, avoiding read-then-write races
+ * across concurrent requests.
+ */
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class VelocityServiceRedisImpl implements VelocityService {
@@ -32,7 +43,16 @@ public class VelocityServiceRedisImpl implements VelocityService {
             member,
             String.valueOf(ttlSeconds));
 
-    return count != null && count > maxRequests;
+    boolean tooFrequent = count != null && count > maxRequests;
+    log.debug(
+        "Sliding-window velocity check, dimension={}, name={}, windowMs={}, maxRequests={}, count={}, tooFrequent={}",
+        dimension,
+        name,
+        windowMs,
+        maxRequests,
+        count,
+        tooFrequent);
+    return tooFrequent;
   }
 
   // alternative java implementation

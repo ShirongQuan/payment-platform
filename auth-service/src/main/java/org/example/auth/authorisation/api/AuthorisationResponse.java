@@ -5,6 +5,7 @@ import java.time.OffsetDateTime;
 import java.util.UUID;
 import org.example.auth.authorisation.domain.AuthorisationStatus;
 
+/** Response body describing the current state of an authorisation. */
 public record AuthorisationResponse(
     UUID id,
     UUID accountId,

@@ -15,6 +15,11 @@ import org.springframework.stereotype.Component;
 @Component
 public class KafkaHeaderReader {
 
+  /**
+   * Extracts and type-converts the required metadata headers into an {@link EventMetadata}.
+   *
+   * @throws IllegalArgumentException if a required header is missing or malformed
+   */
   public EventMetadata read(Headers headers) {
     EventMetadata metadata =
         new EventMetadata(
@@ -32,6 +37,7 @@ public class KafkaHeaderReader {
     return metadata;
   }
 
+  /** Reads a single required header value as a UTF-8 string, failing fast if it's absent. */
   private String header(Headers headers, String name) {
     Header header = headers.lastHeader(name);
     if (header == null) {

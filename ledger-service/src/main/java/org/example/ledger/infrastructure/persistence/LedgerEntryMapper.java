@@ -12,11 +12,20 @@ import org.example.ledger.domain.EventType;
 import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;
 
+/**
+ * MapStruct mapper translating Kafka event metadata/payloads into ledger persistence entities, and
+ * ledger entities back into query API responses.
+ *
+ * <p>Each {@code toLedgerEntry}/{@code toReversedLedgerEntry} overload corresponds to one
+ * authorisation lifecycle event type (authorised/captured/reversed); a fresh {@code entryId} is
+ * generated per row since ledger entries are append-only (one row per event, never updated).
+ */
 @Mapper(
     componentModel = "spring",
     imports = {EventType.class, UUID.class, OffsetDateTime.class})
 public interface LedgerEntryMapper {
 
+  /** Maps a raw event (metadata + parsed JSON payload) into the append-only event log entity. */
   @Mapping(target = "eventId", source = "metadata.eventId")
   @Mapping(target = "aggregateType", source = "metadata.aggregateType")
   @Mapping(target = "aggregateId", source = "metadata.aggregateId")
@@ -27,7 +36,9 @@ public interface LedgerEntryMapper {
   @Mapping(target = "receivedAt", expression = "java(OffsetDateTime.now())")
   LedgerEventLogEntity toEventLogEntity(EventMetadata metadata, Map<String, Object> payloadJson);
 
+  /** Maps an AUTHORISATION_AUTHORISED event into a new ledger entry projection row. */
   @Mapping(target = "entryId", expression = "java(UUID.randomUUID())")
+
   @Mapping(target = "eventId", source = "metadata.eventId")
   @Mapping(target = "aggregateType", source = "metadata.aggregateType")
   @Mapping(target = "aggregateId", source = "metadata.aggregateId")
@@ -47,6 +58,7 @@ public interface LedgerEntryMapper {
       AuthorisationAuthorisedPayload payload,
       Map<String, Object> payloadJson);
 
+  /** Maps an AUTHORISATION_CAPTURED event into a new ledger entry projection row. */
   @Mapping(target = "entryId", expression = "java(UUID.randomUUID())")
   @Mapping(target = "eventId", source = "metadata.eventId")
   @Mapping(target = "aggregateType", source = "metadata.aggregateType")
@@ -66,7 +78,9 @@ public interface LedgerEntryMapper {
       AuthorisationCapturedPayload payload,
       Map<String, Object> payloadJson);
 
+  /** Maps an AUTHORISATION_REVERSED event into a new ledger entry projection row. */
   @Mapping(target = "entryId", expression = "java(UUID.randomUUID())")
+
   @Mapping(target = "eventId", source = "metadata.eventId")
   @Mapping(target = "aggregateType", source = "metadata.aggregateType")
   @Mapping(target = "aggregateId", source = "metadata.aggregateId")
@@ -85,7 +99,9 @@ public interface LedgerEntryMapper {
       AuthorisationReversedPayload payload,
       Map<String, Object> payloadJson);
 
+  /** Maps a persisted ledger entry row into the public authorisation query API response. */
   @Mapping(target = "authorisationId", source = "entity.authorisationId")
+
   @Mapping(target = "accountId", source = "entity.accountId")
   @Mapping(target = "merchantReference", source = "entity.merchantReference")
   @Mapping(target = "amount", source = "entity.amount")

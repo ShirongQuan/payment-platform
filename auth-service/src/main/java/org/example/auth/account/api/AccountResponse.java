@@ -5,6 +5,7 @@ import java.time.OffsetDateTime;
 import java.util.UUID;
 import org.example.auth.account.domain.AccountStatus;
 
+/** Response body describing the current state of an account. */
 public record AccountResponse(
     UUID accountId,
     AccountStatus status,

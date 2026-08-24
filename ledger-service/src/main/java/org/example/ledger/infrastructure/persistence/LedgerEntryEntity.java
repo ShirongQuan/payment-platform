@@ -16,6 +16,13 @@ import lombok.Setter;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 
+/**
+ * Append-only ledger projection row: one row per applied authorisation lifecycle event
+ * (authorised/captured/reversed).
+ *
+ * <p>Rows are never updated in place; the current state of an authorisation is derived by reading
+ * all rows for the same {@code authorisationId} ordered by {@code occurredAt}.
+ */
 @Entity
 @Table(name = "ledger_entry")
 @Getter
@@ -24,10 +31,12 @@ import org.hibernate.type.SqlTypes;
 @AllArgsConstructor
 public class LedgerEntryEntity {
 
+  /** Surrogate primary key, freshly generated per row since entries are append-only. */
   @Id
   @Column(name = "entry_id", nullable = false)
   private UUID entryId;
 
+  /** Id of the source event that produced this row; unique to enforce one row per event. */
   @Column(name = "event_id", nullable = false, unique = true)
   private UUID eventId;
 
@@ -67,6 +76,7 @@ public class LedgerEntryEntity {
   @Column(name = "created_at", nullable = false)
   private OffsetDateTime createdAt;
 
+  /** Full parsed JSON payload of the source event, retained for auditing/debugging. */
   @JdbcTypeCode(SqlTypes.JSON)
   @Column(name = "payload", columnDefinition = "jsonb")
   private Map<String, Object> payload;

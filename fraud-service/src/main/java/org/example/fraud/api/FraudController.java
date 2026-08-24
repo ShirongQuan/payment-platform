@@ -2,6 +2,7 @@ package org.example.fraud.api;
 
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.example.fraud.application.FraudService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -9,6 +10,8 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+/** REST entry point for synchronous fraud evaluation, called by auth-service's fraud gateway. */
+@Slf4j
 @RestController
 @RequiredArgsConstructor
 @RequestMapping("/fraud")
@@ -18,7 +21,16 @@ public class FraudController {
 
   @PostMapping("/check")
   public ResponseEntity<FraudCheckResult> check(@Valid @RequestBody FraudCheckRequest request) {
+    log.debug(
+        "Received fraud check request, accountId={}, idempotencyKey={}",
+        request.accountId(),
+        request.idempotencyKey());
     FraudCheckResult result = fraudService.check(request);
+    log.debug(
+        "Returning fraud check result, accountId={}, idempotencyKey={}, resultType={}",
+        request.accountId(),
+        request.idempotencyKey(),
+        result.getClass().getSimpleName());
     return ResponseEntity.ok(result);
   }
 }

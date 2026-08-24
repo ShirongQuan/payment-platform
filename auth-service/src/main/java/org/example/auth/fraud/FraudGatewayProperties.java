@@ -9,6 +9,12 @@ import java.time.Duration;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.validation.annotation.Validated;
 
+/**
+ * Configuration for the outbound fraud-service HTTP client, bound from the {@code fraud} prefix.
+ *
+ * @param baseUrl base URL of the fraud service (must start with http:// or https://)
+ * @param http connection/read timeout settings for the HTTP client
+ */
 @ConfigurationProperties(prefix = "fraud")
 @Validated
 public record FraudGatewayProperties(
@@ -19,6 +25,7 @@ public record FraudGatewayProperties(
         String baseUrl,
     @Valid @NotNull(message = "fraud.http is required") Http http) {
 
+  /** HTTP client timeout settings. */
   public record Http(
       @NotNull(message = "fraud.http.connect-timeout is required") Duration connectTimeout,
       @NotNull(message = "fraud.http.read-timeout is required") Duration readTimeout) {

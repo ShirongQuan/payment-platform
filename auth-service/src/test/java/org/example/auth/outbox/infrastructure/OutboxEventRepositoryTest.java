@@ -122,6 +122,7 @@ class OutboxEventRepositoryTest {
   void markPublishedShouldUpdateStatusAndClearClaimFields() {
     OffsetDateTime now = OffsetDateTime.parse("2026-07-08T12:00:00Z");
     OffsetDateTime publishedAt = now.plusSeconds(5);
+    OffsetDateTime claimedAt = now.minusSeconds(20);
 
     UUID id =
         persistEvent(
@@ -129,13 +130,13 @@ class OutboxEventRepositoryTest {
             1,
             "previous error",
             now.minusMinutes(1),
-            now.minusSeconds(20),
+            claimedAt,
             now.plusSeconds(20),
             null);
 
     int updated =
         repository.markPublished(
-            id, publishedAt, OutboxEventStatus.PUBLISHED, OutboxEventStatus.PUBLISHING);
+            id, publishedAt, OutboxEventStatus.PUBLISHED, OutboxEventStatus.PUBLISHING, claimedAt);
 
     assertThat(updated).isEqualTo(1);
     entityManager.clear();
@@ -148,9 +149,44 @@ class OutboxEventRepositoryTest {
   }
 
   @Test
+  void markPublishedShouldNotUpdate_whenClaimedAtDoesNotMatchCurrentClaim() {
+    // Simulates a stale completion arriving after the lease expired and the row was reclaimed
+    // and re-claimed by a newer attempt with a different claimedAt (fencing token).
+    OffsetDateTime now = OffsetDateTime.parse("2026-07-08T12:30:00Z");
+    OffsetDateTime staleClaimedAt = now.minusMinutes(5);
+    OffsetDateTime currentClaimedAt = now.minusSeconds(5);
+
+    UUID id =
+        persistEvent(
+            OutboxEventStatus.PUBLISHING,
+            0,
+            null,
+            now.minusMinutes(1),
+            currentClaimedAt,
+            now.plusSeconds(25),
+            null);
+
+    int updated =
+        repository.markPublished(
+            id,
+            now,
+            OutboxEventStatus.PUBLISHED,
+            OutboxEventStatus.PUBLISHING,
+            staleClaimedAt);
+
+    assertThat(updated).isEqualTo(0);
+    entityManager.clear();
+    OutboxEventEntity event = repository.findById(id).orElseThrow();
+    // Row is untouched by the stale completion; the current (newer) claim is preserved.
+    assertThat(event.getStatus()).isEqualTo(OutboxEventStatus.PUBLISHING);
+    assertThat(event.getClaimedAt()).isEqualTo(currentClaimedAt);
+  }
+
+  @Test
   void markRetryShouldUpdateStatusAndClearClaimFields() {
     OffsetDateTime now = OffsetDateTime.parse("2026-07-08T13:00:00Z");
     OffsetDateTime nextAttempt = now.plusMinutes(5);
+    OffsetDateTime claimedAt = now.minusSeconds(30);
 
     UUID id =
         persistEvent(
@@ -158,7 +194,7 @@ class OutboxEventRepositoryTest {
             1,
             "temp",
             now.minusMinutes(1),
-            now.minusSeconds(30),
+            claimedAt,
             now.plusSeconds(30),
             null);
 
@@ -169,7 +205,8 @@ class OutboxEventRepositoryTest {
             nextAttempt,
             "retryable",
             OutboxEventStatus.NEW,
-            OutboxEventStatus.PUBLISHING);
+            OutboxEventStatus.PUBLISHING,
+            claimedAt);
 
     assertThat(updated).isEqualTo(1);
     entityManager.clear();
@@ -185,6 +222,7 @@ class OutboxEventRepositoryTest {
   @Test
   void markFailedShouldUpdateStatusAndClearClaimFields() {
     OffsetDateTime now = OffsetDateTime.parse("2026-07-08T14:00:00Z");
+    OffsetDateTime claimedAt = now.minusSeconds(30);
 
     UUID id =
         persistEvent(
@@ -192,13 +230,13 @@ class OutboxEventRepositoryTest {
             2,
             "temp",
             now.minusMinutes(1),
-            now.minusSeconds(30),
+            claimedAt,
             now.plusSeconds(30),
             null);
 
     int updated =
         repository.markFailed(
-            id, 3, "fatal", OutboxEventStatus.FAILED, OutboxEventStatus.PUBLISHING);
+            id, 3, "fatal", OutboxEventStatus.FAILED, OutboxEventStatus.PUBLISHING, claimedAt);
 
     assertThat(updated).isEqualTo(1);
     entityManager.clear();
@@ -220,7 +258,7 @@ class OutboxEventRepositoryTest {
 
     int updated =
         repository.markPublished(
-            id, publishedAt, OutboxEventStatus.PUBLISHED, OutboxEventStatus.PUBLISHING);
+            id, publishedAt, OutboxEventStatus.PUBLISHED, OutboxEventStatus.PUBLISHING, null);
 
     assertThat(updated).isEqualTo(0);
   }
@@ -240,7 +278,8 @@ class OutboxEventRepositoryTest {
             nextAttempt,
             "retryable",
             OutboxEventStatus.NEW,
-            OutboxEventStatus.PUBLISHING);
+            OutboxEventStatus.PUBLISHING,
+            null);
 
     assertThat(updated).isEqualTo(0);
   }
@@ -254,7 +293,7 @@ class OutboxEventRepositoryTest {
 
     int updated =
         repository.markFailed(
-            id, 1, "fatal", OutboxEventStatus.FAILED, OutboxEventStatus.PUBLISHING);
+            id, 1, "fatal", OutboxEventStatus.FAILED, OutboxEventStatus.PUBLISHING, null);
 
     assertThat(updated).isEqualTo(0);
   }

@@ -7,9 +7,15 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+/** Repository for the current-state {@link AuthorisationEntity} rows. */
 @Repository
 public interface AuthorisationRepository extends JpaRepository<AuthorisationEntity, UUID> {
 
+  /**
+   * Finds the most recent authorisation created for an {@code (accountId, idempotencyKey)} pair,
+   * used to detect and replay duplicate authorise requests. Only considers the initial
+   * authorise-lifecycle events (AUTHORISED/DECLINED), not later capture/reverse events.
+   */
   @Query(
       value =
           """

@@ -1,5 +1,6 @@
 package org.example.auth.common.exception;
 
+/** Stable, machine-readable error codes returned in problem-detail error responses. */
 public enum ErrorCode {
   ACCOUNT_NOT_FOUND("Account not found"),
   AUTHORISATION_NOT_FOUND("Authorisation not found"),

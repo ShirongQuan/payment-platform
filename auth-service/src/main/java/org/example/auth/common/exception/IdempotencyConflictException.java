@@ -1,5 +1,9 @@
 package org.example.auth.common.exception;
 
+/**
+ * Thrown when a request reuses an idempotency key that was already used for a request with
+ * different business parameters (amount/currency/merchant reference/etc). Maps to HTTP 409.
+ */
 public class IdempotencyConflictException extends RuntimeException implements CodedException {
   public IdempotencyConflictException() {
     super(

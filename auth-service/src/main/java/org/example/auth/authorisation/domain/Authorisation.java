@@ -9,6 +9,17 @@ import java.util.Objects;
 import java.util.UUID;
 import lombok.Getter;
 
+/**
+ * Domain model representing a single authorisation (a reservation of funds against an account).
+ *
+ * <p>An authorisation transitions through {@link AuthorisationStatus} states over its lifecycle:
+ * created as {@code AUTHORISED} or {@code DECLINED}, then optionally {@code CAPTURED} or {@code
+ * REVERSED}. Each transition is recorded as a separate {@code AuthorisationEvent} row (see {@link
+ * org.example.auth.authorisation.infrastructure.AuthorisationEventEntity}) for audit/idempotency.
+ *
+ * <p>Use the 5-arg constructor to create a brand-new authorisation, and the 8-arg constructor only
+ * for rehydrating an existing authorisation from persistence.
+ */
 @Getter
 public class Authorisation {
   private final UUID id;
@@ -20,6 +31,7 @@ public class Authorisation {
   private OffsetDateTime createdAt;
   private OffsetDateTime updatedAt;
 
+  /** Creates a brand-new authorisation with a freshly generated id and current timestamps. */
   public Authorisation(
       UUID accountId,
       BigDecimal amount,
@@ -36,6 +48,7 @@ public class Authorisation {
     this.updatedAt = OffsetDateTime.now();
   }
 
+  /** Rehydration constructor used to restore an authorisation from persistence. */
   public Authorisation(
       UUID id,
       UUID accountId,

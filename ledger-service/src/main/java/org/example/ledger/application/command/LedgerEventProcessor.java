@@ -5,9 +5,9 @@ import org.example.ledger.domain.EventMetadata;
 import org.example.ledger.domain.EventType;
 import org.springframework.stereotype.Service;
 
+/** Routes inbound authorisation events to the correct ledger command handler. */
 @Slf4j
 @Service
-/** Routes inbound authorisation events to the correct ledger command handler. */
 public class LedgerEventProcessor {
   private final AuthorisationAuthorisedHandler authorisationAuthorisedHandler;
   private final AuthorisationCapturedHandler authorisationCapturedHandler;
@@ -29,6 +29,10 @@ public class LedgerEventProcessor {
         metadata.eventId(),
         eventType,
         metadata.aggregateId());
+    // Dispatch to the handler matching the event type. AUTHORISATION_DECLINED events carry no
+    // monetary effect on the ledger and are intentionally no-ops; any other/unknown event type
+    // is treated as a configuration/contract error and fails loudly so it can be investigated
+    // (and, depending on the Kafka error handler, routed to the dead-letter topic).
     switch (eventType) {
       case AUTHORISATION_AUTHORISED -> {
         authorisationAuthorisedHandler.handle(metadata, rawPayload);

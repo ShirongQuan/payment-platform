@@ -21,6 +21,15 @@ import org.example.fraud.domain.FraudDecision;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 
+/**
+ * Persistent record of a single fraud evaluation, one row per (accountId, idempotencyKey).
+ *
+ * <p>A row is first inserted in {@code PENDING} state (see {@link
+ * FraudEvaluationRepository#tryInsertPending}) to atomically claim the idempotency key, then
+ * updated in place with the final decision and score once rule evaluation completes (see {@link
+ * FraudEvaluationRepository#finalizeEvaluation}). This lets duplicate/concurrent requests for the
+ * same key either replay the finalized decision or be told evaluation is still in progress.
+ */
 @Entity
 @Table(name = "fraud_evaluation")
 @Getter
