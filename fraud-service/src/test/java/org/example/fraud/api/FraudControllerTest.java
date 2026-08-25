@@ -38,7 +38,9 @@ class FraudControllerTest {
             new FraudCheckResponse(
                 FraudDecision.APPROVE,
                 40,
-                List.of(new RuleResult("IP_VELOCITY_RULE", 40, "IP_VELOCITY_EXCEEDED in 30s"))));
+                List.of(new RuleResult("IP_VELOCITY_RULE", 40, "IP_VELOCITY_EXCEEDED in 30s")),
+                false,
+                null));
 
     mockMvc
         .perform(post("/fraud/check").contentType(MediaType.APPLICATION_JSON).content(validRequestJson()))

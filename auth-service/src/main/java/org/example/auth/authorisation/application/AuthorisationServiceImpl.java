@@ -5,6 +5,9 @@ import java.util.Optional;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.example.auth.account.domain.AccountStatus;
+import org.example.auth.account.infrastructure.AccountEntity;
+import org.example.auth.account.infrastructure.AccountRepository;
 import org.example.auth.authorisation.api.AuthorisationRequest;
 import org.example.auth.authorisation.api.AuthorisationResponse;
 import org.example.auth.authorisation.api.CaptureRequest;
@@ -17,6 +20,7 @@ import org.example.auth.authorisation.infrastructure.AuthorisationEntity;
 import org.example.auth.authorisation.infrastructure.AuthorisationEventRepository;
 import org.example.auth.authorisation.infrastructure.AuthorisationRepository;
 import org.example.auth.common.OperationType;
+import org.example.auth.common.exception.AccountNotFoundException;
 import org.example.auth.common.exception.AuthorisationNotFoundException;
 import org.example.auth.common.exception.IdempotencyConflictException;
 import org.example.auth.common.validation.ValidationHelpers;
@@ -47,6 +51,7 @@ public class AuthorisationServiceImpl implements AuthorisationService {
   private final AuthorisationTransactionalExecutor authorisationTransactionalExecutor;
   private final AuthorisationRepository authorisationRepository;
   private final AuthorisationEventRepository authorisationEventRepository;
+  private final AccountRepository accountRepository;
   private final FraudOrchestrator fraudOrchestrator;
   private final CorrelationIdResolver correlationIdResolver;
   private final IdempotencyProperties idempotencyProperties;
@@ -80,18 +85,55 @@ public class AuthorisationServiceImpl implements AuthorisationService {
       return authorisationResponseOpt.get();
     }
 
+    // Best-effort DB idempotency pre-check, before paying for a fraud-service call. This is an
+    // optimistic fast-path only (a concurrent duplicate can still race past it); the authoritative
+    // check-and-insert happens inside authorisationTransactionalExecutor.authoriseInTransaction.
+    // Doing this here avoids an unnecessary external fraud-service round trip (and, with it, a
+    // doomed-to-replay DB transaction) on a cache-cold retry of an already-processed request.
+    Optional<AuthorisationEntity> existingEntityOpt =
+        authorisationRepository.findByAccountIdAndAuthoriseEventTypesAndIdempotencyKey(
+            request.accountId(), request.idempotencyKey());
+    if (existingEntityOpt.isPresent()) {
+      log.debug(
+          "Found existing authorisation in DB pre-check for operation=authorise, accountId={}, idempotencyKey={}",
+          request.accountId(),
+          request.idempotencyKey());
+      validateAndBuildIdempotentResponse(existingEntityOpt.get(), request, normalizedCurrency);
+    }
+
     UUID correlationId = correlationIdResolver.resolveOrCreate();
-    FraudDecision fraudDecision =
-        fraudOrchestrator.evaluate(request, normalizedCurrency, clientIpAddress);
-    log.debug(
-        "Fraud decision evaluated, accountId={}, idempotencyKey={}, fraudDecision={}",
-        request.accountId(),
-        request.idempotencyKey(),
-        fraudDecision.toString());
+
+    // Account-active gate: only call fraud-service if the account is currently ACTIVE. This both
+    // saves an external call for accounts we already know will be declined, and ensures a locked
+    // account can never slip through to authorisation just because fraud-service was unavailable.
+    AccountEntity accountEntity =
+        accountRepository
+            .findById(request.accountId())
+            .orElseThrow(() -> new AccountNotFoundException(request.accountId()));
+
+    PreAuthDecision preAuthDecision;
+    if (accountEntity.getStatus() != AccountStatus.ACTIVE) {
+      log.warn(
+          "Skipping fraud check because account is not active, accountId={}, idempotencyKey={}, status={}",
+          request.accountId(),
+          request.idempotencyKey(),
+          accountEntity.getStatus());
+      preAuthDecision = new PreAuthDecision.AccountNotActive(accountEntity.getStatus());
+    } else {
+      FraudDecision fraudDecision =
+          fraudOrchestrator.evaluate(request, normalizedCurrency, clientIpAddress);
+      log.debug(
+          "Fraud decision evaluated, accountId={}, idempotencyKey={}, fraudDecision={}",
+          request.accountId(),
+          request.idempotencyKey(),
+          fraudDecision.toString());
+      preAuthDecision = new PreAuthDecision.FraudEvaluated(fraudDecision);
+    }
+
     try {
       AuthorisationResponse authorisationResponse =
           authorisationTransactionalExecutor.authoriseInTransaction(
-              request, normalizedCurrency, fraudDecision, correlationId);
+              request, normalizedCurrency, preAuthDecision, correlationId);
       saveResponseToCache(
           OperationType.AUTHORISE,
           request.accountId(),
@@ -139,19 +181,19 @@ public class AuthorisationServiceImpl implements AuthorisationService {
           entity.getAccountId(),
           request.idempotencyKey(),
           new CachedAuthorisationResponse(
-              buildAuthoriseRequestFingerprint(request, normalizedCurrency), authorisationResponse));
+              buildAuthoriseRequestFingerprint(request, normalizedCurrency),
+              authorisationResponse));
       return authorisationResponse;
     }
     throw new IdempotencyConflictException();
   }
 
   /**
-   * Generic best-effort read for a cached idempotency response. Returns {@link Optional#empty()}
-   * on a cache miss or on any cache read failure (Redis unavailable, deserialization error, etc.)
-   * so callers fall back to the normal transactional path. Throws {@link
-   * IdempotencyConflictException} when a cached entry exists but its request fingerprint doesn't
-   * match the current request, since that is a genuine business conflict rather than a caching
-   * concern.
+   * Generic best-effort read for a cached idempotency response. Returns {@link Optional#empty()} on
+   * a cache miss or on any cache read failure (Redis unavailable, deserialization error, etc.) so
+   * callers fall back to the normal transactional path. Throws {@link IdempotencyConflictException}
+   * when a cached entry exists but its request fingerprint doesn't match the current request, since
+   * that is a genuine business conflict rather than a caching concern.
    */
   private <C extends CachedIdempotentResponse<R>, R> Optional<R> getCachedResponse(
       OperationType operationType,
@@ -191,7 +233,9 @@ public class AuthorisationServiceImpl implements AuthorisationService {
     return Optional.of(cachedResponse);
   }
 
-  /** Generic best-effort store of a cached idempotency response; failures are logged and swallowed. */
+  /**
+   * Generic best-effort store of a cached idempotency response; failures are logged and swallowed.
+   */
   private void saveResponseToCache(
       OperationType operationType,
       UUID scopeId,

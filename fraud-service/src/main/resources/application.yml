@@ -60,6 +60,15 @@ logging:
 risk:
   rules-version: v1.0
   decline-threshold: 70
+  lock:
+    enabled: true
+    # Recommend locking the account after more than this many declines within the window.
+    repeated-decline-threshold: 3
+    repeated-decline-window-seconds: 600 # 10 minutes
+    # Recommend locking immediately, regardless of decline history, at/above this score.
+    high-risk-score-threshold: 90
+    repeated-decline-reason-code: REPEATED_DECLINE_PATTERN
+    high-risk-score-reason-code: FRAUD_HIGH_RISK_SCORE
   rules:
     velocity:
       ip:

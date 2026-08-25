@@ -3,14 +3,13 @@ package org.example.fraud.application;
 import static org.example.fraud.domain.FraudDecision.APPROVE;
 import static org.example.fraud.domain.FraudDecision.PENDING;
 
+import java.time.Duration;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.example.shared.correlation.CorrelationIdResolver;
-import org.example.shared.idempotency.RequestHashing;
 import org.example.fraud.api.FraudCheckRequest;
 import org.example.fraud.api.FraudCheckResponse;
 import org.example.fraud.api.FraudCheckResult;
@@ -22,8 +21,11 @@ import org.example.fraud.exception.IdempotencyConflictException;
 import org.example.fraud.failure.FailureModeService;
 import org.example.fraud.infrastructure.FraudEvaluationEntity;
 import org.example.fraud.infrastructure.FraudEvaluationRepository;
+import org.example.fraud.properties.AccountLockRuleProperties;
 import org.example.fraud.properties.AmountDeviationRuleProperties;
 import org.example.fraud.properties.RiskProperties;
+import org.example.shared.correlation.CorrelationIdResolver;
+import org.example.shared.idempotency.RequestHashing;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import tools.jackson.core.type.TypeReference;
@@ -37,10 +39,12 @@ import tools.jackson.databind.ObjectMapper;
  *
  * <p>For every check request this: (1) applies optional chaos/failure injection for resilience
  * testing, (2) atomically inserts a PENDING evaluation row keyed by (accountId, idempotencyKey) to
- * guard against concurrent duplicate submissions, (3) runs the configured {@link RiskRule}s via
- * {@link RiskScoringEngine} to compute a risk score, (4) derives an APPROVE/DECLINE decision
- * against the configured threshold, and (5) finalizes the evaluation row so idempotent retries can
- * replay the same response instead of re-scoring.
+ * guard against concurrent duplicate submissions, (3) runs the configured {@link
+ * org.example.fraud.component.RiskRule}s via {@link RiskScoringEngine} to compute a risk score, (4)
+ * derives an APPROVE/DECLINE decision against the configured threshold, (5) on DECLINE, evaluates
+ * whether an account-lock should be recommended to the caller (repeated-decline pattern or very
+ * high risk score), and (6) finalizes the evaluation row so idempotent retries can replay the same
+ * response instead of re-scoring.
  */
 public class FraudServiceImpl implements FraudService {
 
@@ -53,6 +57,8 @@ public class FraudServiceImpl implements FraudService {
   private final AmountDeviationRuleCacheService amountDeviationRuleCacheService;
   private final AmountDeviationRuleProperties amountDeviationRuleProperties;
   private final CorrelationIdResolver correlationIdResolver;
+  private final VelocityService velocityService;
+  private final AccountLockRuleProperties accountLockRuleProperties;
 
   @Transactional
   @Override
@@ -118,6 +124,35 @@ public class FraudServiceImpl implements FraudService {
         decision,
         riskReport.triggeredRules());
 
+    // Account-lock recommendation: only ever considered on DECLINE, never on APPROVE. Checks a
+    // very high risk score first (immediate lock), then falls back to a repeated-decline pattern
+    // within a trailing window (reuses the generic sliding-window VelocityService with a
+    // dedicated "decline" dimension, which both records this decline and returns whether more
+    // than the configured threshold have occurred in the window).
+    boolean lockRecommended = false;
+    String lockReasonCode = null;
+    if (decision == FraudDecision.DECLINE && accountLockRuleProperties.enabled()) {
+      if (riskReport.totalScore() >= accountLockRuleProperties.highRiskScoreThreshold()) {
+        lockRecommended = true;
+        lockReasonCode = accountLockRuleProperties.highRiskScoreReasonCode();
+      } else if (velocityService.isTooFrequent(
+          "decline",
+          request.accountId().toString(),
+          accountLockRuleProperties.repeatedDeclineThreshold(),
+          Duration.ofSeconds(accountLockRuleProperties.repeatedDeclineWindowSeconds()))) {
+        lockRecommended = true;
+        lockReasonCode = accountLockRuleProperties.repeatedDeclineReasonCode();
+      }
+      if (lockRecommended) {
+        log.warn(
+            "Recommending account lock, evaluationId={}, accountId={}, reasonCode={}, totalScore={}",
+            fraudEvaluationId,
+            request.accountId(),
+            lockReasonCode,
+            riskReport.totalScore());
+      }
+    }
+
     String ruleResultJson;
     try {
       ruleResultJson = objectMapper.writeValueAsString(riskReport.triggeredRules());
@@ -129,7 +164,12 @@ public class FraudServiceImpl implements FraudService {
     // (accountId, idempotencyKey) short-circuit via resolveIdempotencyAfterDuplicateFound(...).
     int finalizeResult =
         fraudEvaluationRepository.finalizeEvaluation(
-            fraudEvaluationId, riskReport.totalScore(), decision.name(), ruleResultJson);
+            fraudEvaluationId,
+            riskReport.totalScore(),
+            decision.name(),
+            ruleResultJson,
+            lockRecommended,
+            lockReasonCode);
 
     if (finalizeResult == 0) {
       // Unlikely to happen
@@ -152,7 +192,13 @@ public class FraudServiceImpl implements FraudService {
         fraudEvaluationId,
         request.accountId(),
         decision);
-    return new FraudCheckResponse(decision, riskReport.totalScore(), riskReport.triggeredRules());
+
+    return new FraudCheckResponse(
+        decision,
+        riskReport.totalScore(),
+        riskReport.triggeredRules(),
+        lockRecommended,
+        lockReasonCode);
   }
 
   /**
@@ -201,8 +247,11 @@ public class FraudServiceImpl implements FraudService {
             ? List.of()
             : objectMapper.convertValue(existing.getRuleResult(), new TypeReference<>() {});
 
-    return new FraudCheckResponse(existing.getDecision(), existing.getRiskScore(), ruleResultList);
+    return new FraudCheckResponse(
+        existing.getDecision(),
+        existing.getRiskScore(),
+        ruleResultList,
+        existing.isLockRecommended(),
+        existing.getLockReasonCode());
   }
-
-
 }

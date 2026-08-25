@@ -7,6 +7,7 @@ import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.example.auth.account.domain.Account;
+import org.example.auth.account.domain.AccountStatus;
 import org.example.auth.account.infrastructure.AccountEntity;
 import org.example.auth.account.infrastructure.AccountMapper;
 import org.example.auth.account.infrastructure.AccountRepository;
@@ -59,7 +60,7 @@ public class AuthorisationTransactionalExecutorImpl implements AuthorisationTran
   public AuthorisationResponse authoriseInTransaction(
       AuthorisationRequest request,
       String normalizedCurrency,
-      FraudDecision fraudDecision,
+      PreAuthDecision preAuthDecision,
       UUID correlationId) {
     log.debug(
         "Starting authorise transaction, accountId={}, idempotencyKey={}, amount={}, currency={}",
@@ -68,7 +69,11 @@ public class AuthorisationTransactionalExecutorImpl implements AuthorisationTran
         request.amount(),
         normalizedCurrency);
 
-    // check DB
+    // check DB - authoritative idempotency gate immediately before any write. A best-effort copy
+    // of this same check may already have run outside this transaction (see
+    // AuthorisationServiceImpl) to avoid a wasted fraud-service call/transaction on replay, but
+    // that earlier check is optimistic only: this one is what protects against a concurrent race
+    // between two requests that both passed the earlier check before either committed.
     Optional<AuthorisationEntity> entityOpt =
         authorisationRepository.findByAccountIdAndAuthoriseEventTypesAndIdempotencyKey(
             request.accountId(), request.idempotencyKey());
@@ -85,12 +90,16 @@ public class AuthorisationTransactionalExecutorImpl implements AuthorisationTran
             .findById(request.accountId())
             .orElseThrow(() -> new AccountNotFoundException(request.accountId()));
 
-    if (fraudDecision.isDeclined()) {
+    if (preAuthDecision instanceof PreAuthDecision.AccountNotActive(AccountStatus status)) {
+      AuthorisationEventReason reason =
+          status == AccountStatus.LOCKED
+              ? AuthorisationEventReason.ACCOUNT_LOCKED
+              : AuthorisationEventReason.ACCOUNT_INACTIVE;
       log.debug(
-          "Authorise declined by fraud pre-check, accountId={}, riskScore={}, reasons={}, correlationId={}",
+          "Authorise declined because account is not active, accountId={}, status={}, reason={}, correlationId={}",
           request.accountId(),
-          fraudDecision.riskScore(),
-          fraudDecision.reasons(),
+          status,
+          reason,
           correlationId);
       authorisation =
           new Authorisation(
@@ -109,56 +118,20 @@ public class AuthorisationTransactionalExecutorImpl implements AuthorisationTran
               request.idempotencyKey(),
               request.amount(),
               normalizedCurrency,
-              AuthorisationEventReason.FRAUD_DECLINED,
+              reason,
               correlationId,
               OffsetDateTime.now());
     } else {
-      try {
-        Account account = accountMapper.toAccount(accountEntity);
+      FraudDecision fraudDecision =
+          ((PreAuthDecision.FraudEvaluated) preAuthDecision).fraudDecision();
+
+      if (fraudDecision.isDeclined()) {
         log.debug(
-            "Loaded account for authorise, accountId={}, availableBalance={}, reservedBalance={}",
-            accountEntity.getId(),
-            accountEntity.getAvailableBalance(),
-            accountEntity.getReservedBalance());
-        account.reserve(request.amount(), normalizedCurrency);
-
-        accountEntity.setAvailableBalance(account.getAvailableBalance());
-        accountEntity.setReservedBalance(account.getReservedBalance());
-        log.debug(
-            "Reserved amount for authorise, accountId={}, availableBalance={}, reservedBalance={}",
-            accountEntity.getId(),
-            accountEntity.getAvailableBalance(),
-            accountEntity.getReservedBalance());
-        // send sql to trigger DB constraint validation earlier
-        accountRepository.flush();
-
-        authorisation =
-            new Authorisation(
-                request.accountId(),
-                request.amount(),
-                normalizedCurrency,
-                request.merchantReference(),
-                AuthorisationStatus.AUTHORISED);
-
-        authorisationEventEntity =
-            new AuthorisationEventEntity(
-                eventId,
-                authorisation.getId(),
-                request.accountId(),
-                EventType.AUTHORISATION_AUTHORISED,
-                request.idempotencyKey(),
-                request.amount(),
-                normalizedCurrency,
-                AuthorisationEventReason.NONE,
-                correlationId,
-                OffsetDateTime.now());
-
-      } catch (InsufficientFundException ife) {
-        log.debug(
-            "Authorise declined due to insufficient funds, accountId={}, requestedAmount={}",
+            "Authorise declined by fraud pre-check, accountId={}, riskScore={}, reasons={}, correlationId={}",
             request.accountId(),
-            request.amount());
-        // in this case, Account in DB will remain intact and the Authorisation will persist
+            fraudDecision.riskScore(),
+            fraudDecision.reasons(),
+            correlationId);
         authorisation =
             new Authorisation(
                 request.accountId(),
@@ -176,9 +149,91 @@ public class AuthorisationTransactionalExecutorImpl implements AuthorisationTran
                 request.idempotencyKey(),
                 request.amount(),
                 normalizedCurrency,
-                AuthorisationEventReason.INSUFFICIENT_FUNDS,
+                AuthorisationEventReason.FRAUD_DECLINED,
                 correlationId,
                 OffsetDateTime.now());
+
+        // Fraud-service recommended locking the account (repeated-decline pattern or very high
+        // risk score). Flip the status on the already-loaded managed entity; Hibernate persists
+        // it via dirty-checking at commit, atomically with the decline written above.
+        // Note: publishing an ACCOUNT_LOCKED outbox event for downstream consumers (e.g.
+        // ledger-service) is intentionally deferred to a follow-up change.
+        if (fraudDecision.lockAccountRecommended() && accountEntity.getStatus() == AccountStatus.ACTIVE) {
+          log.warn(
+              "Locking account due to fraud signal, accountId={}, reasonCode={}, correlationId={}",
+              accountEntity.getId(),
+              fraudDecision.lockReasonCode(),
+              correlationId);
+          accountEntity.setStatus(AccountStatus.LOCKED);
+        }
+      } else {
+        try {
+          Account account = accountMapper.toAccount(accountEntity);
+          log.debug(
+              "Loaded account for authorise, accountId={}, availableBalance={}, reservedBalance={}",
+              accountEntity.getId(),
+              accountEntity.getAvailableBalance(),
+              accountEntity.getReservedBalance());
+          account.reserve(request.amount(), normalizedCurrency);
+
+          accountEntity.setAvailableBalance(account.getAvailableBalance());
+          accountEntity.setReservedBalance(account.getReservedBalance());
+          log.debug(
+              "Reserved amount for authorise, accountId={}, availableBalance={}, reservedBalance={}",
+              accountEntity.getId(),
+              accountEntity.getAvailableBalance(),
+              accountEntity.getReservedBalance());
+          // send sql to trigger DB constraint validation earlier
+          accountRepository.flush();
+
+          authorisation =
+              new Authorisation(
+                  request.accountId(),
+                  request.amount(),
+                  normalizedCurrency,
+                  request.merchantReference(),
+                  AuthorisationStatus.AUTHORISED);
+
+          authorisationEventEntity =
+              new AuthorisationEventEntity(
+                  eventId,
+                  authorisation.getId(),
+                  request.accountId(),
+                  EventType.AUTHORISATION_AUTHORISED,
+                  request.idempotencyKey(),
+                  request.amount(),
+                  normalizedCurrency,
+                  AuthorisationEventReason.NONE,
+                  correlationId,
+                  OffsetDateTime.now());
+
+        } catch (InsufficientFundException ife) {
+          log.debug(
+              "Authorise declined due to insufficient funds, accountId={}, requestedAmount={}",
+              request.accountId(),
+              request.amount());
+          // in this case, Account in DB will remain intact and the Authorisation will persist
+          authorisation =
+              new Authorisation(
+                  request.accountId(),
+                  request.amount(),
+                  normalizedCurrency,
+                  request.merchantReference(),
+                  AuthorisationStatus.DECLINED);
+
+          authorisationEventEntity =
+              new AuthorisationEventEntity(
+                  eventId,
+                  authorisation.getId(),
+                  request.accountId(),
+                  EventType.AUTHORISATION_DECLINED,
+                  request.idempotencyKey(),
+                  request.amount(),
+                  normalizedCurrency,
+                  AuthorisationEventReason.INSUFFICIENT_FUNDS,
+                  correlationId,
+                  OffsetDateTime.now());
+        }
       }
     }
     AuthorisationEntity authorisationEntity = authorisationMapper.toEntity(authorisation);

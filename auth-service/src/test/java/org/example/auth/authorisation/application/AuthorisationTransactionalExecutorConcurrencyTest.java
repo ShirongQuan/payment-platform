@@ -346,7 +346,7 @@ class AuthorisationTransactionalExecutorConcurrencyTest {
     return executor.authoriseInTransaction(
         request,
         normalizedCurrency,
-        FraudDecision.approve(0, java.util.List.of()),
+        new PreAuthDecision.FraudEvaluated(FraudDecision.approve(0, java.util.List.of())),
         UUID.randomUUID());
   }
 

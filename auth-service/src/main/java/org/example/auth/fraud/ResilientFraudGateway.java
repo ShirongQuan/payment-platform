@@ -54,11 +54,14 @@ public class ResilientFraudGateway {
           if (resp == null) return FraudDecision.unavailable("fraud_null_response");
 
           if ("DECLINE".equalsIgnoreCase(resp.decision())) {
-            return FraudDecision.decline(
-                resp.riskScore(),
+            List<String> reasons =
                 resp.reasons() == null
                     ? List.of()
-                    : resp.reasons().stream().map(RuleResult::toString).toList());
+                    : resp.reasons().stream().map(RuleResult::toString).toList();
+            if (resp.lockAccountRecommended()) {
+              return FraudDecision.declineWithLock(resp.riskScore(), reasons, resp.lockReasonCode());
+            }
+            return FraudDecision.decline(resp.riskScore(), reasons);
           }
           return FraudDecision.approve(
               resp.riskScore(), resp.reasons().stream().map(Record::toString).toList());

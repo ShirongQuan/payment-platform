@@ -47,11 +47,12 @@ public interface FraudEvaluationRepository extends JpaRepository<FraudEvaluation
       insert into fraud_evaluation (
         evaluation_id, account_id, amount, currency_code, merchant_reference,
         idempotency_key, request_hash, risk_score, decision, rules_version,
-        rule_result, ip_address, correlation_id, created_at
+        rule_result, ip_address, correlation_id, created_at, lock_recommended, lock_reason_code
       ) values (
         :evaluationId, :accountId, :amount, :currencyCode, :merchantReference,
         :idempotencyKey, :requestHash, 0, :decision, :rulesVersion,
-        cast(:ruleResultJson as jsonb), cast(:ipAddress as inet), :correlationId, :createdAt
+        cast(:ruleResultJson as jsonb), cast(:ipAddress as inet), :correlationId, :createdAt,
+        false, null
       )
       on conflict (account_id, idempotency_key) do nothing
       """,
@@ -78,7 +79,9 @@ public interface FraudEvaluationRepository extends JpaRepository<FraudEvaluation
       update fraud_evaluation
          set risk_score = :riskScore,
              decision = :decision,
-             rule_result = cast(:ruleResultJson as jsonb)
+             rule_result = cast(:ruleResultJson as jsonb),
+             lock_recommended = :lockRecommended,
+             lock_reason_code = :lockReasonCode
        where evaluation_id = :evaluationId
          and decision = 'PENDING'
       """,
@@ -87,5 +90,7 @@ public interface FraudEvaluationRepository extends JpaRepository<FraudEvaluation
     @Param("evaluationId") UUID evaluationId,
     @Param("riskScore") int riskScore,
     @Param("decision") String decision,
-    @Param("ruleResultJson") String ruleResultJson);
+    @Param("ruleResultJson") String ruleResultJson,
+    @Param("lockRecommended") boolean lockRecommended,
+    @Param("lockReasonCode") String lockReasonCode);
 }

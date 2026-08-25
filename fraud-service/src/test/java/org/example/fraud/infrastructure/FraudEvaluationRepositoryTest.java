@@ -71,7 +71,9 @@ class FraudEvaluationRepositoryTest {
             "APPROVE",
             """
             [{"ruleName":"IP_VELOCITY_RULE","score":40,"reason":"IP_VELOCITY_EXCEEDED in 30s"}]
-            """);
+            """,
+            false,
+            null);
     assertThat(finalized).isEqualTo(1);
 
     FraudEvaluationEntity saved =
@@ -153,7 +155,7 @@ class FraudEvaluationRepositoryTest {
         "1.2.3.4",
         UUID.randomUUID(),
         createdAt);
-    repository.finalizeEvaluation(evaluationId, 10, "APPROVE", "[]");
+    repository.finalizeEvaluation(evaluationId, 10, "APPROVE", "[]", false, null);
   }
 
   private void insertDeclined(UUID accountId, String key, String amount, OffsetDateTime createdAt) {
@@ -172,6 +174,6 @@ class FraudEvaluationRepositoryTest {
         "1.2.3.4",
         UUID.randomUUID(),
         createdAt);
-    repository.finalizeEvaluation(evaluationId, 80, "DECLINE", "[]");
+    repository.finalizeEvaluation(evaluationId, 80, "DECLINE", "[]", false, null);
   }
 }

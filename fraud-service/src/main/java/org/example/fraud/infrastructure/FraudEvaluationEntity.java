@@ -86,4 +86,13 @@ public class FraudEvaluationEntity {
 
   @Column(name = "created_at", nullable = false)
   private OffsetDateTime createdAt;
+
+  /** Whether this evaluation recommends the caller lock the account (see {@link
+   * org.example.fraud.properties.AccountLockRuleProperties}). Always {@code false} for APPROVE. */
+  @Column(name = "lock_recommended", nullable = false)
+  private boolean lockRecommended;
+
+  /** Reason code for the lock recommendation, or {@code null} when not recommended. */
+  @Column(name = "lock_reason_code")
+  private String lockReasonCode;
 }

@@ -3,9 +3,11 @@ package org.example.fraud.application;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.nullable;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -29,6 +31,7 @@ import org.example.fraud.exception.IdempotencyConflictException;
 import org.example.fraud.failure.FailureModeService;
 import org.example.fraud.infrastructure.FraudEvaluationEntity;
 import org.example.fraud.infrastructure.FraudEvaluationRepository;
+import org.example.fraud.properties.AccountLockRuleProperties;
 import org.example.fraud.properties.AmountDeviationRuleProperties;
 import org.example.fraud.properties.RiskProperties;
 import org.junit.jupiter.api.BeforeEach;
@@ -48,6 +51,7 @@ class FraudServiceImplTest {
   @Mock private FraudEvaluationRepository fraudEvaluationRepository;
   @Mock private AmountDeviationRuleCacheService amountDeviationRuleCacheService;
   @Mock private CorrelationIdResolver correlationIdResolver;
+  @Mock private VelocityService velocityService;
 
   private FraudServiceImpl fraudService;
 
@@ -62,7 +66,11 @@ class FraudServiceImplTest {
             fraudEvaluationRepository,
             amountDeviationRuleCacheService,
             new AmountDeviationRuleProperties(true, 3, 30, 200, 5, 30, 25, "AMOUNT_DEVIATION"),
-            correlationIdResolver);
+            correlationIdResolver,
+            velocityService,
+            // Lock evaluation disabled by default so existing tests aren't affected; lock-specific
+            // behavior is covered by dedicated tests below.
+            new AccountLockRuleProperties(false, 3, 600, 90, "REPEATED_DECLINE", "HIGH_RISK_SCORE"));
     when(correlationIdResolver.resolveOrCreate()).thenReturn(CORRELATION_ID);
   }
 
@@ -87,7 +95,7 @@ class FraudServiceImplTest {
     when(riskScoringEngine.evaluate(request))
         .thenReturn(new RiskReport(40, List.of(new RuleResult("IP_VELOCITY_RULE", 40, "IP"))));
     when(fraudEvaluationRepository.finalizeEvaluation(
-            any(UUID.class), anyInt(), anyString(), anyString()))
+            any(UUID.class), anyInt(), anyString(), anyString(), anyBoolean(), nullable(String.class)))
         .thenReturn(1);
 
     FraudCheckResult result = fraudService.check(request);
@@ -125,7 +133,7 @@ class FraudServiceImplTest {
                     new RuleResult("IP_VELOCITY_RULE", 40, "IP"),
                     new RuleResult("ACCOUNT", 30, "ACC"))));
     when(fraudEvaluationRepository.finalizeEvaluation(
-            any(UUID.class), anyInt(), anyString(), anyString()))
+            any(UUID.class), anyInt(), anyString(), anyString(), anyBoolean(), nullable(String.class)))
         .thenReturn(1);
 
     FraudCheckResult result = fraudService.check(request);
@@ -156,7 +164,9 @@ class FraudServiceImplTest {
             List.of(),
             request.ipAddress(),
             CORRELATION_ID,
-            OffsetDateTime.now());
+            OffsetDateTime.now(),
+            false,
+            null);
 
     when(fraudEvaluationRepository.tryInsertPending(
             any(UUID.class),
@@ -218,7 +228,9 @@ class FraudServiceImplTest {
                     "reason", "IP_VELOCITY_EXCEEDED in 30s")),
             request.ipAddress(),
             CORRELATION_ID,
-            OffsetDateTime.now());
+            OffsetDateTime.now(),
+            false,
+            null);
 
     when(fraudEvaluationRepository.tryInsertPending(
             any(UUID.class),
@@ -268,7 +280,9 @@ class FraudServiceImplTest {
             List.of(),
             request.ipAddress(),
             CORRELATION_ID,
-            OffsetDateTime.now());
+            OffsetDateTime.now(),
+            false,
+            null);
 
     when(fraudEvaluationRepository.tryInsertPending(
             any(UUID.class),
@@ -315,7 +329,7 @@ class FraudServiceImplTest {
         .thenReturn(1);
     when(riskScoringEngine.evaluate(request)).thenReturn(new RiskReport(5, List.of()));
     when(fraudEvaluationRepository.finalizeEvaluation(
-            any(UUID.class), anyInt(), anyString(), anyString()))
+            any(UUID.class), anyInt(), anyString(), anyString(), anyBoolean(), nullable(String.class)))
         .thenReturn(1);
 
     when(correlationIdResolver.resolveOrCreate()).thenReturn(correlationId);

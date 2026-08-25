@@ -8,7 +8,6 @@ import org.example.auth.authorisation.api.CaptureRequest;
 import org.example.auth.authorisation.api.CaptureResponse;
 import org.example.auth.authorisation.api.ReverseRequest;
 import org.example.auth.authorisation.api.ReverseResponse;
-import org.example.auth.fraud.FraudDecision;
 
 /** Transaction-scoped executor for authorisation lifecycle state transitions. */
 public interface AuthorisationTransactionalExecutor {
@@ -21,6 +20,6 @@ public interface AuthorisationTransactionalExecutor {
   AuthorisationResponse authoriseInTransaction(
       AuthorisationRequest request,
       String normalizedCurrency,
-      FraudDecision fraudDecision,
+      PreAuthDecision preAuthDecision,
       UUID correlationId);
 }

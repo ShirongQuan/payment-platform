@@ -15,6 +15,8 @@ CREATE TABLE fraud_evaluation (
   ip_address           INET,
   correlation_id       UUID NOT NULL,
   created_at           timestamp with time zone not null,
+  lock_recommended     BOOLEAN NOT NULL DEFAULT FALSE,
+  lock_reason_code     VARCHAR(64),
 
   CONSTRAINT chk_risk_score_non_negative CHECK (risk_score >= 0),
   CONSTRAINT chk_decision_values CHECK (decision IN ('APPROVE', 'PENDING', 'DECLINE')),

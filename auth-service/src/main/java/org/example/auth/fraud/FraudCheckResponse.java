@@ -6,4 +6,6 @@ import java.util.List;
 public record FraudCheckResponse(
     String decision, // APPROVE / DECLINE
     int riskScore,
-    List<RuleResult> reasons) {}
+    List<RuleResult> reasons,
+    boolean lockAccountRecommended,
+    String lockReasonCode) {}
