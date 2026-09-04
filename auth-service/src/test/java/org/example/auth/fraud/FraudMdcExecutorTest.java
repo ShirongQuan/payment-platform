@@ -26,8 +26,12 @@ class FraudMdcExecutorTest {
   @Test
   void shouldPropagateCorrelationIdIntoAsyncTask() throws Exception {
     FraudHttpClientConfig config = new FraudHttpClientConfig();
-    Executor bean = config.fraudMdcExecutor();
-    executor = (ThreadPoolTaskExecutor) bean;
+    executor = config.fraudMdcThreadPoolTaskExecutor();
+    // Directly instantiating the bean-factory method bypasses Spring's lifecycle management, so
+    // initialize() must be called manually here (Spring would normally call this automatically
+    // via InitializingBean since fraudMdcThreadPoolTaskExecutor is registered as its own bean).
+    executor.initialize();
+    Executor bean = executor;
 
     String correlationId = "0264473d-9c23-40b5-a2fb-00591737bcfc";
     MDC.put(CorrelationIdConstants.CORRELATION_ID_MDC_KEY, correlationId);
@@ -41,8 +45,9 @@ class FraudMdcExecutorTest {
   @Test
   void shouldNotLeakCorrelationIdAcrossTasks() throws Exception {
     FraudHttpClientConfig config = new FraudHttpClientConfig();
-    Executor bean = config.fraudMdcExecutor();
-    executor = (ThreadPoolTaskExecutor) bean;
+    executor = config.fraudMdcThreadPoolTaskExecutor();
+    executor.initialize();
+    Executor bean = executor;
 
     MDC.put(CorrelationIdConstants.CORRELATION_ID_MDC_KEY, "first-correlation-id");
     CompletableFuture<Void> first = new CompletableFuture<>();

@@ -32,6 +32,7 @@ spring:
       # Commit each record after handler completes.
       ack-mode: record
       missing-topics-fatal: false
+      observation-enabled: true
 
 server:
   port: 9020
@@ -40,7 +41,7 @@ management:
   endpoints:
     web:
       exposure:
-        include: health,info,prometheus
+        include: health,info,prometheus,metrics,circuitbreakers
   endpoint:
     health:
       show-details: always
@@ -50,6 +51,22 @@ management:
     metrics:
       export:
         enabled: true
+  tracing:
+    sampling:
+      # Fraction of newly-started traces to sample (0.0-1.0). Override per-environment, e.g.
+      # TRACING_SAMPLING_PROBABILITY=0.2 in production to reduce overhead/cost; keep 1.0 in
+      # dev/test for full visibility. Only affects root spans - downstream services honor the
+      # sampling decision propagated via the traceparent header (ParentBased sampler).
+      probability: ${TRACING_SAMPLING_PROBABILITY:1.0}
+    export:
+      otlp:
+        enabled: true
+  opentelemetry:
+    tracing:
+      export:
+        otlp:
+          endpoint: ${OTEL_EXPORTER_OTLP_TRACES_ENDPOINT:http://localhost:4318/v1/traces}
+
 
 springdoc:
   api-docs:
@@ -57,6 +74,8 @@ springdoc:
   swagger-ui:
     path: /swagger-ui.html
 
+
+#debug: true
 
 logging:
   level:
@@ -66,5 +85,9 @@ logging:
     org.hibernate.orm.jdbc.bind: ERROR
     org.flywaydb: INFO
     org.springframework.jdbc: INFO
+  #    org.springframework.boot.actuate.autoconfigure.tracing: DEBUG
+  #    io.opentelemetry: DEBUG
+  #    io.micrometer.tracing: DEBUG
+  #    org.springframework.boot.autoconfigure.logging.ConditionEvaluationReportLoggingListener: INFO
   pattern:
     console: "%d{yyyy-MM-dd'T'HH:mm:ss.SSSXXX} %5p ${PID:- } --- [${spring.application.name:-}] [%15.15thread] [%X{correlationId:-}] %-40.40logger{39} : %m%n"

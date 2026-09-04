@@ -1,0 +1,38 @@
+apiVersion: 1
+
+datasources:
+  - name: Tempo
+    uid: tempo
+    type: tempo
+    access: proxy
+    url: http://tempo:3200
+    isDefault: false
+    editable: true
+    jsonData:
+      httpMethod: GET
+      # Node graph derived from trace spans (client/server relationships).
+      nodeGraph:
+        enabled: true
+      # Correlate a trace's spans with Prometheus metrics (span latency/calls
+      # emitted by the otel-collector's spanmetrics connector).
+      tracesToMetrics:
+        datasourceUid: prometheus
+        tags:
+          - key: service.name
+            value: service
+        queries:
+          - name: Request rate
+            query: 'sum(rate(traces_spanmetrics_calls_total{$$__tags}[5m]))'
+          - name: P95 latency
+            query: 'histogram_quantile(0.95, sum(rate(traces_spanmetrics_duration_milliseconds_bucket{$$__tags}[5m])) by (le))'
+      # No Loki in the stack yet, so trace-to-logs stays disabled. See the
+      # commented block below for what to add once Loki is introduced.
+      tracesToLogsV2:
+        datasourceUid: null
+      search:
+        hide: false
+      lokiSearch:
+        datasourceUid: null
+      spanBar:
+        type: Tag
+        tag: http.status_code

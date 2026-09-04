@@ -4,11 +4,28 @@ global:
 scrape_configs:
   - job_name: 'prometheus'
     static_configs:
-      - targets: ['prometheus:9090']
-
-  # Add your Spring Boot apps later when they expose /actuator/prometheus
-  # Example:
-  # - job_name: 'auth-service'
-  #   metrics_path: /actuator/prometheus
-  #   static_configs:
-  #     - targets: ['host.docker.internal:9000']
+      - targets: [ 'prometheus:9090' ]
+  - job_name: 'otel-collector-spanmetrics'
+    static_configs:
+      - targets: [ 'otel-collector:8889' ]
+  # auth-service, fraud-service, and ledger-service run as host processes (e.g. via IDE/mvn),
+  # not as containers on this compose network - they are not defined in docker-compose.yml.
+  # host.docker.internal is therefore required for the containerized Prometheus to reach them.
+  # It resolves automatically on Docker Desktop (macOS/Windows); on Linux it requires the
+  # "host.docker.internal:host-gateway" extra_hosts mapping configured on the prometheus
+  # service in docker-compose.yml (Docker 20.10+/Compose v2+).
+  # If these services are ever containerized on this compose network instead, switch these
+  # targets to their service/container DNS names (e.g. 'auth-service:9000'), matching the
+  # pattern used for 'otel-collector:8889' above.
+  - job_name: 'auth-service'
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets: [ 'host.docker.internal:9000' ]
+  - job_name: 'fraud-service'
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets: [ 'host.docker.internal:9010' ]
+  - job_name: 'ledger-service'
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets: [ 'host.docker.internal:9020' ]

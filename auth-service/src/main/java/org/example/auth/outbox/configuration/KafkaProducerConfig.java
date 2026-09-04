@@ -21,6 +21,14 @@ public class KafkaProducerConfig {
   @Bean
   KafkaTemplate<UUID, Map<String, Object>> outboxEventKafkaTemplate(
       ProducerFactory<UUID, Map<String, Object>> outboxEventProducerFactory) {
-    return new KafkaTemplate<>(outboxEventProducerFactory);
+    KafkaTemplate<UUID, Map<String, Object>> kafkaTemplate =
+        new KafkaTemplate<>(outboxEventProducerFactory);
+    // spring.kafka.template.observation-enabled only applies to Spring Boot's auto-configured
+    // KafkaTemplate bean. Since this KafkaTemplate is constructed manually, observation must be
+    // enabled explicitly here, otherwise the outbox publish is never wrapped in a producer span
+    // and no traceparent header is injected into the record - causing ledger-service's consumer
+    // to start a brand-new, disconnected trace instead of continuing the auth-service trace.
+    kafkaTemplate.setObservationEnabled(true);
+    return kafkaTemplate;
   }
 }

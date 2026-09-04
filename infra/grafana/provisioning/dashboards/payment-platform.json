@@ -1,0 +1,9 @@
+{
+  "title": "Payment Platform",
+  "uid": "payment-platform",
+  "panels": [
+    {
+      "title": "Auth Requests/sec by Outcome"
+    }
+  ]
+}

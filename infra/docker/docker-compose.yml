@@ -61,7 +61,7 @@ services:
 
   redisinsight:
     image: redis/redisinsight:3.8.0
-    container_name: payment-platform-redisinsight
+    container_name: redisinsight
     ports:
       - "5540:5540"
     volumes:
@@ -70,7 +70,6 @@ services:
       redis:
         condition: service_healthy
     restart: unless-stopped
-
 
   # --------------------------------------------      prometheus   -------------------------------------------------
 
@@ -82,6 +81,12 @@ services:
     volumes:
       - ./../prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - prometheus_data:/prometheus
+    # auth-service/fraud-service/ledger-service run as host processes (not containers in this
+    # compose network), so Prometheus must reach them via the host. host.docker.internal resolves
+    # automatically on Docker Desktop (macOS/Windows), but on Linux it requires this explicit
+    # host-gateway mapping. See infra/prometheus/prometheus.yml for the scrape targets.
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     depends_on:
       - redis
     healthcheck:
@@ -106,9 +111,11 @@ services:
       - grafana_data:/var/lib/grafana
       - ./../grafana/provisioning/datasources:/etc/grafana/provisioning/datasources:ro
       - ./../grafana/provisioning/dashboards:/etc/grafana/provisioning/dashboards:ro
-      - ./../grafana/dashboards:/var/lib/grafana/dashboards:ro
     depends_on:
-      - prometheus
+      prometheus:
+        condition: service_started
+      tempo:
+        condition: service_healthy
     healthcheck:
       test: [ "CMD-SHELL", "wget -q -O /dev/null http://localhost:3000/api/health" ]
       interval: 15s
@@ -241,6 +248,47 @@ services:
       - ./../kafka/create-topics.sh:/create-topics.sh:ro
     entrypoint: [ "/bin/sh", "/create-topics.sh" ]
 
+  # --------------------------------------------  trace backend + collector   -------------------------------------------------
+
+  otel-collector:
+    build:
+      context: ./../otel
+      dockerfile: Dockerfile
+    image: payment-platform/otel-collector-contrib:0.112.0-healthcheck
+    container_name: otel-collector
+    volumes:
+      - ./../otel/otel-collector-config.yml:/etc/otelcol-contrib/config.yaml:ro
+    ports:
+      - "4317:4317"   # OTLP gRPC
+      - "4318:4318"   # OTLP HTTP
+      - "8889:8889"   # span-metrics for Prometheus
+      - "13133:13133"   # health_check extension
+    depends_on:
+      tempo:
+        condition: service_healthy
+    healthcheck:
+      test: [ "CMD", "wget", "--spider", "-q", "http://localhost:13133/" ]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+  tempo:
+    image: grafana/tempo:2.6.0
+    container_name: tempo
+    command: [ "-config.file=/etc/tempo.yml" ]
+    volumes:
+      - ./../tempo/tempo.yml:/etc/tempo.yml:ro
+      - tempo_data:/var/tempo
+    ports:
+      - "3200:3200"   # Tempo query API
+    healthcheck:
+      test: [ "CMD", "wget", "--spider", "-q", "http://localhost:3200/ready" ]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
 volumes:
   postgres_data:
   pgadmin_data:
@@ -252,3 +300,4 @@ volumes:
   kafka1-data:
   kafka2-data:
   kafka3-data:
+  tempo_data:
