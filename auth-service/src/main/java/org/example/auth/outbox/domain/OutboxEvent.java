@@ -24,6 +24,15 @@ public class OutboxEvent {
   private final String idempotencyKey;
   private final UUID correlationId;
 
+  /**
+   * W3C {@code traceparent} of the span active when this event was created (e.g. the original
+   * HTTP request handling the authorisation). Captured at write time and persisted alongside the
+   * event because the outbox publisher runs later on an unrelated {@code @Scheduled} thread with
+   * no in-memory trace context of its own. Nullable: may be absent if no span was active, or for
+   * events created before this field existed.
+   */
+  private final String traceParent;
+
   public OutboxEvent(
       UUID id,
       AggregateType aggregateType,
@@ -39,7 +48,8 @@ public class OutboxEvent {
       OffsetDateTime claimUntil,
       OffsetDateTime publishedAt,
       String idempotencyKey,
-      UUID correlationId) {
+      UUID correlationId,
+      String traceParent) {
     this.id = Objects.requireNonNull(id, "id cannot be null");
     this.aggregateType = Objects.requireNonNull(aggregateType, "aggregateType cannot be null");
     this.aggregateId = Objects.requireNonNull(aggregateId, "aggregateId cannot be null");
@@ -62,6 +72,7 @@ public class OutboxEvent {
     }
     this.idempotencyKey = idempotencyKey;
     this.correlationId = Objects.requireNonNull(correlationId, "correlationId cannot be null");
+    this.traceParent = traceParent;
   }
 
   public OutboxEvent(
@@ -73,6 +84,20 @@ public class OutboxEvent {
       OffsetDateTime createdAt,
       String idempotencyKey,
       UUID correlationId) {
+    this(id, aggregateType, aggregateId, eventType, payload, createdAt, idempotencyKey,
+        correlationId, null);
+  }
+
+  public OutboxEvent(
+      UUID id,
+      AggregateType aggregateType,
+      UUID aggregateId,
+      EventType eventType,
+      Map<String, Object> payload,
+      OffsetDateTime createdAt,
+      String idempotencyKey,
+      UUID correlationId,
+      String traceParent) {
     this(
         id,
         aggregateType,
@@ -88,6 +113,7 @@ public class OutboxEvent {
         null,
         null,
         idempotencyKey,
-        correlationId);
+        correlationId,
+        traceParent);
   }
 }

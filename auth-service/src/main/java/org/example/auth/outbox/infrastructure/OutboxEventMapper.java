@@ -36,6 +36,7 @@ public interface OutboxEventMapper {
         entity.getClaimUntil(),
         entity.getPublishedAt(),
         entity.getIdempotencyKey(),
-        entity.getCorrelationId());
+        entity.getCorrelationId(),
+        entity.getTraceParent());
   }
 }

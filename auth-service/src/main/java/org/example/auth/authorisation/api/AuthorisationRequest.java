@@ -17,4 +17,4 @@ public record AuthorisationRequest(
         @Size(min = 3, max = 3, message = "currencyCode must be exactly 3 characters")
         @ValidCurrencyCode
         String currencyCode,
-    String merchantReference) {}
+    @NotBlank @Size(max = 128) String merchantReference) {}

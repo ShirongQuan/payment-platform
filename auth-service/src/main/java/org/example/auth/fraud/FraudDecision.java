@@ -16,17 +16,17 @@ public record FraudDecision(
     boolean lockAccountRecommended,
     String lockReasonCode) {
   public static FraudDecision approve(int riskScore, List<String> reasons) {
-    return new FraudDecision(FraudOutcome.APPROVE, riskScore, reasons, false, null);
+    return new FraudDecision(FraudOutcome.APPROVED, riskScore, reasons, false, null);
   }
 
   public static FraudDecision decline(int riskScore, List<String> reasons) {
-    return new FraudDecision(FraudOutcome.DECLINE, riskScore, reasons, false, null);
+    return new FraudDecision(FraudOutcome.DECLINED, riskScore, reasons, false, null);
   }
 
   /** Decline that also carries a recommendation from fraud-service to lock the account. */
   public static FraudDecision declineWithLock(
       int riskScore, List<String> reasons, String lockReasonCode) {
-    return new FraudDecision(FraudOutcome.DECLINE, riskScore, reasons, true, lockReasonCode);
+    return new FraudDecision(FraudOutcome.DECLINED, riskScore, reasons, true, lockReasonCode);
   }
 
   public static FraudDecision unavailable(String reason) {
@@ -34,7 +34,7 @@ public record FraudDecision(
   }
 
   public boolean isDeclined() {
-    return outcome == FraudOutcome.DECLINE;
+    return outcome == FraudOutcome.DECLINED;
   }
 
   public boolean isUnavailable() {

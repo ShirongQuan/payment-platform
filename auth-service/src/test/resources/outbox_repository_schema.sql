@@ -16,6 +16,7 @@ create table outbox_event (
     claim_until timestamp with time zone,
     published_at timestamp with time zone,
     idempotency_key varchar(40) not null,
-    correlation_id uuid
+    correlation_id uuid not null,
+    trace_parent varchar(55)
 );
 

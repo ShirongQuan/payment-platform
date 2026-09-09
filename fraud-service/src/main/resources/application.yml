@@ -35,6 +35,9 @@ management:
       show-details: always
     prometheus:
       access: unrestricted
+  metrics:
+    tags:
+      application: fraud-service
   prometheus:
     metrics:
       export:
@@ -54,6 +57,10 @@ management:
       export:
         otlp:
           endpoint: ${OTEL_EXPORTER_OTLP_TRACES_ENDPOINT:http://localhost:4318/v1/traces}
+  otlp:
+    metrics:
+      export:
+        enabled: false
 
 springdoc:
   api-docs:
@@ -70,12 +77,12 @@ logging:
     org.hibernate.orm.jdbc.bind: WARN
     org.flywaydb: INFO
     org.springframework.jdbc: INFO
-  #    org.springframework.boot.actuate.autoconfigure.tracing: DEBUG
+    #    org.springframework.boot.actuate.autoconfigure.tracing: DEBUG
   #    io.opentelemetry: DEBUG
   #    io.micrometer.tracing: DEBUG
   #    org.springframework.boot.autoconfigure.logging.ConditionEvaluationReportLoggingListener: INFO
   pattern:
-    console: "%d{yyyy-MM-dd'T'HH:mm:ss.SSSXXX} %5p ${PID:- } --- [${spring.application.name:-}] [%15.15thread] [%X{correlationId:-}] %logger : %m%n"
+    console: "%d{yyyy-MM-dd'T'HH:mm:ss.SSSXXX} %5p ${PID:- } --- [${spring.application.name:-}] [%15.15thread] [%X{traceId:-},%X{spanId:-}] [%X{correlationId:-}] %logger : %m%n"
 
 
 risk:

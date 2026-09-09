@@ -4,6 +4,7 @@ import java.util.UUID;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.example.ledger.application.command.LedgerEventProcessor;
+import org.example.ledger.common.metrics.LedgerMetrics;
 import org.example.ledger.domain.EventMetadata;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Component;
@@ -14,11 +15,15 @@ import org.springframework.stereotype.Component;
 public class LedgerKafkaConsumer {
   private final KafkaHeaderReader kafkaHeaderReader;
   private final LedgerEventProcessor ledgerEventProcessor;
+  private final LedgerMetrics ledgerMetrics;
 
   public LedgerKafkaConsumer(
-      KafkaHeaderReader kafkaHeaderReader, LedgerEventProcessor ledgerEventProcessor) {
+      KafkaHeaderReader kafkaHeaderReader,
+      LedgerEventProcessor ledgerEventProcessor,
+      LedgerMetrics ledgerMetrics) {
     this.kafkaHeaderReader = kafkaHeaderReader;
     this.ledgerEventProcessor = ledgerEventProcessor;
+    this.ledgerMetrics = ledgerMetrics;
   }
 
   /**
@@ -31,6 +36,7 @@ public class LedgerKafkaConsumer {
    */
   @KafkaListener(topics = "auth.events", groupId = "${spring.kafka.consumer.group-id}")
   public void onMessage(ConsumerRecord<UUID, String> record) {
+    ledgerMetrics.incrementReceived(record.topic());
     log.debug(
         "Received Kafka record, topic={}, partition={}, offset={}, key={}",
         record.topic(),

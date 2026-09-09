@@ -4,9 +4,12 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import io.opentelemetry.api.GlobalOpenTelemetry;
+import io.opentelemetry.api.OpenTelemetry;
 import java.nio.charset.StandardCharsets;
 import java.time.OffsetDateTime;
 import java.util.Map;
@@ -19,10 +22,10 @@ import org.example.auth.outbox.domain.AggregateType;
 import org.example.auth.outbox.domain.EventType;
 import org.example.auth.outbox.domain.OutboxEvent;
 import org.example.shared.correlation.CorrelationIdConstants;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.kafka.core.KafkaTemplate;
@@ -34,7 +37,15 @@ class OutboxKafkaPublisherTest {
   @Mock private KafkaTemplate<UUID, Map<String, Object>> kafkaTemplate;
   @Mock private OutboxKafkaProperties outboxKafkaProperties;
 
-  @InjectMocks private OutboxKafkaPublisher outboxKafkaPublisher;
+  private final OpenTelemetry openTelemetry = GlobalOpenTelemetry.get();
+
+  private OutboxKafkaPublisher outboxKafkaPublisher;
+
+  @BeforeEach
+  void setUp() {
+    outboxKafkaPublisher =
+        new OutboxKafkaPublisher(kafkaTemplate, outboxKafkaProperties, openTelemetry);
+  }
 
   @Test
   void shouldResolveTopicByKeyAndSetHeaders() {
@@ -51,8 +62,12 @@ class OutboxKafkaPublisherTest {
     CompletableFuture<SendResult<UUID, Map<String, Object>>> returned =
         outboxKafkaPublisher.publishAsync(event);
 
-    assertThat(returned).isSameAs(future);
-    verify(outboxKafkaProperties).name();
+    // The publisher wraps the KafkaTemplate's future with a whenComplete (to end the tracing
+    // span), so `returned` is a distinct-but-equivalent stage rather than the same object.
+    assertThat(returned.join()).isSameAs(sendResult);
+    // Called twice: once to resolve the topic name for the ProducerRecord, once as a span
+    // attribute when building the linked tracing span.
+    verify(outboxKafkaProperties, times(2)).name();
 
     ArgumentCaptor<ProducerRecord<UUID, Map<String, Object>>> recordCaptor =
         ArgumentCaptor.forClass(ProducerRecord.class);
@@ -85,9 +100,8 @@ class OutboxKafkaPublisherTest {
     CompletableFuture<SendResult<UUID, Map<String, Object>>> returned =
         outboxKafkaPublisher.publishAsync(event);
 
-    assertThat(returned).isSameAs(failedFuture);
     assertThatThrownBy(returned::join).hasCause(sendFailure);
-    verify(outboxKafkaProperties).name();
+    verify(outboxKafkaProperties, times(2)).name();
   }
 
   private static OutboxEvent sampleEvent() {
@@ -109,3 +123,5 @@ class OutboxKafkaPublisherTest {
     assertThat(new String(header.value(), StandardCharsets.UTF_8)).isEqualTo(expectedValue);
   }
 }
+
+

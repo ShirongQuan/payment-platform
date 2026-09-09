@@ -4,6 +4,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.UUID;
@@ -20,11 +22,16 @@ class HttpFraudClientTest {
 
   @Mock private ResilientFraudGateway resilientFraudGateway;
 
+  // Timer.start(...)/Timer.builder(...).register(...) call meterRegistry.config().clock(),
+  // which a Mockito mock returns null for unless stubbed - use a real, lightweight in-memory
+  // registry instead so the timer machinery actually works.
+  private final MeterRegistry meterRegistry = new SimpleMeterRegistry();
+
   private HttpFraudClient client;
 
   @BeforeEach
   void setUp() {
-    client = new HttpFraudClient(resilientFraudGateway);
+    client = new HttpFraudClient(resilientFraudGateway, meterRegistry);
   }
 
   @Test
@@ -51,12 +58,6 @@ class HttpFraudClientTest {
 
   private static FraudCheckRequest request() {
     return new FraudCheckRequest(
-        UUID.randomUUID(),
-        "idem-key",
-        new BigDecimal("2.50"),
-        "USD",
-        "merchant-1",
-        "203.0.113.10");
+        UUID.randomUUID(), "idem-key", new BigDecimal("2.50"), "USD", "merchant-1", "203.0.113.10");
   }
 }
-

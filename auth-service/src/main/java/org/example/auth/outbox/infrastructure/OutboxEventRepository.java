@@ -129,4 +129,6 @@ where e.id = :id
       @Param("failedStatus") OutboxEventStatus failedStatus,
       @Param("publishingStatus") OutboxEventStatus publishingStatus,
       @Param("claimedAt") OffsetDateTime claimedAt);
+
+  long countByStatusIn(List<OutboxEventStatus> statuses);
 }

@@ -15,7 +15,7 @@ public class FraudOrchestrator {
   private static final int RISK_SCORE_WHEN_FRAUD_SERVICE_UNAVAILABLE = 100;
   private static final int RISK_SCORE_WHEN_FAIL_OPEN = 40;
 
-  private static final String FRAUD_UNAVAILABLE_REASON = "FRAUD_SERVICE_UNAVAILABLE";
+  public static final String FRAUD_UNAVAILABLE_REASON = "FRAUD_SERVICE_UNAVAILABLE";
   private static final String FAIL_OPEN_REASON = "FRAUD_UNAVAILABLE_TRUSTED_TINY_AMOUNT";
 
   private final FraudClient fraudClient;

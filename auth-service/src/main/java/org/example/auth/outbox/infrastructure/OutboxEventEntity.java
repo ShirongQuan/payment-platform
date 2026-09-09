@@ -75,4 +75,7 @@ public class OutboxEventEntity {
 
   @Column(name = "correlation_id", nullable = false)
   private UUID correlationId;
+
+  @Column(name = "trace_parent", nullable = true, updatable = false)
+  private String traceParent;
 }

@@ -97,6 +97,10 @@ management:
       export:
         otlp:
           endpoint: ${OTEL_EXPORTER_OTLP_TRACES_ENDPOINT:http://localhost:4318/v1/traces}
+  otlp:
+    metrics:
+      export:
+        enabled: false
 
 springdoc:
   api-docs:
@@ -118,12 +122,12 @@ logging:
     org.hibernate.orm.jdbc.bind: ERROR
     org.flywaydb: INFO
     org.springframework.jdbc: INFO
-  #    org.springframework.boot.actuate.autoconfigure.tracing: DEBUG
+    #    org.springframework.boot.actuate.autoconfigure.tracing: DEBUG
   #    io.opentelemetry: DEBUG
   #    io.micrometer.tracing: DEBUG
   #    org.springframework.boot.autoconfigure.logging.ConditionEvaluationReportLoggingListener: INFO
   pattern:
-    console: "%d{yyyy-MM-dd'T'HH:mm:ss.SSSXXX} %5p ${PID:- } --- [${spring.application.name:-}] [%15.15thread] [%X{correlationId:-}] %logger : %m%n"
+    console: "%d{yyyy-MM-dd'T'HH:mm:ss.SSSXXX} %5p ${PID:- } --- [${spring.application.name:-}] [%15.15thread] [%X{traceId:-},%X{spanId:-}] [%X{correlationId:-}] %logger : %m%n"
 
 fraud:
   base-url: ${FRAUD_BASE_URL:http://localhost:9010}
@@ -131,7 +135,7 @@ fraud:
     connect-timeout: 500ms
     read-timeout: 1000ms
   fail-open:
-    enabled: true
+    enabled: false
     max-amount: 5.00
     trusted-account-ids:
       - "11111111-1111-1111-1111-111111111111"
@@ -140,17 +144,17 @@ resilience4j:
   timelimiter:
     instances:
       fraudService:
-        timeoutDuration: 250ms
-        cancelRunningFuture: true
+        timeoutDuration: 250ms       # abort the async call if not done in 250ms
+        cancelRunningFuture: true    # also cancel/interrupt the in-flight future on timeout
   circuitbreaker:
     instances:
       fraudService:
-        slidingWindowType: COUNT_BASED
-        slidingWindowSize: 20
-        minimumNumberOfCalls: 10
-        failureRateThreshold: 50
-        slowCallRateThreshold: 50
-        slowCallDurationThreshold: 300ms
-        waitDurationInOpenState: 10s
-        permittedNumberOfCallsInHalfOpenState: 3
-        automaticTransitionFromOpenToHalfOpenEnabled: true
+        slidingWindowType: COUNT_BASED      # evaluate based on last N calls, not last N seconds
+        slidingWindowSize: 10               # window = last 10 calls
+        minimumNumberOfCalls: 5            # need at least 5 calls before evaluating failure rate
+        failureRateThreshold: 50            # OPEN if >=50% of the window's calls failed
+        slowCallRateThreshold: 50           # OPEN if >=50% of calls were "slow" (see below)
+        slowCallDurationThreshold: 100ms    # a call counts as "slow" if it took >100ms
+        waitDurationInOpenState: 15s        # stay OPEN for 10s before allowing a trial
+        permittedNumberOfCallsInHalfOpenState: 3   # allow 3 trial calls in HALF_OPEN
+        automaticTransitionFromOpenToHalfOpenEnabled: true  # auto-flip after 10s, no need to wait for an incoming call to trigger it

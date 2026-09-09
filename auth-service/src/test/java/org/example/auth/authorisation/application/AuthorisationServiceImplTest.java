@@ -38,6 +38,7 @@ import org.example.auth.authorisation.infrastructure.AuthorisationEventRepositor
 import org.example.auth.authorisation.infrastructure.AuthorisationRepository;
 import org.example.auth.common.exception.AuthorisationNotFoundException;
 import org.example.auth.common.exception.IdempotencyConflictException;
+import org.example.auth.common.metrics.AuthMetrics;
 import org.example.auth.fraud.FraudDecision;
 import org.example.auth.fraud.FraudOrchestrator;
 import org.example.auth.idempotency.CachedAuthorisationResponse;
@@ -67,6 +68,7 @@ class AuthorisationServiceImplTest {
   @Mock private CorrelationIdResolver correlationIdResolver;
   @Mock private IdempotencyProperties idempotencyProperties;
   @Mock private IdempotencyService idempotencyService;
+  @Mock private AuthMetrics authMetrics;
 
   private AuthorisationServiceImpl service;
 
@@ -81,7 +83,8 @@ class AuthorisationServiceImplTest {
             fraudOrchestrator,
             correlationIdResolver,
             idempotencyProperties,
-            idempotencyService);
+            idempotencyService,
+            authMetrics);
     lenient()
         .when(fraudOrchestrator.evaluate(any(), any(), any()))
         .thenReturn(FraudDecision.approve(0, java.util.List.of()));
@@ -210,7 +213,8 @@ class AuthorisationServiceImplTest {
   }
 
   @Test
-  void authorise_shouldStoreResponseInCache_afterSuccessfulTransaction() {    UUID accountId = UUID.randomUUID();
+  void authorise_shouldStoreResponseInCache_afterSuccessfulTransaction() {
+    UUID accountId = UUID.randomUUID();
     String idempotencyKey = "idem-store-success";
     AuthorisationRequest request =
         new AuthorisationRequest(
@@ -379,7 +383,8 @@ class AuthorisationServiceImplTest {
         .thenThrow(new ConcurrentIdempotencyRaceException(new RuntimeException("duplicate key")));
 
     AuthorisationEntity existing =
-        existingAuthorisation(accountId, idempotencyKey, new BigDecimal("10.00"), "USD", "merchant-1");
+        existingAuthorisation(
+            accountId, idempotencyKey, new BigDecimal("10.00"), "USD", "merchant-1");
     // First call is the pre-check (before the tx attempt, simulating "not yet committed" at that
     // point); second call is the post-rollback resolution (simulating the concurrent winner has
     // since committed).
@@ -1352,7 +1357,8 @@ class AuthorisationServiceImplTest {
     UUID authorisationId = UUID.randomUUID();
     UUID accountId = UUID.randomUUID();
     ReverseRequest request =
-        new ReverseRequest("reverse-race-store-error-key", AuthorisationEventReason.CUSTOMER_REQUEST);
+        new ReverseRequest(
+            "reverse-race-store-error-key", AuthorisationEventReason.CUSTOMER_REQUEST);
 
     when(transactionalExecutor.reverseInTransaction(
             eq(authorisationId), eq(request), any(UUID.class)))

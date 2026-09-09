@@ -1,5 +1,7 @@
 package org.example.auth.authorisation.application;
 
+import static org.example.auth.fraud.FraudOrchestrator.FRAUD_UNAVAILABLE_REASON;
+
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
@@ -23,6 +25,7 @@ import org.example.auth.common.OperationType;
 import org.example.auth.common.exception.AccountNotFoundException;
 import org.example.auth.common.exception.AuthorisationNotFoundException;
 import org.example.auth.common.exception.IdempotencyConflictException;
+import org.example.auth.common.metrics.AuthMetrics;
 import org.example.auth.common.validation.ValidationHelpers;
 import org.example.auth.fraud.FraudDecision;
 import org.example.auth.fraud.FraudOrchestrator;
@@ -56,9 +59,21 @@ public class AuthorisationServiceImpl implements AuthorisationService {
   private final CorrelationIdResolver correlationIdResolver;
   private final IdempotencyProperties idempotencyProperties;
   private final IdempotencyService idempotencyService;
+  private final AuthMetrics authMetrics;
 
   @Override
   public AuthorisationResponse authorise(AuthorisationRequest request, String clientIpAddress) {
+    try {
+      AuthorisationResponse response = doAuthorise(request, clientIpAddress);
+      authMetrics.incrementSuccess();
+      return response;
+    } catch (RuntimeException e) {
+      authMetrics.incrementFailure();
+      throw e;
+    }
+  }
+
+  private AuthorisationResponse doAuthorise(AuthorisationRequest request, String clientIpAddress) {
     String normalizedCurrency =
         ValidationHelpers.normalizeAndValidateCurrency(request.currencyCode());
     log.debug(
@@ -98,7 +113,8 @@ public class AuthorisationServiceImpl implements AuthorisationService {
           "Found existing authorisation in DB pre-check for operation=authorise, accountId={}, idempotencyKey={}",
           request.accountId(),
           request.idempotencyKey());
-      validateAndBuildIdempotentResponse(existingEntityOpt.get(), request, normalizedCurrency);
+      return validateAndBuildIdempotentResponse(
+          existingEntityOpt.get(), request, normalizedCurrency);
     }
 
     UUID correlationId = correlationIdResolver.resolveOrCreate();
@@ -134,6 +150,11 @@ public class AuthorisationServiceImpl implements AuthorisationService {
       AuthorisationResponse authorisationResponse =
           authorisationTransactionalExecutor.authoriseInTransaction(
               request, normalizedCurrency, preAuthDecision, correlationId);
+
+      authMetrics.incrementAuthorisationOutcome(
+          authorisationResponse.status().name(),
+          resolveDeclineReason(preAuthDecision, authorisationResponse));
+
       saveResponseToCache(
           OperationType.AUTHORISE,
           request.accountId(),
@@ -148,6 +169,26 @@ public class AuthorisationServiceImpl implements AuthorisationService {
           e);
       return resolveIdempotencyAfterRollback(request, normalizedCurrency);
     }
+  }
+
+  private String resolveDeclineReason(
+      PreAuthDecision preAuthDecision, AuthorisationResponse response) {
+    if (response.status() != AuthorisationStatus.DECLINED) {
+      return "approved";
+    }
+    return switch (preAuthDecision) {
+      case PreAuthDecision.AccountNotActive notActive -> "account_not_active";
+      case PreAuthDecision.FraudEvaluated fraudEvaluated ->
+          resolveFraudDeclineReason(fraudEvaluated.fraudDecision());
+    };
+  }
+
+  private String resolveFraudDeclineReason(FraudDecision fraudDecision) {
+    if (fraudDecision.reasons() != null
+        && fraudDecision.reasons().contains(FRAUD_UNAVAILABLE_REASON)) {
+      return "fraud_unavailable_decline";
+    }
+    return "fraud_decline";
   }
 
   private AuthorisationResponse resolveIdempotencyAfterRollback(
@@ -205,6 +246,7 @@ public class AuthorisationServiceImpl implements AuthorisationService {
     try {
       cachedOpt = idempotencyService.get(operationType, scopeId, idempotencyKey, cacheType);
     } catch (Exception e) {
+      authMetrics.incrementIdempotencyCacheError();
       log.warn(
           "Failed to read idempotency cache entry, operationType={}, scopeId={}, idempotencyKey={}",
           operationType,
@@ -215,6 +257,7 @@ public class AuthorisationServiceImpl implements AuthorisationService {
     }
 
     if (cachedOpt.isEmpty()) {
+      authMetrics.incrementIdempotencyCacheMiss();
       return Optional.empty();
     }
 
@@ -223,13 +266,17 @@ public class AuthorisationServiceImpl implements AuthorisationService {
     R cachedResponse = cached.response();
     if (cachedFingerprint == null || cachedResponse == null) {
       // Backward compatibility for old cache payloads that may not include fingerprint wrapper.
+      authMetrics.incrementIdempotencyCacheMiss();
       return Optional.empty();
     }
 
     if (!Objects.equals(cachedFingerprint, expectedFingerprint)) {
+      // Entry found, but it's a genuine business conflict, not a cache-effectiveness concern.
+      // Still counts as a "hit" for cache-lookup purposes (Redis had data for this key).
+      authMetrics.incrementIdempotencyCacheHit();
       throw new IdempotencyConflictException();
     }
-
+    authMetrics.incrementIdempotencyCacheHit();
     return Optional.of(cachedResponse);
   }
 

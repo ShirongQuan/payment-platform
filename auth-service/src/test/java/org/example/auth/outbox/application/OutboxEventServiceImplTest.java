@@ -8,6 +8,8 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import io.opentelemetry.api.OpenTelemetry;
+import io.opentelemetry.context.propagation.ContextPropagators;
 import java.math.BigDecimal;
 import java.time.OffsetDateTime;
 import java.util.HashMap;
@@ -58,6 +60,8 @@ class OutboxEventServiceImplTest {
 
   @Spy private OutboxEventMapper outboxEventMapper = Mappers.getMapper(OutboxEventMapper.class);
 
+  @Mock private OpenTelemetry openTelemetry;
+
   @InjectMocks private OutboxEventServiceImpl service;
 
   @Test
@@ -66,6 +70,8 @@ class OutboxEventServiceImplTest {
     UUID eventId = UUID.randomUUID();
     UUID correctionId = UUID.randomUUID();
     String idempotencyKey = "key";
+
+    when(openTelemetry.getPropagators()).thenReturn(ContextPropagators.noop());
 
     AuthorisationEntity authorisationEntity =
         new AuthorisationEntity(

@@ -103,6 +103,10 @@ public class FraudHttpClientConfig {
         });
     // No explicit initialize()/shutdown() calls here - Spring calls both automatically since
     // this ThreadPoolTaskExecutor is registered as its own bean (InitializingBean/DisposableBean).
+    // Note: ThreadPoolTaskExecutor does NOT pre-start core threads by default, so the first async
+    // fraud check submitted after startup pays JVM thread-creation cost. FraudServiceWarmup
+    // pre-starts this pool's threads once Spring has finished initializing it (can't be done here
+    // - initialize() hasn't run yet at this point in the bean lifecycle).
     return executor;
   }
 }

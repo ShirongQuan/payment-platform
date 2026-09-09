@@ -191,7 +191,7 @@ Constraints:
 - `idempotencyKey`: required, max 20 chars
 - `amount`: required, minimum `0.01`
 - `currencyCode`: required, exactly 3 chars, valid ISO currency code
-- `merchantReference`: optional
+- `merchantReference`: required, max 128 chars
 
 ### Response
 

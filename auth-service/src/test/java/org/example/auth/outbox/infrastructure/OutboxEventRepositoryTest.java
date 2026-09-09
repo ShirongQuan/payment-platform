@@ -323,7 +323,8 @@ class OutboxEventRepositoryTest {
             claimUntil,
             publishedAt,
             "idem-" + id.toString().substring(0, 8),
-            UUID.randomUUID());
+            UUID.randomUUID(),
+            null);
 
     repository.saveAndFlush(outboxEventMapper.toEntity(event));
     return id;

@@ -38,7 +38,7 @@ class FraudOrchestratorTest {
 
     FraudDecision decision = orchestrator.evaluate(request, request.currencyCode(), CLIENT_IP);
 
-    assertThat(decision.outcome()).isEqualTo(FraudOutcome.APPROVE);
+    assertThat(decision.outcome()).isEqualTo(FraudOutcome.APPROVED);
     assertThat(decision.reasons()).contains("FRAUD_SERVICE_UNAVAILABLE", "FRAUD_TIMEOUT");
     assertThat(decision.reasons()).contains("FRAUD_UNAVAILABLE_TRUSTED_TINY_AMOUNT");
     verify(failOpenPolicy).allow(request.accountId(), request.amount());
@@ -53,7 +53,7 @@ class FraudOrchestratorTest {
 
     FraudDecision decision = orchestrator.evaluate(request, request.currencyCode(), CLIENT_IP);
 
-    assertThat(decision.outcome()).isEqualTo(FraudOutcome.DECLINE);
+    assertThat(decision.outcome()).isEqualTo(FraudOutcome.DECLINED);
     assertThat(decision.reasons()).contains("FRAUD_SERVICE_UNAVAILABLE", "FRAUD_TIMEOUT");
   }
 

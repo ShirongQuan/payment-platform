@@ -28,6 +28,14 @@ spring:
       properties:
         # Consume only committed records from transactional producers.
         isolation.level: read_committed
+    producer:
+      # Used only by the DeadLetterPublishingRecoverer (KafkaConsumerConfig) to republish failed
+      # records to the DLT. Must match the consumer's (de)serializer types (UUID key, String
+      # value) - without this, Boot defaults to StringSerializer for the key and every DLT publish
+      # throws a ClassCastException (UUID cannot be cast to String), silently dropping the record
+      # even though the pre-send DLT-published metric still increments.
+      key-serializer: org.apache.kafka.common.serialization.UUIDSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
     listener:
       # Commit each record after handler completes.
       ack-mode: record
@@ -42,6 +50,12 @@ management:
     web:
       exposure:
         include: health,info,prometheus,metrics,circuitbreakers
+  metrics:
+    tags:
+      # Adds application="ledger-service" to every Micrometer meter (custom + auto-configured),
+      # matching auth-service's convention - lets Grafana dashboards/queries filter/group by
+      # service without relying on the Prometheus scrape "job" label.
+      application: ledger-service
   endpoint:
     health:
       show-details: always
@@ -66,7 +80,10 @@ management:
       export:
         otlp:
           endpoint: ${OTEL_EXPORTER_OTLP_TRACES_ENDPOINT:http://localhost:4318/v1/traces}
-
+  otlp:
+    metrics:
+      export:
+        enabled: false
 
 springdoc:
   api-docs:
@@ -85,9 +102,9 @@ logging:
     org.hibernate.orm.jdbc.bind: ERROR
     org.flywaydb: INFO
     org.springframework.jdbc: INFO
-  #    org.springframework.boot.actuate.autoconfigure.tracing: DEBUG
+    #    org.springframework.boot.actuate.autoconfigure.tracing: DEBUG
   #    io.opentelemetry: DEBUG
   #    io.micrometer.tracing: DEBUG
   #    org.springframework.boot.autoconfigure.logging.ConditionEvaluationReportLoggingListener: INFO
   pattern:
-    console: "%d{yyyy-MM-dd'T'HH:mm:ss.SSSXXX} %5p ${PID:- } --- [${spring.application.name:-}] [%15.15thread] [%X{correlationId:-}] %-40.40logger{39} : %m%n"
+    console: "%d{yyyy-MM-dd'T'HH:mm:ss.SSSXXX} %5p ${PID:- } --- [${spring.application.name:-}] [%15.15thread] [%X{traceId:-},%X{spanId:-}] [%X{correlationId:-}] %logger : %m%n"

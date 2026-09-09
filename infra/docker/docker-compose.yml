@@ -111,6 +111,7 @@ services:
       - grafana_data:/var/lib/grafana
       - ./../grafana/provisioning/datasources:/etc/grafana/provisioning/datasources:ro
       - ./../grafana/provisioning/dashboards:/etc/grafana/provisioning/dashboards:ro
+      - ./../grafana/dashboards:/var/lib/grafana/dashboards:ro
     depends_on:
       prometheus:
         condition: service_started
@@ -247,6 +248,56 @@ services:
     volumes:
       - ./../kafka/create-topics.sh:/create-topics.sh:ro
     entrypoint: [ "/bin/sh", "/create-topics.sh" ]
+
+  # Exposes Kafka broker/topic/consumer-group metrics to Prometheus. Talks to the brokers
+  # over the INTERNAL listener (kafka-1:9092/kafka-2:9092/kafka-3:9092) since it runs on the
+  # same compose network. Scraped by Prometheus at the 'kafka-exporter' job
+  kafka-exporter:
+    image: danielqsj/kafka-exporter:v1.9.0
+    container_name: kafka-exporter
+    command:
+      - "--kafka.server=kafka-1:9092"
+      - "--kafka.server=kafka-2:9092"
+      - "--kafka.server=kafka-3:9092"
+    ports:
+      - "9308:9308"
+    depends_on:
+      kafka-1:
+        condition: service_healthy
+      kafka-2:
+        condition: service_healthy
+      kafka-3:
+        condition: service_healthy
+    healthcheck:
+      test: [ "CMD-SHELL", "wget -q -O /dev/null http://localhost:9308/metrics" ]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 15s
+
+  # Exposes per-container CPU/memory/network metrics for the "Infrastructure Health" panels in
+  # the Kafka dashboard. In this docker-compose (non-Kubernetes) setup, cAdvisor labels
+  # containers by their compose service/container name (e.g. name="kafka-1"), not by
+  # pod/namespace - the dashboard's queries are written to match that.
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:v0.49.1
+    container_name: cadvisor
+    ports:
+      - "8085:8080"
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+      - /dev/disk/:/dev/disk:ro
+    privileged: true
+    healthcheck:
+      test: [ "CMD-SHELL", "wget -q -O /dev/null http://localhost:8080/healthz" ]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 15s
 
   # --------------------------------------------  trace backend + collector   -------------------------------------------------
 
