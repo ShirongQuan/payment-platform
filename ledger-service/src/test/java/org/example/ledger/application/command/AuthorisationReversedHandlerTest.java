@@ -12,6 +12,7 @@ import java.math.BigDecimal;
 import java.time.OffsetDateTime;
 import java.util.Map;
 import java.util.UUID;
+import org.example.ledger.common.metrics.LedgerMetrics;
 import org.example.ledger.domain.AuthorisationReversedPayload;
 import org.example.ledger.domain.EventMetadata;
 import org.example.ledger.domain.EventType;
@@ -37,6 +38,7 @@ class AuthorisationReversedHandlerTest {
   @Mock private LedgerEntryRepository ledgerEntryRepository;
   @Mock private LedgerEntryMapper ledgerEntryMapper;
   @Mock private ObjectMapper objectMapper;
+  @Mock private LedgerMetrics ledgerMetrics;
 
   @InjectMocks private AuthorisationReversedHandler handler;
 
@@ -120,6 +122,7 @@ class AuthorisationReversedHandlerTest {
 
     handler.handle(metadata, "{\"status\":\"REVERSED\"}");
 
+    verify(ledgerMetrics).incrementDuplicateSkipped(EventType.AUTHORISATION_REVERSED.name());
     verify(ledgerEventLogRepository, never()).save(any());
     verify(ledgerEntryRepository, never()).save(any());
   }

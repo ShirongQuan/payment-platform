@@ -56,6 +56,11 @@ management:
       # matching auth-service's convention - lets Grafana dashboards/queries filter/group by
       # service without relying on the Prometheus scrape "job" label.
       application: ledger-service
+    distribution:
+      # Emits http_server_requests_seconds_bucket series (in addition to _count/_sum/_max),
+      # required for Grafana panels using histogram_quantile(...) over http_server_requests_seconds_bucket.
+      percentiles-histogram:
+        http.server.requests: true
   endpoint:
     health:
       show-details: always

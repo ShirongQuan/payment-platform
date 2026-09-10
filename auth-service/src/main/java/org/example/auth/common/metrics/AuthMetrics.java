@@ -34,6 +34,8 @@ public class AuthMetrics {
   // outbox metric
   public static final String AUTH_OUTBOX_PUBLISH_LAG_SECONDS = "auth_outbox_publish_lag_seconds";
   public static final String AUTH_OUTBOX_BACKLOG = "auth_outbox_backlog";
+  public static final String AUTH_OUTBOX_PUBLISH_ATTEMPTS_TOTAL =
+      "auth_outbox_publish_attempts_total";
 
   // idempotency cache metric
   public static final String AUTH_IDEMPOTENCY_CACHE_TOTAL = "auth_idempotency_cache_total";
@@ -49,6 +51,12 @@ public class AuthMetrics {
   private final Counter idempotencyCacheHitCounter;
   private final Counter idempotencyCacheMissCounter;
   private final Counter idempotencyCacheErrorCounter;
+
+  // Outbox publish attempt outcome (success/retry/failed) is a finite, low-cardinality set known
+  // upfront, so pre-registered eagerly in the constructor like the other startup counters above.
+  private final Counter outboxPublishSuccessCounter;
+  private final Counter outboxPublishRetryCounter;
+  private final Counter outboxPublishFailedCounter;
 
   // Authorisation outcome (status, reason) is finite/low-cardinality, but throughput is high, so
   // counters are built/registered once per distinct combination and cached here rather than
@@ -115,6 +123,25 @@ public class AuthMetrics {
             .description("Idempotency cache (Redis) lookup outcomes")
             .tag(RESULT_TAG, "error")
             .register(meterRegistry);
+
+    // Pre-register all three outcomes so success/retry/failed series all exist from t=0. Without
+    // this, a run with only successful publishes would never surface a "failed"/"retry" series at
+    // all, making it impossible to tell "zero failures" apart from "metric never emitted".
+    this.outboxPublishSuccessCounter =
+        Counter.builder(AUTH_OUTBOX_PUBLISH_ATTEMPTS_TOTAL)
+            .description("Outbox publish attempt outcomes (success/retry/failed)")
+            .tag(RESULT_TAG, "success")
+            .register(meterRegistry);
+    this.outboxPublishRetryCounter =
+        Counter.builder(AUTH_OUTBOX_PUBLISH_ATTEMPTS_TOTAL)
+            .description("Outbox publish attempt outcomes (success/retry/failed)")
+            .tag(RESULT_TAG, "retry")
+            .register(meterRegistry);
+    this.outboxPublishFailedCounter =
+        Counter.builder(AUTH_OUTBOX_PUBLISH_ATTEMPTS_TOTAL)
+            .description("Outbox publish attempt outcomes (success/retry/failed)")
+            .tag(RESULT_TAG, "failed")
+            .register(meterRegistry);
   }
 
   public void incrementSuccess() {
@@ -159,5 +186,20 @@ public class AuthMetrics {
 
   public void incrementIdempotencyCacheError() {
     idempotencyCacheErrorCounter.increment();
+  }
+
+  /** Records that an outbox event was successfully published to Kafka on this claim attempt. */
+  public void incrementOutboxPublishSuccess() {
+    outboxPublishSuccessCounter.increment();
+  }
+
+  /** Records that an outbox event failed to publish but will be retried (backoff not exhausted). */
+  public void incrementOutboxPublishRetry() {
+    outboxPublishRetryCounter.increment();
+  }
+
+  /** Records that an outbox event exhausted retries and was moved to the terminal FAILED state. */
+  public void incrementOutboxPublishFailed() {
+    outboxPublishFailedCounter.increment();
   }
 }

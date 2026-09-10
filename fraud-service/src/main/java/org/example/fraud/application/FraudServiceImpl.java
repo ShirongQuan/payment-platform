@@ -3,6 +3,7 @@ package org.example.fraud.application;
 import static org.example.fraud.domain.FraudDecision.APPROVE;
 import static org.example.fraud.domain.FraudDecision.PENDING;
 
+import io.micrometer.core.instrument.Timer;
 import java.time.Duration;
 import java.time.OffsetDateTime;
 import java.util.List;
@@ -13,6 +14,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.example.fraud.api.FraudCheckRequest;
 import org.example.fraud.api.FraudCheckResponse;
 import org.example.fraud.api.FraudCheckResult;
+import org.example.fraud.common.metrics.FraudMetrics;
 import org.example.fraud.domain.FraudDecision;
 import org.example.fraud.domain.RiskReport;
 import org.example.fraud.domain.RuleResult;
@@ -59,6 +61,7 @@ public class FraudServiceImpl implements FraudService {
   private final CorrelationIdResolver correlationIdResolver;
   private final VelocityService velocityService;
   private final AccountLockRuleProperties accountLockRuleProperties;
+  private final FraudMetrics fraudMetrics;
 
   @Transactional
   @Override
@@ -85,120 +88,140 @@ public class FraudServiceImpl implements FraudService {
         fraudEvaluationId,
         correlationId);
 
-    // Idempotency guard: unique constraint on (accountId, idempotencyKey) makes this a
-    // conditional insert. A 0-row result means a concurrent/earlier request already owns this key.
-    int insertPendingResult =
-        fraudEvaluationRepository.tryInsertPending(
-            fraudEvaluationId,
-            request.accountId(),
-            request.amount(),
-            request.currencyCode(),
-            request.merchantReference(),
-            request.idempotencyKey(),
-            requestHash,
-            PENDING.toString(),
-            riskProperties.rulesVersion(),
-            "[]",
-            request.ipAddress(),
-            correlationId,
-            OffsetDateTime.now());
-
-    if (insertPendingResult == 0) {
-      log.warn(
-          "Resolving fraud evaluation idempotency after detecting duplicate account Id / idempotency key");
-      return resolveIdempotencyAfterDuplicateFound(request, requestHash);
-    }
-
-    RiskReport riskReport = riskScoringEngine.evaluate(request);
-
-    FraudDecision decision =
-        riskReport.totalScore() >= riskProperties.declineThreshold()
-            ? FraudDecision.DECLINE
-            : FraudDecision.APPROVE;
-
-    log.debug(
-        "Fraud evaluation scored, evaluationId={}, accountId={}, totalScore={}, decision={}, triggeredRules={}",
-        fraudEvaluationId,
-        request.accountId(),
-        riskReport.totalScore(),
-        decision,
-        riskReport.triggeredRules());
-
-    // Account-lock recommendation: only ever considered on DECLINE, never on APPROVE. Checks a
-    // very high risk score first (immediate lock), then falls back to a repeated-decline pattern
-    // within a trailing window (reuses the generic sliding-window VelocityService with a
-    // dedicated "decline" dimension, which both records this decline and returns whether more
-    // than the configured threshold have occurred in the window).
-    boolean lockRecommended = false;
-    String lockReasonCode = null;
-    if (decision == FraudDecision.DECLINE && accountLockRuleProperties.enabled()) {
-      if (riskReport.totalScore() >= accountLockRuleProperties.highRiskScoreThreshold()) {
-        lockRecommended = true;
-        lockReasonCode = accountLockRuleProperties.highRiskScoreReasonCode();
-      } else if (velocityService.isTooFrequent(
-          "decline",
-          request.accountId().toString(),
-          accountLockRuleProperties.repeatedDeclineThreshold(),
-          Duration.ofSeconds(accountLockRuleProperties.repeatedDeclineWindowSeconds()))) {
-        lockRecommended = true;
-        lockReasonCode = accountLockRuleProperties.repeatedDeclineReasonCode();
-      }
-      if (lockRecommended) {
-        log.warn(
-            "Recommending account lock, evaluationId={}, accountId={}, reasonCode={}, totalScore={}",
-            fraudEvaluationId,
-            request.accountId(),
-            lockReasonCode,
-            riskReport.totalScore());
-      }
-    }
-
-    String ruleResultJson;
+    // Latency/outcome metrics span this whole method (including the duplicate-replay branch
+    // below), since FraudServiceImpl is the only place with full visibility of every mutually
+    // exclusive outcome: fresh APPROVE/DECLINE, a DUPLICATE replay, or the CONFLICT/IN_PROGRESS/
+    // ERROR failure paths (the latter two/three surfacing as exceptions, caught below).
+    Timer.Sample sample = fraudMetrics.startTimer();
     try {
-      ruleResultJson = objectMapper.writeValueAsString(riskReport.triggeredRules());
-    } catch (Exception e) {
-      throw new IllegalStateException("Failed to serialize rule results", e);
+      // Idempotency guard: unique constraint on (accountId, idempotencyKey) makes this a
+      // conditional insert. A 0-row result means a concurrent/earlier request already owns this
+      // key.
+      int insertPendingResult =
+          fraudEvaluationRepository.tryInsertPending(
+              fraudEvaluationId,
+              request.accountId(),
+              request.amount(),
+              request.currencyCode(),
+              request.merchantReference(),
+              request.idempotencyKey(),
+              requestHash,
+              PENDING.toString(),
+              riskProperties.rulesVersion(),
+              "[]",
+              request.ipAddress(),
+              correlationId,
+              OffsetDateTime.now());
+
+      if (insertPendingResult == 0) {
+        log.warn(
+            "Resolving fraud evaluation idempotency after detecting duplicate account Id / idempotency key");
+        return resolveIdempotencyAfterDuplicateFound(request, requestHash, sample);
+      }
+
+      RiskReport riskReport = riskScoringEngine.evaluate(request);
+
+      FraudDecision decision =
+          riskReport.totalScore() >= riskProperties.declineThreshold()
+              ? FraudDecision.DECLINE
+              : FraudDecision.APPROVE;
+
+      log.debug(
+          "Fraud evaluation scored, evaluationId={}, accountId={}, totalScore={}, decision={}, triggeredRules={}",
+          fraudEvaluationId,
+          request.accountId(),
+          riskReport.totalScore(),
+          decision,
+          riskReport.triggeredRules());
+
+      // Account-lock recommendation: only ever considered on DECLINE, never on APPROVE. Checks a
+      // very high risk score first (immediate lock), then falls back to a repeated-decline pattern
+      // within a trailing window (reuses the generic sliding-window VelocityService with a
+      // dedicated "decline" dimension, which both records this decline and returns whether more
+      // than the configured threshold have occurred in the window).
+      boolean lockRecommended = false;
+      String lockReasonCode = null;
+      if (decision == FraudDecision.DECLINE && accountLockRuleProperties.enabled()) {
+        if (riskReport.totalScore() >= accountLockRuleProperties.highRiskScoreThreshold()) {
+          lockRecommended = true;
+          lockReasonCode = accountLockRuleProperties.highRiskScoreReasonCode();
+        } else if (velocityService.isTooFrequent(
+            "decline",
+            request.accountId().toString(),
+            accountLockRuleProperties.repeatedDeclineThreshold(),
+            Duration.ofSeconds(accountLockRuleProperties.repeatedDeclineWindowSeconds()))) {
+          lockRecommended = true;
+          lockReasonCode = accountLockRuleProperties.repeatedDeclineReasonCode();
+        }
+        if (lockRecommended) {
+          log.warn(
+              "Recommending account lock, evaluationId={}, accountId={}, reasonCode={}, totalScore={}",
+              fraudEvaluationId,
+              request.accountId(),
+              lockReasonCode,
+              riskReport.totalScore());
+        }
+      }
+
+      String ruleResultJson;
+      try {
+        ruleResultJson = objectMapper.writeValueAsString(riskReport.triggeredRules());
+      } catch (Exception e) {
+        throw new IllegalStateException("Failed to serialize rule results", e);
+      }
+
+      // Transition the row from PENDING to its final decision so future replays of the same
+      // (accountId, idempotencyKey) short-circuit via resolveIdempotencyAfterDuplicateFound(...).
+      int finalizeResult =
+          fraudEvaluationRepository.finalizeEvaluation(
+              fraudEvaluationId,
+              riskReport.totalScore(),
+              decision.name(),
+              ruleResultJson,
+              lockRecommended,
+              lockReasonCode);
+
+      if (finalizeResult == 0) {
+        // Unlikely to happen
+        throw new IllegalStateException(
+            "Failed to finalize fraud evaluation: no PENDING row updated for evaluationId="
+                + fraudEvaluationId
+                + ", accountId="
+                + request.accountId()
+                + ", idempotencyKey="
+                + request.idempotencyKey());
+      }
+
+      // Invalidate cache for amount deviation rule
+      if (amountDeviationRuleProperties.enabled() && decision == APPROVE) {
+        log.debug("Invalidate cache for amount deviation rule, accountId={}", request.accountId());
+        amountDeviationRuleCacheService.invalidate(request.accountId());
+      }
+      log.debug(
+          "Completed fraud check, evaluationId={}, accountId={}, decision={}",
+          fraudEvaluationId,
+          request.accountId(),
+          decision);
+
+      fraudMetrics.recordOutcome(
+          decision == FraudDecision.DECLINE ? FraudMetrics.Outcome.DECLINE : FraudMetrics.Outcome.APPROVE,
+          sample);
+      return new FraudCheckResponse(
+          decision,
+          riskReport.totalScore(),
+          riskReport.triggeredRules(),
+          lockRecommended,
+          lockReasonCode);
+    } catch (IdempotencyConflictException e) {
+      fraudMetrics.recordOutcome(FraudMetrics.Outcome.CONFLICT, sample);
+      throw e;
+    } catch (FraudEvaluationInProgressException e) {
+      fraudMetrics.recordOutcome(FraudMetrics.Outcome.IN_PROGRESS, sample);
+      throw e;
+    } catch (RuntimeException e) {
+      fraudMetrics.recordOutcome(FraudMetrics.Outcome.ERROR, sample);
+      throw e;
     }
-
-    // Transition the row from PENDING to its final decision so future replays of the same
-    // (accountId, idempotencyKey) short-circuit via resolveIdempotencyAfterDuplicateFound(...).
-    int finalizeResult =
-        fraudEvaluationRepository.finalizeEvaluation(
-            fraudEvaluationId,
-            riskReport.totalScore(),
-            decision.name(),
-            ruleResultJson,
-            lockRecommended,
-            lockReasonCode);
-
-    if (finalizeResult == 0) {
-      // Unlikely to happen
-      throw new IllegalStateException(
-          "Failed to finalize fraud evaluation: no PENDING row updated for evaluationId="
-              + fraudEvaluationId
-              + ", accountId="
-              + request.accountId()
-              + ", idempotencyKey="
-              + request.idempotencyKey());
-    }
-
-    // Invalidate cache for amount deviation rule
-    if (amountDeviationRuleProperties.enabled() && decision == APPROVE) {
-      log.debug("Invalidate cache for amount deviation rule, accountId={}", request.accountId());
-      amountDeviationRuleCacheService.invalidate(request.accountId());
-    }
-    log.debug(
-        "Completed fraud check, evaluationId={}, accountId={}, decision={}",
-        fraudEvaluationId,
-        request.accountId(),
-        decision);
-
-    return new FraudCheckResponse(
-        decision,
-        riskReport.totalScore(),
-        riskReport.triggeredRules(),
-        lockRecommended,
-        lockReasonCode);
   }
 
   /**
@@ -209,7 +232,7 @@ public class FraudServiceImpl implements FraudService {
    * if the original evaluation is still PENDING (concurrent race not yet finalized).
    */
   FraudCheckResult resolveIdempotencyAfterDuplicateFound(
-      FraudCheckRequest request, String requestHash) {
+      FraudCheckRequest request, String requestHash, Timer.Sample sample) {
     FraudEvaluationEntity existing =
         fraudEvaluationRepository
             .findByAccountIdAndIdempotencyKey(request.accountId(), request.idempotencyKey())
@@ -236,6 +259,10 @@ public class FraudServiceImpl implements FraudService {
         request.accountId(),
         request.idempotencyKey(),
         existing.getDecision());
+    // Record this call as a DUPLICATE replay (not APPROVE/DECLINE) before returning - it reused a
+    // previously finalized decision without re-scoring, which is a distinct outcome from a fresh
+    // evaluation even though the underlying decision may itself be an approve or decline.
+    fraudMetrics.recordOutcome(FraudMetrics.Outcome.DUPLICATE, sample);
     return toResponse(existing);
   }
 

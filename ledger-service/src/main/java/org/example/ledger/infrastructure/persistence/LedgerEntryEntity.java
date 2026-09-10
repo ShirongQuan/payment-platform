@@ -64,7 +64,7 @@ public class LedgerEntryEntity {
   @Column(name = "currency_code", length = 3)
   private String currencyCode;
 
-  @Column(name = "merchant_reference", length = 20)
+  @Column(name = "merchant_reference", length = 128)
   private String merchantReference;
 
   @Column(name = "idempotency_key", length = 30)

@@ -38,6 +38,11 @@ management:
   metrics:
     tags:
       application: fraud-service
+    distribution:
+      # Emits http_server_requests_seconds_bucket series (in addition to _count/_sum/_max),
+      # required for Grafana panels using histogram_quantile(...) over http_server_requests_seconds_bucket.
+      percentiles-histogram:
+        http.server.requests: true
   prometheus:
     metrics:
       export:
@@ -101,18 +106,14 @@ risk:
     velocity:
       ip:
         enabled: true
-        #        threshold: 3
-        #        window-seconds: 5
-        threshold: 2
-        window-seconds: 50
+        threshold: 3
+        window-seconds: 5
         score: 40
         reason-code: IP_VELOCITY_EXCEEDED
       account:
         enabled: true
-        threshold: 2
-        window-seconds: 50
-        #        threshold: 5
-        #        window-seconds: 30
+        threshold: 3
+        window-seconds: 5
         score: 30
         reason-code: ACCOUNT_VELOCITY_EXCEEDED
     amount-deviation:

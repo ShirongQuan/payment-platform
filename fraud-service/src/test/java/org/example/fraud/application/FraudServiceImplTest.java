@@ -8,10 +8,12 @@ import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.nullable;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import io.micrometer.core.instrument.Timer;
 import java.math.BigDecimal;
 import java.time.OffsetDateTime;
 import java.util.List;
@@ -23,6 +25,7 @@ import org.example.shared.idempotency.RequestHashing;
 import org.example.fraud.api.FraudCheckRequest;
 import org.example.fraud.api.FraudCheckResponse;
 import org.example.fraud.api.FraudCheckResult;
+import org.example.fraud.common.metrics.FraudMetrics;
 import org.example.fraud.domain.FraudDecision;
 import org.example.fraud.domain.RiskReport;
 import org.example.fraud.domain.RuleResult;
@@ -52,6 +55,7 @@ class FraudServiceImplTest {
   @Mock private AmountDeviationRuleCacheService amountDeviationRuleCacheService;
   @Mock private CorrelationIdResolver correlationIdResolver;
   @Mock private VelocityService velocityService;
+  @Mock private FraudMetrics fraudMetrics;
 
   private FraudServiceImpl fraudService;
 
@@ -70,8 +74,13 @@ class FraudServiceImplTest {
             velocityService,
             // Lock evaluation disabled by default so existing tests aren't affected; lock-specific
             // behavior is covered by dedicated tests below.
-            new AccountLockRuleProperties(false, 3, 600, 90, "REPEATED_DECLINE", "HIGH_RISK_SCORE"));
+            new AccountLockRuleProperties(false, 3, 600, 90, "REPEATED_DECLINE", "HIGH_RISK_SCORE"),
+            fraudMetrics);
     when(correlationIdResolver.resolveOrCreate()).thenReturn(CORRELATION_ID);
+    // Real Timer.Sample instances only work with a real MeterRegistry clock; since these tests
+    // only assert *which* outcome was recorded (not real timings), stub a mock sample instead so
+    // any(Timer.Sample.class) matchers below match the non-null instance actually passed through.
+    when(fraudMetrics.startTimer()).thenReturn(mock(Timer.Sample.class));
   }
 
   @Test
@@ -105,6 +114,8 @@ class FraudServiceImplTest {
     assertThat(response.decision()).isEqualTo(FraudDecision.APPROVE);
     assertThat(response.riskScore()).isEqualTo(40);
     verify(amountDeviationRuleCacheService).invalidate(request.accountId());
+    verify(fraudMetrics)
+        .recordOutcome(eq(FraudMetrics.Outcome.APPROVE), any(Timer.Sample.class));
   }
 
   @Test
@@ -143,6 +154,8 @@ class FraudServiceImplTest {
     assertThat(response.decision()).isEqualTo(FraudDecision.DECLINE);
     assertThat(response.riskScore()).isEqualTo(70);
     verify(amountDeviationRuleCacheService, never()).invalidate(request.accountId());
+    verify(fraudMetrics)
+        .recordOutcome(eq(FraudMetrics.Outcome.DECLINE), any(Timer.Sample.class));
   }
 
   @Test
@@ -192,6 +205,8 @@ class FraudServiceImplTest {
         .hasMessageContaining(existing.getId().toString())
         .hasMessageContaining(request.idempotencyKey());
     verify(riskScoringEngine, never()).evaluate(any(FraudCheckRequest.class));
+    verify(fraudMetrics)
+        .recordOutcome(eq(FraudMetrics.Outcome.IN_PROGRESS), any(Timer.Sample.class));
   }
 
   private String requestHash(FraudCheckRequest request) {
@@ -260,6 +275,12 @@ class FraudServiceImplTest {
     assertThat(replay.reasons()).hasSize(1);
     assertThat(replay.reasons().get(0).ruleName()).isEqualTo("IP_VELOCITY_RULE");
     verify(riskScoringEngine, never()).evaluate(any(FraudCheckRequest.class));
+    // A replayed decision must be counted as DUPLICATE, not APPROVE/DECLINE, even though the
+    // underlying stored decision here happens to be APPROVE.
+    verify(fraudMetrics)
+        .recordOutcome(eq(FraudMetrics.Outcome.DUPLICATE), any(Timer.Sample.class));
+    verify(fraudMetrics, never())
+        .recordOutcome(eq(FraudMetrics.Outcome.APPROVE), any(Timer.Sample.class));
   }
 
   @Test
@@ -306,6 +327,8 @@ class FraudServiceImplTest {
     assertThatThrownBy(() -> fraudService.check(request))
         .isInstanceOf(IdempotencyConflictException.class);
     verify(riskScoringEngine, never()).evaluate(any(FraudCheckRequest.class));
+    verify(fraudMetrics)
+        .recordOutcome(eq(FraudMetrics.Outcome.CONFLICT), any(Timer.Sample.class));
   }
 
   @Test

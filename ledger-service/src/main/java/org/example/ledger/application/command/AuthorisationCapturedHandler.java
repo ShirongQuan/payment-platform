@@ -3,6 +3,7 @@ package org.example.ledger.application.command;
 import java.time.OffsetDateTime;
 import java.util.Map;
 import lombok.extern.slf4j.Slf4j;
+import org.example.ledger.common.metrics.LedgerMetrics;
 import org.example.ledger.domain.AuthorisationCapturedPayload;
 import org.example.ledger.domain.EventMetadata;
 import org.example.ledger.domain.EventType;
@@ -25,18 +26,21 @@ public class AuthorisationCapturedHandler {
   private final LedgerEntryRepository ledgerEntryRepository;
   private final LedgerEntryMapper ledgerEntryMapper;
   private final ObjectMapper objectMapper;
+  private final LedgerMetrics ledgerMetrics;
 
   public AuthorisationCapturedHandler(
       ProcessedEventRepository processedEventRepository,
       LedgerEventLogRepository ledgerEventLogRepository,
       LedgerEntryRepository ledgerEntryRepository,
       LedgerEntryMapper ledgerEntryMapper,
-      ObjectMapper objectMapper) {
+      ObjectMapper objectMapper,
+      LedgerMetrics ledgerMetrics) {
     this.processedEventRepository = processedEventRepository;
     this.ledgerEventLogRepository = ledgerEventLogRepository;
     this.ledgerEntryRepository = ledgerEntryRepository;
     this.ledgerEntryMapper = ledgerEntryMapper;
     this.objectMapper = objectMapper;
+    this.ledgerMetrics = ledgerMetrics;
   }
 
   /**
@@ -56,6 +60,7 @@ public class AuthorisationCapturedHandler {
             metadata.eventId(), EventType.AUTHORISATION_CAPTURED.name(), OffsetDateTime.now());
     if (inserted == 0) {
       log.debug("Event with id {} already exist, do nothing", metadata.eventId());
+      ledgerMetrics.incrementDuplicateSkipped(EventType.AUTHORISATION_CAPTURED.name());
       return;
     }
     log.debug("Event marked as first-time processing, eventId={}", metadata.eventId());

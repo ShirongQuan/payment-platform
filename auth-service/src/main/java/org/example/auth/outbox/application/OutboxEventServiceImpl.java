@@ -235,6 +235,7 @@ public class OutboxEventServiceImpl implements OutboxEventService {
                   // PUBLISHED, so a stale/reclaimed completion doesn't double count.
                   Duration lag = Duration.between(event.getCreatedAt(), publishedAt);
                   authMetrics.recordOutboxPublishLag(lag);
+                  authMetrics.incrementOutboxPublishSuccess();
                 }
               } else {
                 Throwable cause = (throwable.getCause() != null) ? throwable.getCause() : throwable;
@@ -257,6 +258,8 @@ public class OutboxEventServiceImpl implements OutboxEventService {
                             + " likely reclaimed by a newer attempt after lease expiry",
                         event.getId(),
                         claimedAt);
+                  } else {
+                    authMetrics.incrementOutboxPublishFailed();
                   }
                 } else {
                   int markRetry =
@@ -274,6 +277,8 @@ public class OutboxEventServiceImpl implements OutboxEventService {
                             + " likely reclaimed by a newer attempt after lease expiry",
                         event.getId(),
                         claimedAt);
+                  } else {
+                    authMetrics.incrementOutboxPublishRetry();
                   }
                 }
               }

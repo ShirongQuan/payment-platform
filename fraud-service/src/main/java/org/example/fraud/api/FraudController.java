@@ -25,6 +25,9 @@ public class FraudController {
         "Received fraud check request, accountId={}, idempotencyKey={}",
         request.accountId(),
         request.idempotencyKey());
+    // Outcome/latency metrics (including distinguishing a DUPLICATE replay from a fresh
+    // APPROVE/DECLINE) are recorded in FraudServiceImpl, which is the only place with full
+    // visibility of every mutually exclusive outcome - see FraudServiceImpl.check(...).
     FraudCheckResult result = fraudService.check(request);
     log.debug(
         "Returning fraud check result, accountId={}, idempotencyKey={}, resultType={}",

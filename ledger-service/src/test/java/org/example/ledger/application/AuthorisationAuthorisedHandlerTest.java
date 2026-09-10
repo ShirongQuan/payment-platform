@@ -12,6 +12,7 @@ import java.time.OffsetDateTime;
 import java.util.Map;
 import java.util.UUID;
 import org.example.ledger.application.command.AuthorisationAuthorisedHandler;
+import org.example.ledger.common.metrics.LedgerMetrics;
 import org.example.ledger.domain.AuthorisationAuthorisedPayload;
 import org.example.ledger.domain.EventMetadata;
 import org.example.ledger.domain.EventType;
@@ -37,6 +38,7 @@ class AuthorisationAuthorisedHandlerTest {
   @Mock private LedgerEntryRepository ledgerEntryRepository;
   @Mock private LedgerEntryMapper ledgerEntryMapper;
   @Mock private ObjectMapper objectMapper;
+  @Mock private LedgerMetrics ledgerMetrics;
 
   @InjectMocks private AuthorisationAuthorisedHandler handler;
 
@@ -53,6 +55,7 @@ class AuthorisationAuthorisedHandlerTest {
     verify(processedEventRepository)
         .tryInsertProcessedEvent(
             eq(metadata.eventId()), eq(EventType.AUTHORISATION_AUTHORISED.name()), any());
+    verify(ledgerMetrics).incrementDuplicateSkipped(EventType.AUTHORISATION_AUTHORISED.name());
     verifyNoInteractions(
         objectMapper, ledgerEntryMapper, ledgerEventLogRepository, ledgerEntryRepository);
   }
