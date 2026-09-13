@@ -28,6 +28,7 @@ import org.example.auth.authorisation.domain.AuthorisationStatus;
 import org.example.auth.authorisation.infrastructure.AuthorisationEntity;
 import org.example.auth.authorisation.infrastructure.AuthorisationEventRepository;
 import org.example.auth.authorisation.infrastructure.AuthorisationRepository;
+import org.example.auth.common.exception.AccountConcurrencyConflictException;
 import org.example.auth.fraud.FraudDecision;
 import org.example.auth.outbox.application.OutboxEventService;
 import org.example.auth.outbox.domain.EventType;
@@ -95,7 +96,8 @@ class AuthorisationTransactionalExecutorConcurrencyTest {
                 result ->
                     result.error() instanceof ObjectOptimisticLockingFailureException
                         || result.error() instanceof DataIntegrityViolationException
-                        || result.error() instanceof ConcurrentIdempotencyRaceException)
+                        || result.error() instanceof ConcurrentIdempotencyRaceException
+                        || result.error() instanceof AccountConcurrencyConflictException)
             .count();
 
     assertThat(authorisedCount).isEqualTo(1);
@@ -306,7 +308,8 @@ class AuthorisationTransactionalExecutorConcurrencyTest {
             result ->
                 result.error() instanceof ConcurrentIdempotencyRaceException
                     || result.error() instanceof ObjectOptimisticLockingFailureException
-                    || result.error() instanceof DataIntegrityViolationException);
+                    || result.error() instanceof DataIntegrityViolationException
+                    || result.error() instanceof AccountConcurrencyConflictException);
   }
 
   private long countEventsByAuthorisationAndEventTypeAndIdempotencyKey(

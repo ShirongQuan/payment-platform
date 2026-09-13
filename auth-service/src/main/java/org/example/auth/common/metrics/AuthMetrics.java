@@ -40,6 +40,13 @@ public class AuthMetrics {
   // idempotency cache metric
   public static final String AUTH_IDEMPOTENCY_CACHE_TOTAL = "auth_idempotency_cache_total";
 
+  // concurrency conflict metric: type=idempotency_race (duplicate request, safely resolved to an
+  // idempotent replay) and type=optimistic_lock (two distinct requests racing on the same
+  // account's version - benign infra contention, mapped to a 409 retry-hint, not a replay)
+  public static final String AUTH_CONCURRENCY_CONFLICT_TOTAL = "auth_concurrency_conflict_total";
+  public static final String OPERATION_TAG = "operation";
+  public static final String TYPE_TAG = "type";
+
   private static final List<OutboxEventStatus> BACKLOG_STATUSES =
       List.of(OutboxEventStatus.NEW, OutboxEventStatus.PUBLISHING);
 
@@ -63,6 +70,18 @@ public class AuthMetrics {
   // re-built via Counter.builder(...).register(...) on every call.
   private final Map<AuthorisationOutcomeKey, Counter> authorisationOutcomeCounters =
       new ConcurrentHashMap<>();
+
+  // Concurrency conflict counters (idempotency_race only for now), pre-registered per operation
+  // (finite, known set) so all three series exist with a value of 0 from t=0.
+  private final Counter authoriseIdempotencyRaceCounter;
+  private final Counter captureIdempotencyRaceCounter;
+  private final Counter reverseIdempotencyRaceCounter;
+
+  // Concurrency conflict counters (optimistic_lock: same account, different idempotency key),
+  // pre-registered per operation for the same reason as above.
+  private final Counter authoriseOptimisticLockCounter;
+  private final Counter captureOptimisticLockCounter;
+  private final Counter reverseOptimisticLockCounter;
 
   public AuthMetrics(MeterRegistry meterRegistry, OutboxEventRepository outboxEventRepository) {
     this.meterRegistry = meterRegistry;
@@ -142,6 +161,51 @@ public class AuthMetrics {
             .description("Outbox publish attempt outcomes (success/retry/failed)")
             .tag(RESULT_TAG, "failed")
             .register(meterRegistry);
+
+    // Pre-register all three operations so authorise/capture/reverse series all exist from t=0.
+    this.authoriseIdempotencyRaceCounter =
+        Counter.builder(AUTH_CONCURRENCY_CONFLICT_TOTAL)
+            .description(
+                "Concurrency conflicts detected and safely resolved during authorisation lifecycle operations")
+            .tag(OPERATION_TAG, "authorise")
+            .tag(TYPE_TAG, "idempotency_race")
+            .register(meterRegistry);
+    this.captureIdempotencyRaceCounter =
+        Counter.builder(AUTH_CONCURRENCY_CONFLICT_TOTAL)
+            .description(
+                "Concurrency conflicts detected and safely resolved during authorisation lifecycle operations")
+            .tag(OPERATION_TAG, "capture")
+            .tag(TYPE_TAG, "idempotency_race")
+            .register(meterRegistry);
+    this.reverseIdempotencyRaceCounter =
+        Counter.builder(AUTH_CONCURRENCY_CONFLICT_TOTAL)
+            .description(
+                "Concurrency conflicts detected and safely resolved during authorisation lifecycle operations")
+            .tag(OPERATION_TAG, "reverse")
+            .tag(TYPE_TAG, "idempotency_race")
+            .register(meterRegistry);
+
+    this.authoriseOptimisticLockCounter =
+        Counter.builder(AUTH_CONCURRENCY_CONFLICT_TOTAL)
+            .description(
+                "Concurrency conflicts detected and safely resolved during authorisation lifecycle operations")
+            .tag(OPERATION_TAG, "authorise")
+            .tag(TYPE_TAG, "optimistic_lock")
+            .register(meterRegistry);
+    this.captureOptimisticLockCounter =
+        Counter.builder(AUTH_CONCURRENCY_CONFLICT_TOTAL)
+            .description(
+                "Concurrency conflicts detected and safely resolved during authorisation lifecycle operations")
+            .tag(OPERATION_TAG, "capture")
+            .tag(TYPE_TAG, "optimistic_lock")
+            .register(meterRegistry);
+    this.reverseOptimisticLockCounter =
+        Counter.builder(AUTH_CONCURRENCY_CONFLICT_TOTAL)
+            .description(
+                "Concurrency conflicts detected and safely resolved during authorisation lifecycle operations")
+            .tag(OPERATION_TAG, "reverse")
+            .tag(TYPE_TAG, "optimistic_lock")
+            .register(meterRegistry);
   }
 
   public void incrementSuccess() {
@@ -201,5 +265,35 @@ public class AuthMetrics {
   /** Records that an outbox event exhausted retries and was moved to the terminal FAILED state. */
   public void incrementOutboxPublishFailed() {
     outboxPublishFailedCounter.increment();
+  }
+
+  /** Records a concurrent duplicate (same idempotency key) request race resolved during authorise. */
+  public void incrementAuthoriseIdempotencyRaceConflict() {
+    authoriseIdempotencyRaceCounter.increment();
+  }
+
+  /** Records a concurrent duplicate (same idempotency key) request race resolved during capture. */
+  public void incrementCaptureIdempotencyRaceConflict() {
+    captureIdempotencyRaceCounter.increment();
+  }
+
+  /** Records a concurrent duplicate (same idempotency key) request race resolved during reverse. */
+  public void incrementReverseIdempotencyRaceConflict() {
+    reverseIdempotencyRaceCounter.increment();
+  }
+
+  /** Records a same-account optimistic-lock conflict (different idempotency keys) during authorise. */
+  public void incrementAuthoriseOptimisticLockConflict() {
+    authoriseOptimisticLockCounter.increment();
+  }
+
+  /** Records a same-account optimistic-lock conflict (different idempotency keys) during capture. */
+  public void incrementCaptureOptimisticLockConflict() {
+    captureOptimisticLockCounter.increment();
+  }
+
+  /** Records a same-account optimistic-lock conflict (different idempotency keys) during reverse. */
+  public void incrementReverseOptimisticLockConflict() {
+    reverseOptimisticLockCounter.increment();
   }
 }

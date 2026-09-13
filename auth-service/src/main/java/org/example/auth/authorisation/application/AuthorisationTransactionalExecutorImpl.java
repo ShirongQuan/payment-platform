@@ -26,6 +26,7 @@ import org.example.auth.authorisation.infrastructure.AuthorisationEventRepositor
 import org.example.auth.authorisation.infrastructure.AuthorisationMapper;
 import org.example.auth.authorisation.infrastructure.AuthorisationRepository;
 import org.example.auth.common.OperationType;
+import org.example.auth.common.exception.AccountConcurrencyConflictException;
 import org.example.auth.common.exception.AccountNotFoundException;
 import org.example.auth.common.exception.AuthorisationIllegalStateException;
 import org.example.auth.common.exception.AuthorisationNotFoundException;
@@ -35,6 +36,7 @@ import org.example.auth.fraud.FraudDecision;
 import org.example.auth.outbox.application.OutboxEventService;
 import org.example.auth.outbox.domain.EventType;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -207,6 +209,20 @@ public class AuthorisationTransactionalExecutorImpl implements AuthorisationTran
                   correlationId,
                   OffsetDateTime.now());
 
+        } catch (ObjectOptimisticLockingFailureException e) {
+          // Two distinct, legitimate requests (different idempotency keys) racing to reserve
+          // balance on the same account at (almost) the same instant - benign infra contention,
+          // not a duplicate request, so there is no safe replay to fall back to (unlike
+          // ConcurrentIdempotencyRaceException below). Fail fast and let the caller retry.
+          // Expected/handled (tracked via auth_concurrency_conflict_total, resolved with its own
+          // WARN log one layer up in AuthorisationServiceImpl) - log a concise message only, not
+          // the full exception, to avoid a duplicate, misleadingly alarming stack-trace dump.
+          log.warn(
+              "Concurrent account-version conflict while reserving balance for authorise, accountId={}, idempotencyKey={}, cause={}",
+              request.accountId(),
+              request.idempotencyKey(),
+              e.getMessage());
+          throw new AccountConcurrencyConflictException(e);
         } catch (InsufficientFundException ife) {
           log.debug(
               "Authorise declined due to insufficient funds, accountId={}, requestedAmount={}",
@@ -249,12 +265,14 @@ public class AuthorisationTransactionalExecutorImpl implements AuthorisationTran
       // race-condition safety net for idempotency under concurrency.
       // DB constraint: uq_authorisation_event_account_eventtype_idempotency
       // Fail-fast signal of concurrent idempotency race, so the whole transaction rolls back
-      // consistently.
+      // consistently. Expected/handled (tracked via auth_concurrency_conflict_total, resolved
+      // with its own WARN log one layer up in AuthorisationServiceImpl) - log a concise message
+      // only, not the full exception, to avoid a duplicate, misleadingly alarming stack trace.
       log.warn(
-          "Concurrent idempotency race while persisting authorise, accountId={}, idempotencyKey={}",
+          "Concurrent idempotency race while persisting authorise, accountId={}, idempotencyKey={}, cause={}",
           request.accountId(),
           request.idempotencyKey(),
-          e);
+          e.getMessage());
       throw new ConcurrentIdempotencyRaceException(e);
     }
 
@@ -396,12 +414,19 @@ public class AuthorisationTransactionalExecutorImpl implements AuthorisationTran
           "Persisted capture state and event, authorisationId={}, eventId={}",
           authorisationEntity.getId(),
           authorisationEventEntity.getEventId());
-    } catch (DataIntegrityViolationException e) {
+    } catch (ObjectOptimisticLockingFailureException e) {
       log.warn(
-          "Concurrent idempotency race while persisting capture, authorisationId={}, idempotencyKey={}",
+          "Concurrent account-version conflict while releasing reserved balance for capture, authorisationId={}, idempotencyKey={}, cause={}",
           authorisationId,
           captureRequest.idempotencyKey(),
-          e);
+          e.getMessage());
+      throw new AccountConcurrencyConflictException(e);
+    } catch (DataIntegrityViolationException e) {
+      log.warn(
+          "Concurrent idempotency race while persisting capture, authorisationId={}, idempotencyKey={}, cause={}",
+          authorisationId,
+          captureRequest.idempotencyKey(),
+          e.getMessage());
       throw new ConcurrentIdempotencyRaceException(e);
     }
     // write outbox event
@@ -516,12 +541,19 @@ public class AuthorisationTransactionalExecutorImpl implements AuthorisationTran
           "Persisted reverse state and event, authorisationId={}, eventId={}",
           authorisationEntity.getId(),
           authorisationEventEntity.getEventId());
-    } catch (DataIntegrityViolationException e) {
+    } catch (ObjectOptimisticLockingFailureException e) {
       log.warn(
-          "Concurrent idempotency race while persisting reverse, authorisationId={}, idempotencyKey={}",
+          "Concurrent account-version conflict while releasing reserved balance for reverse, authorisationId={}, idempotencyKey={}, cause={}",
           authorisationId,
           reverseRequest.idempotencyKey(),
-          e);
+          e.getMessage());
+      throw new AccountConcurrencyConflictException(e);
+    } catch (DataIntegrityViolationException e) {
+      log.warn(
+          "Concurrent idempotency race while persisting reverse, authorisationId={}, idempotencyKey={}, cause={}",
+          authorisationId,
+          reverseRequest.idempotencyKey(),
+          e.getMessage());
       throw new ConcurrentIdempotencyRaceException(e);
     }
 

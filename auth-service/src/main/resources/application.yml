@@ -125,6 +125,13 @@ logging:
           authorisation: DEBUG
     org.hibernate.SQL: ERROR
     org.hibernate.orm.jdbc.bind: ERROR
+    # Hibernate logs every JDBC/SQL exception here itself (raw ErrorCode/SQLState + DB error text)
+    # *before* Spring translates and our code catches it - including expected, safely-handled
+    # ones like the concurrent-idempotency-race unique-constraint violation (see
+    # ConcurrentIdempotencyRaceException / AuthorisationTransactionalExecutorImpl), which already
+    # gets its own clear log.warn(...) with context. Suppress the raw duplicate to avoid noise;
+    # genuinely unhandled SQL errors will still surface via the exception's own stack trace.
+    org.hibernate.orm.jdbc.error: ERROR
     org.flywaydb: INFO
     org.springframework.jdbc: INFO
     #    org.springframework.boot.actuate.autoconfigure.tracing: DEBUG

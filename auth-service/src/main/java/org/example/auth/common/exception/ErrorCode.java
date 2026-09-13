@@ -8,7 +8,9 @@ public enum ErrorCode {
   CURRENCY_MISMATCH("Currency mismatch"),
   INVALID_CURRENCY("Invalid currency"),
   IDEMPOTENCY_CONFLICT("Idempotency key conflict"),
-  INVALID_AUTHORISATION_STATE("Authorisation is in an invalid state for this operation");
+  INVALID_AUTHORISATION_STATE("Authorisation is in an invalid state for this operation"),
+  ACCOUNT_CONCURRENCY_CONFLICT(
+      "Concurrent request on the same account conflicted; please retry");
 
   private final String defaultMessage;
 

@@ -18,33 +18,8 @@
   "editable": true,
   "fiscalYearStartMonth": 0,
   "graphTooltip": 0,
-  "id": 5,
-  "links": [
-    {
-      "asDropdown": false,
-      "icon": "external link",
-      "title": "Auth Dashboard (detail)",
-      "tooltip": "Drill down into auth-service metrics",
-      "type": "link",
-      "url": "/d/auth-dashboard/auth-dashboard"
-    },
-    {
-      "asDropdown": false,
-      "icon": "external link",
-      "title": "Ledger Dashboard (detail)",
-      "tooltip": "Drill down into ledger-service metrics",
-      "type": "link",
-      "url": "/d/ledger-dashboard/ledger-dashboard"
-    },
-    {
-      "asDropdown": false,
-      "icon": "external link",
-      "title": "Service Overview (targets)",
-      "tooltip": "Raw up/down target health",
-      "type": "link",
-      "url": "/d/service-overview/service-overview"
-    }
-  ],
+  "id": 3,
+  "links": [],
   "panels": [
     {
       "collapsed": false,
@@ -64,6 +39,7 @@
         "type": "prometheus",
         "uid": "prometheus"
       },
+      "description": "Up/down status (1=up, 0=down) for each scraped Prometheus target: auth-service, fraud-service, ledger-service, and supporting infra exporters.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -73,7 +49,7 @@
             "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
-            "axisLabel": "",
+            "axisLabel": "Target status (1=up, 0=down)",
             "axisPlacement": "auto",
             "barAlignment": 0,
             "barWidthFactor": 0.6,
@@ -116,11 +92,57 @@
             ]
           }
         },
-        "overrides": []
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "auth-service"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "blue",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "fraud-service"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "orange",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "ledger-service"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "purple",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          }
+        ]
       },
       "gridPos": {
-        "h": 8,
-        "w": 24,
+        "h": 9,
+        "w": 12,
         "x": 0,
         "y": 1
       },
@@ -143,12 +165,12 @@
         {
           "editorMode": "code",
           "expr": "up",
-          "legendFormat": "{{job}} - {{instance}}",
+          "legendFormat": "{{job}}",
           "range": true,
           "refId": "A"
         }
       ],
-      "title": "Up Targets",
+      "title": "Up targets",
       "type": "timeseries"
     },
     {
@@ -210,13 +232,59 @@
           },
           "unit": "reqps"
         },
-        "overrides": []
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "auth-service"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "blue",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "fraud-service"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "orange",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "ledger-service"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "purple",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          }
+        ]
       },
       "gridPos": {
-        "h": 8,
-        "w": 8,
-        "x": 0,
-        "y": 9
+        "h": 9,
+        "w": 12,
+        "x": 12,
+        "y": 1
       },
       "id": 102,
       "options": {
@@ -349,10 +417,10 @@
         ]
       },
       "gridPos": {
-        "h": 8,
-        "w": 8,
-        "x": 8,
-        "y": 9
+        "h": 9,
+        "w": 12,
+        "x": 0,
+        "y": 10
       },
       "id": 104,
       "options": {
@@ -372,13 +440,13 @@
       "targets": [
         {
           "editorMode": "code",
-          "expr": "sum by (application, status) (increase(http_server_requests_seconds_count{uri!~\".*(prometheus|health).*\"}[1m]))",
-          "legendFormat": "{{application-status}}",
+          "expr": "sum by (application, status) (increase(http_server_requests_seconds_count{uri!~\".*(prometheus|health).*\",status!=\"304\"}[1m]))",
+          "legendFormat": "{{application}} - {{status}}",
           "range": true,
           "refId": "A"
         }
       ],
-      "title": "HTTP Request Throughput by Application & Status (1m)",
+      "title": "HTTP request throughput by application & status (1m)",
       "type": "timeseries"
     },
     {
@@ -444,13 +512,59 @@
           },
           "unit": "s"
         },
-        "overrides": []
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "auth-service"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "blue",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "fraud-service"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "orange",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "ledger-service"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "purple",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          }
+        ]
       },
       "gridPos": {
-        "h": 8,
-        "w": 8,
-        "x": 16,
-        "y": 9
+        "h": 9,
+        "w": 12,
+        "x": 12,
+        "y": 10
       },
       "id": 103,
       "options": {
@@ -480,12 +594,38 @@
       "type": "timeseries"
     },
     {
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 19
+      },
+      "id": 503,
+      "options": {
+        "code": {
+          "language": "plaintext",
+          "showLineNumbers": false,
+          "showMiniMap": false
+        },
+        "content": "&nbsp;\n\n",
+        "mode": "html"
+      },
+      "pluginVersion": "11.6.15",
+      "title": "",
+      "transparent": true,
+      "type": "text"
+    },
+    {
       "collapsed": false,
       "gridPos": {
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 17
+        "y": 20
       },
       "id": 200,
       "panels": [],
@@ -497,6 +637,7 @@
         "type": "prometheus",
         "uid": "prometheus"
       },
+      "description": "Auth-service request processing outcomes (success/failure) over the trailing 5m window, from the auth_requests_total counter.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -580,10 +721,10 @@
         ]
       },
       "gridPos": {
-        "h": 8,
+        "h": 9,
         "w": 12,
         "x": 0,
-        "y": 18
+        "y": 21
       },
       "id": 201,
       "options": {
@@ -609,7 +750,7 @@
           "refId": "A"
         }
       ],
-      "title": "Auth request processing results (last 5m)",
+      "title": "Auth request outcomes (last 5m)",
       "type": "timeseries"
     },
     {
@@ -617,6 +758,7 @@
         "type": "prometheus",
         "uid": "prometheus"
       },
+      "description": "Authorisation decisions (AUTHORISED/DECLINED) returned by auth-service over the trailing 5m window, from the auth_authorisations_total counter.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -700,10 +842,10 @@
         ]
       },
       "gridPos": {
-        "h": 8,
+        "h": 9,
         "w": 12,
         "x": 12,
-        "y": 18
+        "y": 21
       },
       "id": 202,
       "options": {
@@ -737,6 +879,7 @@
         "type": "prometheus",
         "uid": "prometheus"
       },
+      "description": "Percentage of authorisation requests approved (AUTHORISED) over time.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -800,10 +943,10 @@
         "overrides": []
       },
       "gridPos": {
-        "h": 8,
+        "h": 9,
         "w": 12,
         "x": 0,
-        "y": 26
+        "y": 30
       },
       "id": 203,
       "options": {
@@ -829,7 +972,7 @@
           "refId": "A"
         }
       ],
-      "title": "Authorisation approval rate over time (%)",
+      "title": "Authorisation approval rate (%)",
       "type": "timeseries"
     },
     {
@@ -837,6 +980,7 @@
         "type": "prometheus",
         "uid": "prometheus"
       },
+      "description": "Rate of declined authorisations per minute, broken down by decline reason.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -889,10 +1033,10 @@
         "overrides": []
       },
       "gridPos": {
-        "h": 8,
+        "h": 9,
         "w": 12,
         "x": 12,
-        "y": 26
+        "y": 30
       },
       "id": 204,
       "options": {
@@ -918,8 +1062,170 @@
           "refId": "A"
         }
       ],
-      "title": "Decline rate by reason over time",
+      "title": "Declines/min by reason",
       "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "description": "Concurrency conflicts (concurrent duplicate-idempotency-key requests) detected and safely resolved during authorise/capture/reverse, from the auth_concurrency_conflict_total counter.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "Conflicts/min",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "barWidthFactor": 0.6,
+            "drawStyle": "line",
+            "fillOpacity": 0,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 0,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green"
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "authorise"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "blue",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "capture"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "green",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "reverse"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "orange",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 24,
+        "x": 0,
+        "y": 39
+      },
+      "id": 205,
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "hideZeros": false,
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "pluginVersion": "11.6.15",
+      "targets": [
+        {
+          "editorMode": "code",
+          "expr": "sum by (operation, type) (rate(auth_concurrency_conflict_total{application=\"auth-service\"}[5m]) * 60)",
+          "legendFormat": "{{operation}}-{{type}}",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "Concurrency conflicts/min by operation and conflict type",
+      "type": "timeseries"
+    },
+    {
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 48
+      },
+      "id": 505,
+      "options": {
+        "code": {
+          "language": "plaintext",
+          "showLineNumbers": false,
+          "showMiniMap": false
+        },
+        "content": "&nbsp;\n\n",
+        "mode": "html"
+      },
+      "pluginVersion": "11.6.15",
+      "title": "",
+      "transparent": true,
+      "type": "text"
     },
     {
       "collapsed": false,
@@ -927,7 +1233,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 34
+        "y": 49
       },
       "id": 300,
       "panels": [],
@@ -939,6 +1245,7 @@
         "type": "prometheus",
         "uid": "prometheus"
       },
+      "description": "Client-side (auth-service) fraud check latency percentiles as observed when calling fraud-service, measured around the Resilience4j circuit breaker call.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -1060,10 +1367,10 @@
         ]
       },
       "gridPos": {
-        "h": 8,
+        "h": 9,
         "w": 12,
         "x": 0,
-        "y": 35
+        "y": 50
       },
       "id": 301,
       "options": {
@@ -1200,10 +1507,10 @@
         ]
       },
       "gridPos": {
-        "h": 8,
+        "h": 9,
         "w": 12,
         "x": 12,
-        "y": 35
+        "y": 50
       },
       "id": 302,
       "options": {
@@ -1250,7 +1557,7 @@
             "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
-            "axisLabel": "Calls/sec",
+            "axisLabel": "Calls/min",
             "axisPlacement": "auto",
             "barAlignment": 0,
             "barWidthFactor": 0.6,
@@ -1354,10 +1661,10 @@
         ]
       },
       "gridPos": {
-        "h": 8,
+        "h": 9,
         "w": 24,
         "x": 0,
-        "y": 43
+        "y": 59
       },
       "id": 303,
       "options": {
@@ -1377,7 +1684,7 @@
       "targets": [
         {
           "editorMode": "code",
-          "expr": "sum(rate(resilience4j_circuitbreaker_calls_seconds_count{name=\"fraudService\", kind=\"successful\"}[1m]))",
+          "expr": "sum(rate(resilience4j_circuitbreaker_calls_seconds_count{name=\"fraudService\", kind=\"successful\"}[5m]) * 60)",
           "legendFormat": "successful",
           "range": true,
           "refId": "A"
@@ -1556,10 +1863,10 @@
         ]
       },
       "gridPos": {
-        "h": 8,
+        "h": 9,
         "w": 12,
         "x": 0,
-        "y": 51
+        "y": 68
       },
       "id": 304,
       "options": {
@@ -1651,13 +1958,104 @@
           },
           "unit": "s"
         },
-        "overrides": []
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "approve"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "green",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "decline"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "orange",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "duplicate"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "blue",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "conflict"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "purple",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "in_progress"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "yellow",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "error"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "red",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          }
+        ]
       },
       "gridPos": {
-        "h": 8,
+        "h": 9,
         "w": 12,
         "x": 12,
-        "y": 51
+        "y": 68
       },
       "id": 305,
       "options": {
@@ -1687,12 +2085,38 @@
       "type": "timeseries"
     },
     {
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 77
+      },
+      "id": 507,
+      "options": {
+        "code": {
+          "language": "plaintext",
+          "showLineNumbers": false,
+          "showMiniMap": false
+        },
+        "content": "&nbsp;\n\n",
+        "mode": "html"
+      },
+      "pluginVersion": "11.6.15",
+      "title": "",
+      "transparent": true,
+      "type": "text"
+    },
+    {
       "collapsed": false,
       "gridPos": {
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 59
+        "y": 78
       },
       "id": 400,
       "panels": [],
@@ -1822,10 +2246,10 @@
         ]
       },
       "gridPos": {
-        "h": 8,
+        "h": 9,
         "w": 12,
         "x": 0,
-        "y": 60
+        "y": 79
       },
       "id": 401,
       "options": {
@@ -1937,10 +2361,10 @@
         "overrides": []
       },
       "gridPos": {
-        "h": 8,
+        "h": 9,
         "w": 12,
         "x": 12,
-        "y": 60
+        "y": 79
       },
       "id": 402,
       "options": {
@@ -2077,10 +2501,10 @@
         ]
       },
       "gridPos": {
-        "h": 8,
+        "h": 12,
         "w": 24,
         "x": 0,
-        "y": 68
+        "y": 88
       },
       "id": 405,
       "options": {
@@ -2127,7 +2551,7 @@
             "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
-            "axisLabel": "",
+            "axisLabel": "Received/min",
             "axisPlacement": "auto",
             "barAlignment": 0,
             "barWidthFactor": 0.6,
@@ -2205,10 +2629,10 @@
         ]
       },
       "gridPos": {
-        "h": 9,
+        "h": 12,
         "w": 24,
         "x": 0,
-        "y": 76
+        "y": 100
       },
       "id": 403,
       "options": {
@@ -2231,8 +2655,8 @@
       "targets": [
         {
           "editorMode": "code",
-          "expr": "sum by (topic) (rate(ledger_kafka_consumer_messages_received_total{application=\"ledger-service\"}[5m]))",
-          "legendFormat": "received/sec - {{topic}}",
+          "expr": "sum by (topic) (rate(ledger_kafka_consumer_messages_received_total{application=\"ledger-service\"}[5m]) * 60)",
+          "legendFormat": "received/min - {{topic}}",
           "range": true,
           "refId": "A"
         },
@@ -2302,13 +2726,104 @@
           },
           "unit": "short"
         },
-        "overrides": []
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "AUTHORISATION_AUTHORISED - success"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "green",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "AUTHORISATION_CAPTURED - success"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "blue",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "AUTHORISATION_REVERSED - success"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "purple",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "AUTHORISATION_DECLINED - ignored"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "yellow",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": ".*- ignored$"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "yellow",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": ".*- error$"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "red",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          }
+        ]
       },
       "gridPos": {
-        "h": 9,
+        "h": 12,
         "w": 24,
         "x": 0,
-        "y": 85
+        "y": 112
       },
       "id": 406,
       "options": {
@@ -2398,10 +2913,10 @@
         "overrides": []
       },
       "gridPos": {
-        "h": 8,
+        "h": 9,
         "w": 24,
         "x": 0,
-        "y": 94
+        "y": 124
       },
       "id": 407,
       "options": {
@@ -2492,10 +3007,10 @@
         "overrides": []
       },
       "gridPos": {
-        "h": 9,
+        "h": 12,
         "w": 24,
         "x": 0,
-        "y": 102
+        "y": 133
       },
       "id": 404,
       "options": {
@@ -2528,12 +3043,38 @@
       "type": "timeseries"
     },
     {
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 145
+      },
+      "id": 506,
+      "options": {
+        "code": {
+          "language": "plaintext",
+          "showLineNumbers": false,
+          "showMiniMap": false
+        },
+        "content": "&nbsp;\n\n",
+        "mode": "html"
+      },
+      "pluginVersion": "11.6.15",
+      "title": "",
+      "transparent": true,
+      "type": "text"
+    },
+    {
       "collapsed": false,
       "gridPos": {
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 111
+        "y": 146
       },
       "id": 500,
       "panels": [],
@@ -2644,10 +3185,10 @@
         ]
       },
       "gridPos": {
-        "h": 8,
+        "h": 9,
         "w": 12,
         "x": 0,
-        "y": 112
+        "y": 147
       },
       "id": 501,
       "options": {
@@ -2673,7 +3214,7 @@
           "refId": "A"
         }
       ],
-      "title": "Idempotency cache outcomes per minute",
+      "title": "Idempotency cache outcomes/min by result",
       "type": "timeseries"
     },
     {
@@ -2691,7 +3232,7 @@
             "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
-            "axisLabel": "",
+            "axisLabel": "Hit rate %",
             "axisPlacement": "auto",
             "barAlignment": 0,
             "barWidthFactor": 0.6,
@@ -2744,10 +3285,10 @@
         "overrides": []
       },
       "gridPos": {
-        "h": 8,
+        "h": 9,
         "w": 12,
         "x": 12,
-        "y": 112
+        "y": 147
       },
       "id": 502,
       "options": {
@@ -2773,12 +3314,12 @@
           "refId": "A"
         }
       ],
-      "title": "Idempotency cache hit rate",
+      "title": "Idempotency cache hit rate (%)",
       "type": "timeseries"
     }
   ],
   "preload": false,
-  "refresh": "5s",
+  "refresh": "auto",
   "schemaVersion": 41,
   "tags": [
     "spring-boot",
@@ -2791,12 +3332,12 @@
     "list": []
   },
   "time": {
-    "from": "now-15m",
+    "from": "now-5m",
     "to": "now"
   },
   "timepicker": {},
   "timezone": "",
   "title": "Payment Platform Overview",
   "uid": "payment-platform-overview",
-  "version": 10
+  "version": 7
 }

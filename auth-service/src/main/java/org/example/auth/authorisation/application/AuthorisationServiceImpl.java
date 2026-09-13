@@ -22,6 +22,7 @@ import org.example.auth.authorisation.infrastructure.AuthorisationEntity;
 import org.example.auth.authorisation.infrastructure.AuthorisationEventRepository;
 import org.example.auth.authorisation.infrastructure.AuthorisationRepository;
 import org.example.auth.common.OperationType;
+import org.example.auth.common.exception.AccountConcurrencyConflictException;
 import org.example.auth.common.exception.AccountNotFoundException;
 import org.example.auth.common.exception.AuthorisationNotFoundException;
 import org.example.auth.common.exception.IdempotencyConflictException;
@@ -162,12 +163,23 @@ public class AuthorisationServiceImpl implements AuthorisationService {
           new CachedAuthorisationResponse(expectedFingerprint, authorisationResponse));
       return authorisationResponse;
     } catch (ConcurrentIdempotencyRaceException e) {
+      authMetrics.incrementAuthoriseIdempotencyRaceConflict();
+      // Expected/handled: a concurrent duplicate lost the DB race and is being resolved to an
+      // idempotent replay below. Already logged with full context in
+      // AuthorisationTransactionalExecutorImpl and tracked via auth_concurrency_conflict_total -
+      // no need to dump the (large, misleadingly alarming) exception chain again here.
       log.warn(
           "Resolving authorise idempotency after concurrent race, accountId={}, idempotencyKey={}",
           request.accountId(),
-          request.idempotencyKey(),
-          e);
+          request.idempotencyKey());
       return resolveIdempotencyAfterRollback(request, normalizedCurrency);
+    } catch (AccountConcurrencyConflictException e) {
+      authMetrics.incrementAuthoriseOptimisticLockConflict();
+      log.warn(
+          "Authorise lost an account-version race against a concurrent, differently-keyed request, accountId={}, idempotencyKey={}",
+          request.accountId(),
+          request.idempotencyKey());
+      throw e;
     }
   }
 
@@ -374,11 +386,11 @@ public class AuthorisationServiceImpl implements AuthorisationService {
           new CachedCaptureResponse(expectedFingerprint, captureResponse));
       return captureResponse;
     } catch (ConcurrentIdempotencyRaceException e) {
+      authMetrics.incrementCaptureIdempotencyRaceConflict();
       log.warn(
           "Resolving capture idempotency after concurrent race, authorisationId={}, idempotencyKey={}",
           authorisationId,
-          captureRequest.idempotencyKey(),
-          e);
+          captureRequest.idempotencyKey());
       CaptureResponse resolvedResponse =
           resolveIdempotencyAfterCaptureRollback(authorisationId, captureRequest);
       saveResponseToCache(
@@ -387,6 +399,13 @@ public class AuthorisationServiceImpl implements AuthorisationService {
           captureRequest.idempotencyKey(),
           new CachedCaptureResponse(expectedFingerprint, resolvedResponse));
       return resolvedResponse;
+    } catch (AccountConcurrencyConflictException e) {
+      authMetrics.incrementCaptureOptimisticLockConflict();
+      log.warn(
+          "Capture lost an account-version race against a concurrent, differently-keyed request, authorisationId={}, idempotencyKey={}",
+          authorisationId,
+          captureRequest.idempotencyKey());
+      throw e;
     }
   }
 
@@ -459,11 +478,11 @@ public class AuthorisationServiceImpl implements AuthorisationService {
           new CachedReverseResponse(expectedFingerprint, reverseResponse));
       return reverseResponse;
     } catch (ConcurrentIdempotencyRaceException e) {
+      authMetrics.incrementReverseIdempotencyRaceConflict();
       log.warn(
           "Resolving reverse idempotency after concurrent race, authorisationId={}, idempotencyKey={}",
           authorisationId,
-          reverseRequest.idempotencyKey(),
-          e);
+          reverseRequest.idempotencyKey());
       ReverseResponse resolvedResponse =
           resolveIdempotencyAfterReverseRollback(authorisationId, reverseRequest);
       saveResponseToCache(
@@ -472,6 +491,13 @@ public class AuthorisationServiceImpl implements AuthorisationService {
           reverseRequest.idempotencyKey(),
           new CachedReverseResponse(expectedFingerprint, resolvedResponse));
       return resolvedResponse;
+    } catch (AccountConcurrencyConflictException e) {
+      authMetrics.incrementReverseOptimisticLockConflict();
+      log.warn(
+          "Reverse lost an account-version race against a concurrent, differently-keyed request, authorisationId={}, idempotencyKey={}",
+          authorisationId,
+          reverseRequest.idempotencyKey());
+      throw e;
     }
   }
 

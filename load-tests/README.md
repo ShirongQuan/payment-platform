@@ -69,6 +69,17 @@ below, so Grafana panels show a clear gap/boundary between phases instead of one
   (defaults: `ROUNDS=10 DUPLICATES_PER_EVENT=3 INTERVAL_SECONDS=1`). See its own section below for
   details — generates `ledger_event_duplicate_skipped_total` samples across all event types.
 
+**Phase 5 — concurrency conflicts**
+- Delegates to the sibling `generate-concurrency-conflicts.sh` script (found relative to this
+  script's own location), passing
+  `ROUNDS=$CONCURRENCY_ROUNDS PARALLEL_REQUESTS=$CONCURRENCY_PARALLEL_REQUESTS INTERVAL_SECONDS=$CONCURRENCY_INTERVAL_SECONDS`
+  (defaults: `ROUNDS=5 PARALLEL_REQUESTS=6 INTERVAL_SECONDS=2`). This is the **last** phase, run
+  after the `REST_BETWEEN_STEPS_SECONDS` (default 2s) gap that follows phase 4. See its own section
+  below for details — generates
+  `auth_concurrency_conflict_total{operation=authorise|capture|reverse, type=idempotency_race|optimistic_lock}`
+  samples via truly concurrent authorise/capture/reverse races, auto-provisioning its own dedicated
+  GBP account per round.
+
 The script always resets fraud-service's failure-mode to `OFF` at the end (even on error/Ctrl-C),
 via an `EXIT` trap, so it never leaves the environment in a broken state.
 
@@ -97,6 +108,9 @@ DLT_MESSAGE_COUNT=5 ./generate-traffic.sh
 # Fewer dedup-event rounds, or shrink the pause between top-level phases
 DEDUP_ROUNDS=3 DEDUP_DUPLICATES_PER_EVENT=2 REST_BETWEEN_STEPS_SECONDS=1 ./generate-traffic.sh
 
+# Fewer/faster concurrency-conflict rounds
+CONCURRENCY_ROUNDS=2 CONCURRENCY_PARALLEL_REQUESTS=4 CONCURRENCY_INTERVAL_SECONDS=1 ./generate-traffic.sh
+
 # Use your own account IDs
 GBP_ACCOUNT_ID=11111111-1111-1111-1111-111111111111 \
 USD_ACCOUNT_ID=22222222-2222-2222-2222-222222222222 \
@@ -106,7 +120,8 @@ EUR_ACCOUNT_ID=33333333-3333-3333-3333-333333333333 \
 
 Full default run takes roughly **5–6 minutes** (phase 1: 50×2s + 30×1s ≈ 130s; phase 2 adds a 25s
 hold plus 10×2s recovery ≈ 55s; phase 3 is quick; phase 4 delegates to `generate-dedup-events.sh`
-with 10 rounds ≈ 60s+; plus ~4×2s rest between phases). Each phase prints a `###`-bannered
+with 10 rounds ≈ 60s+; phase 5 delegates to `generate-concurrency-conflicts.sh` with 5 rounds ≈ 10s+;
+plus ~5×2s rest between phases). Each phase prints a `###`-bannered
 description before it starts, e.g.:
 
 ```
@@ -128,6 +143,9 @@ curl -s http://localhost:9010/actuator/prometheus | grep 'status="503"'
 
 # DLT publishes
 curl -s http://localhost:9020/actuator/prometheus | grep ledger_kafka
+
+# Concurrency conflicts
+curl -s http://localhost:9000/actuator/prometheus | grep auth_concurrency_conflict_total
 ```
 
 ## `generate-dedup-events.sh`
@@ -181,6 +199,89 @@ KAFKA_BROKER=localhost:9092 LEDGER_BASE_URL=http://localhost:9020 ./generate-ded
 
 ```bash
 curl -s http://localhost:9020/actuator/prometheus | grep ledger_event_duplicate_skipped_total
+```
+
+## `generate-concurrency-conflicts.sh`
+
+> Also runs automatically as **Phase 5 (the last step)** of `generate-traffic.sh`, 2s after the
+> preceding dedup-events phase finishes (`REST_BETWEEN_STEPS_SECONDS`). Run it standalone (below)
+> if you only want to generate concurrency-conflict traffic.
+
+Generates test data for the Grafana metric:
+
+```promql
+sum by (operation, type) (rate(auth_concurrency_conflict_total{application="auth-service"}[5m]) * 60)
+```
+
+### How it works
+
+`auth-service` recognizes two distinct concurrency conflicts, both counted on the same metric,
+distinguished by the `type` tag:
+
+- **`type=idempotency_race`** — two (or more) requests share the same idempotency key and race on
+  the unique DB constraint (`account_id`/`authorisation_id`, `event_type`, `idempotency_key`).
+  Exactly one insert wins; the rest are caught as `ConcurrentIdempotencyRaceException` and safely
+  resolved by re-reading and replaying the winner's response (HTTP 200, identical body for every
+  racer).
+- **`type=optimistic_lock`** — two *distinct*, legitimately different requests (different
+  idempotency keys) both try to mutate the *same account's* balance at the same instant. Every
+  authorise/capture/reverse that changes the account's balance bumps its optimistic-lock `version`
+  column, so whichever request's update loses the version race gets
+  `ObjectOptimisticLockingFailureException`, wrapped as `AccountConcurrencyConflictException` and
+  mapped to HTTP 409 (`errorCode=ACCOUNT_CONCURRENCY_CONFLICT`) — benign infra contention between
+  two legitimate requests, not a duplicate, so there is no safe replay to fall back to (the client
+  is expected to retry).
+
+**Non-obvious interaction**: authorise/capture/reverse all mutate the account's balance *before*
+the idempotency-key uniqueness check is reached, so a genuine concurrent *duplicate* request that
+also changes the account balance will almost always race on the account's optimistic-lock version
+first — surfacing as `type=optimistic_lock`, not `type=idempotency_race`. The one reliable way to
+isolate a pure `type=idempotency_race` sample is a scenario where the account balance is never
+touched at all: authorise declined due to insufficient funds is exactly that case, so the script
+deliberately uses an amount that exceeds the account's available balance for that sub-race. This
+also means capture/reverse can only reliably demonstrate `type=optimistic_lock` with this script,
+not `type=idempotency_race` (a documented, known gap).
+
+So, per round, the script fires several *truly concurrent* requests (backgrounded with `&`, then
+`wait`): an optimistic-lock race each for authorise, capture (on a freshly-seeded AUTHORISED
+authorisation), and reverse (on a second freshly-seeded AUTHORISED authorisation), followed last by
+an insufficient-funds idempotency-race on authorise (run last because it deliberately produces
+several rapid DECLINED authorisations, which can otherwise trip fraud-service's repeated-decline
+account-lock recommendation before the other sub-races get a chance to run).
+
+**Account provisioning**: by default the script creates and funds its own dedicated GBP account
+(`POST /accounts` + `POST /accounts/{id}/deposits`) fresh **before every round**, rather than reusing
+a shared demo account. This avoids two real problems observed with a shared/reused account: (1)
+every optimistic-lock "winner" leaves behind a reserved-but-never-captured/reversed balance, so
+available balance shrinks across repeated rounds/runs until authorise starts declining for real
+instead of racing; (2) enough rapid DECLINED authorisations trip fraud-service's repeated-decline
+lock recommendation, after which every subsequent request on that account short-circuits as
+"account not active" instead of racing at all. Pass `ACCOUNT_ID` to reuse a specific existing
+account instead (skips auto-provisioning, so the known depletion/locking issues above can resurface
+on repeated runs).
+
+### Usage
+
+```bash
+cd payment-platform/load-tests
+./generate-concurrency-conflicts.sh
+```
+
+Customize via environment variables:
+
+```bash
+# More rounds / more concurrent requests per race
+ROUNDS=10 PARALLEL_REQUESTS=10 ./generate-concurrency-conflicts.sh
+
+# Reuse a specific existing account instead of auto-provisioning a fresh one per round
+BASE_URL=http://localhost:9000 ACCOUNT_ID=11111111-1111-1111-1111-111111111111 \
+  ./generate-concurrency-conflicts.sh
+```
+
+### Verifying results
+
+```bash
+curl -s http://localhost:9000/actuator/prometheus | grep auth_concurrency_conflict_total
 ```
 
 ## Alternatives for heavier/sustained load

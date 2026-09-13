@@ -114,4 +114,20 @@ public class AuthExceptionHandler {
         e.getErrorCode().name(),
         request);
   }
+
+  /**
+   * Returns 409 when two legitimate, differently-keyed requests race on the same account's
+   * optimistic-lock version (as opposed to a duplicate-idempotency-key race, which is resolved
+   * transparently). Clients should retry.
+   */
+  @ExceptionHandler(AccountConcurrencyConflictException.class)
+  public ProblemDetail handleAccountConcurrencyConflictException(
+      AccountConcurrencyConflictException e, WebRequest request) {
+    return ProblemDetails.from(
+        HttpStatus.CONFLICT,
+        e.getErrorCode().getDefaultMessage(),
+        e.getMessage(),
+        e.getErrorCode().name(),
+        request);
+  }
 }

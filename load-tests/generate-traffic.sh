@@ -18,11 +18,13 @@
 #
 # Phases:
 #   1. Bulk authorisations: the first BULK1_COUNT (50) are sent every BULK1_INTERVAL_SECONDS (2s);
-#      the next BULK2_COUNT (30) are sent every BULK2_INTERVAL_SECONDS (1s) - the faster cadence is
+#      the next BULK2_COUNT (60) are sent every BULK2_INTERVAL_SECONDS (0.2s) - the faster cadence is
 #      intended to trigger fraud-service velocity-rule declines. Every authorisation and capture
-#      request is immediately re-sent with the *same* idempotency key + payload, to generate
+#      requests is immediately re-sent with the *same* idempotency key + payload, to generate
 #      idempotency cache-hit traffic (reversal requests are sent once only, no duplicate). Odd-suffix
-#      keys capture, even-suffix keys reverse.
+#      keys capture, even-suffix keys reverse. After each auth set, ledger-service is queried via
+#      GET /authorisations/{authorisationId}. After each bulk sub-phase completes, ledger-service is
+#      queried via GET /accounts/{accountId}/events once per configured account to generate HTTP metrics.
 #   2. Circuit breaker + HTTP 5xx errors: set fraud-service to ALWAYS_503 (every /fraud/check call
 #      fails with HTTP 503 - both accumulates failures fast enough to trip auth-service's circuit
 #      breaker open, and generates real 5xx samples on fraud-service's own
@@ -36,9 +38,13 @@
 #      the auth.events.ledger.dlt dead-letter topic (non-retryable path).
 #   4. Dedup events: delegates to the sibling generate-dedup-events.sh script (same directory) to
 #      generate ledger_event_duplicate_skipped_total samples across all event types.
+#   5. Concurrency conflicts: delegates to the sibling generate-concurrency-conflicts.sh script
+#      (same directory) to generate auth_concurrency_conflict_total{operation, type} samples
+#      (type=idempotency_race and type=optimistic_lock) via truly concurrent (backgrounded + wait)
+#      authorise/capture/reverse requests.
 #
-# A REST_BETWEEN_STEPS_SECONDS (default 2s) pause is inserted between every top-level step, so
-# Grafana panels show a clear gap/boundary between phases instead of one continuous blur.
+# Between top-level steps, the script can pause for keyboard Return (interactive mode), or fall
+# back to a REST_BETWEEN_STEPS_SECONDS (default 2s) sleep when non-interactive.
 #
 # Fraud-service failure-mode is always reset to OFF at the end (even on error), via an EXIT trap.
 
@@ -51,8 +57,8 @@ KAFKA_BROKER="${KAFKA_BROKER:-localhost:9092}"
 
 BULK1_COUNT="${BULK1_COUNT:-50}"
 BULK1_INTERVAL_SECONDS="${BULK1_INTERVAL_SECONDS:-2}"
-BULK2_COUNT="${BULK2_COUNT:-30}"
-BULK2_INTERVAL_SECONDS="${BULK2_INTERVAL_SECONDS:-1}"
+BULK2_COUNT="${BULK2_COUNT:-60}"
+BULK2_INTERVAL_SECONDS="${BULK2_INTERVAL_SECONDS:-0.2}"
 
 CB_OPEN_REQUEST_COUNT="${CB_OPEN_REQUEST_COUNT:-10}"
 CB_OPEN_INTERVAL_SECONDS="${CB_OPEN_INTERVAL_SECONDS:-1}"
@@ -66,7 +72,12 @@ DEDUP_ROUNDS="${DEDUP_ROUNDS:-10}"
 DEDUP_DUPLICATES_PER_EVENT="${DEDUP_DUPLICATES_PER_EVENT:-3}"
 DEDUP_INTERVAL_SECONDS="${DEDUP_INTERVAL_SECONDS:-1}"
 
+CONCURRENCY_ROUNDS="${CONCURRENCY_ROUNDS:-5}"
+CONCURRENCY_PARALLEL_REQUESTS="${CONCURRENCY_PARALLEL_REQUESTS:-6}"
+CONCURRENCY_INTERVAL_SECONDS="${CONCURRENCY_INTERVAL_SECONDS:-2}"
+
 REST_BETWEEN_STEPS_SECONDS="${REST_BETWEEN_STEPS_SECONDS:-2}"
+PAUSE_FOR_ENTER="${PAUSE_FOR_ENTER:-true}"
 
 GBP_ACCOUNT_ID="${GBP_ACCOUNT_ID:-11111111-1111-1111-1111-111111111111}"
 USD_ACCOUNT_ID="${USD_ACCOUNT_ID:-22222222-2222-2222-2222-222222222222}"
@@ -121,6 +132,18 @@ set_fraud_mode() {
 interval_for() {
   local window="$1" count="$2"
   awk -v w="$window" -v n="$count" 'BEGIN { if (n<=1) print 0; else printf "%.2f", w/(n-1) }'
+}
+
+wait_for_next_step() {
+  local next_step_label="$1"
+
+  # Prompt only when stdin is a TTY; otherwise fall back to a deterministic sleep for automation.
+  if [ "$PAUSE_FOR_ENTER" = "true" ] && [ -t 0 ]; then
+    echo
+    read -r -p "Press Return to continue to ${next_step_label}..."
+  else
+    sleep "$REST_BETWEEN_STEPS_SECONDS"
+  fi
 }
 
 next_ikey() {
@@ -189,6 +212,24 @@ reverse_authorisation() {
   echo "[$ikey]   -> reversal (even key) http=${code}"
 }
 
+query_ledger_account_events() {
+  local context_label="$1" account_id="$2"
+  local resp code
+
+  resp=$(curl -sS -w '\n%{http_code}' "${LEDGER_BASE_URL}/accounts/${account_id}/events")
+  code=$(echo "$resp" | tail -n1)
+  echo "[${context_label}] -> ledger GET /accounts/${account_id}/events http=${code}"
+}
+
+query_ledger_authorisation() {
+  local ikey="$1" auth_id="$2"
+  local resp code
+
+  resp=$(curl -sS -w '\n%{http_code}' "${LEDGER_BASE_URL}/authorisations/${auth_id}")
+  code=$(echo "$resp" | tail -n1)
+  echo "[$ikey]   -> ledger GET /authorisations/${auth_id} http=${code}"
+}
+
 # ---------------------------------------------------------------------------
 # Phase 1: bulk authorisations at a fixed cadence (e.g. 50 @ 2s, then 30 @ 1s). Authorisation and
 # capture requests are each duplicated immediately for an idempotency cache hit; reversal is sent
@@ -223,11 +264,22 @@ run_bulk_phase() {
       else
         reverse_authorisation "$ikey" "$first_auth_id"
       fi
+      query_ledger_authorisation "$ikey" "$first_auth_id"
+    elif [ -n "$first_auth_id" ]; then
+      echo "[$ikey]   -> not authorised (status=${first_status:-n/a}), skipping capture/reversal"
+      query_ledger_authorisation "$ikey" "$first_auth_id"
     else
       echo "[$ikey]   -> not authorised (status=${first_status:-n/a}), skipping capture/reversal"
+      echo "[$ikey]   -> ledger authorisation query skipped (no authorisationId returned by auth-service)"
     fi
 
     sleep "$interval"
+  done
+
+  echo "=== ${label}: ledger account-events reads for metric traffic ==="
+  for pair in "${ACCOUNTS[@]}"; do
+    local account_id="${pair##*:}"
+    query_ledger_account_events "${label}" "$account_id"
   done
 }
 
@@ -328,6 +380,22 @@ run_dedup_events_phase() {
 }
 
 # ---------------------------------------------------------------------------
+# Phase 5: concurrency conflicts, delegates to the sibling generate-concurrency-conflicts.sh script.
+# ---------------------------------------------------------------------------
+run_concurrency_conflicts_phase() {
+  echo
+  echo "### Generating auth-service concurrency-conflict traffic (auth_concurrency_conflict_total) ###"
+  echo "    (delegating to generate-concurrency-conflicts.sh: ROUNDS=${CONCURRENCY_ROUNDS}"
+  echo "     PARALLEL_REQUESTS=${CONCURRENCY_PARALLEL_REQUESTS} INTERVAL_SECONDS=${CONCURRENCY_INTERVAL_SECONDS})"
+
+  BASE_URL="$BASE_URL" \
+  ROUNDS="$CONCURRENCY_ROUNDS" \
+  PARALLEL_REQUESTS="$CONCURRENCY_PARALLEL_REQUESTS" \
+  INTERVAL_SECONDS="$CONCURRENCY_INTERVAL_SECONDS" \
+    "${SCRIPT_DIR}/generate-concurrency-conflicts.sh"
+}
+
+# ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
 echo "== payment-platform test-data generator =="
@@ -339,28 +407,32 @@ echo "Accounts:       ${ACCOUNTS[*]}"
 echo "==========================================="
 
 echo
-echo "### Phase 1: bulk authorisations (${BULK1_COUNT} every ${BULK1_INTERVAL_SECONDS}s, then ${BULK2_COUNT} every ${BULK2_INTERVAL_SECONDS}s) ###"
+echo "### Phase 1a: bulk authorisations (${BULK1_COUNT} every ${BULK1_INTERVAL_SECONDS}s) ###"
 run_bulk_phase "$BULK1_COUNT" "$BULK1_INTERVAL_SECONDS" "Phase 1a (steady traffic)"
-sleep "$REST_BETWEEN_STEPS_SECONDS"
+wait_for_next_step "Phase 2 (circuit breaker + HTTP 5xx)"
+
+run_circuit_breaker_phase
+wait_for_next_step "Phase 3 (dead-letter-topic publish)"
+
+run_dlt_phase
+wait_for_next_step "Phase 4 (dedup events)"
+
+run_dedup_events_phase
+wait_for_next_step "Phase 5 (concurrency conflicts)"
+
+run_concurrency_conflicts_phase
+wait_for_next_step "Phase 1b (burst traffic, final step)"
 
 echo
 echo "### Speeding up to every ${BULK2_INTERVAL_SECONDS}s for the next ${BULK2_COUNT} requests, to trigger fraud-service velocity-rule declines ###"
 run_bulk_phase "$BULK2_COUNT" "$BULK2_INTERVAL_SECONDS" "Phase 1b (burst traffic)"
-sleep "$REST_BETWEEN_STEPS_SECONDS"
-
-run_circuit_breaker_phase
-sleep "$REST_BETWEEN_STEPS_SECONDS"
-
-run_dlt_phase
-sleep "$REST_BETWEEN_STEPS_SECONDS"
-
-run_dedup_events_phase
 
 echo
 echo "==========================================="
 echo "Done. Sent $((BULK1_COUNT + BULK2_COUNT)) bulk auths (x2 for idempotency replay, plus x2 on their capture calls),"
 echo "$((CB_OPEN_REQUEST_COUNT + CB_RECOVERY_REQUEST_COUNT)) circuit-breaker/5xx-phase auths,"
-echo "${DLT_MESSAGE_COUNT} DLT-bound Kafka records, and ${DEDUP_ROUNDS} rounds of dedup-event traffic"
-echo "(via generate-dedup-events.sh)."
+echo "${DLT_MESSAGE_COUNT} DLT-bound Kafka records, ${DEDUP_ROUNDS} rounds of dedup-event traffic"
+echo "(via generate-dedup-events.sh), and ${CONCURRENCY_ROUNDS} rounds of concurrency-conflict traffic"
+echo "(via generate-concurrency-conflicts.sh)."
 echo "fraud-service failure-mode has been reset to OFF."
 
