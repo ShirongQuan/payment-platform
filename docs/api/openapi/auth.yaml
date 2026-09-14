@@ -1,0 +1,361 @@
+openapi: 3.1.0
+info:
+  title: Auth Service API
+  description: API documentation for the Auth service
+  version: V1
+servers:
+- url: http://localhost:9000
+  description: Generated server url
+paths:
+  /authorisations:
+    post:
+      tags:
+      - authorisation-controller
+      operationId: authorise
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AuthorisationRequest"
+        required: true
+      responses:
+        "200":
+          description: OK
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/AuthorisationResponse"
+  /authorisations/{authorisationId}/reversals:
+    post:
+      tags:
+      - authorisation-controller
+      operationId: reverse
+      parameters:
+      - name: authorisationId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ReverseRequest"
+        required: true
+      responses:
+        "200":
+          description: OK
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ReverseResponse"
+  /authorisations/{authorisationId}/captures:
+    post:
+      tags:
+      - authorisation-controller
+      operationId: capture
+      parameters:
+      - name: authorisationId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CaptureRequest"
+        required: true
+      responses:
+        "200":
+          description: OK
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/CaptureResponse"
+  /accounts:
+    post:
+      tags:
+      - account-controller
+      operationId: createAccount
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateAccountRequest"
+        required: true
+      responses:
+        "200":
+          description: OK
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/AccountResponse"
+  /accounts/{accountId}/deposits:
+    post:
+      tags:
+      - account-controller
+      operationId: deposit
+      parameters:
+      - name: accountId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DepositRequest"
+        required: true
+      responses:
+        "200":
+          description: OK
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/AccountResponse"
+  /authorisations/{authorisationId}:
+    get:
+      tags:
+      - authorisation-controller
+      operationId: getAuthorisationById
+      parameters:
+      - name: authorisationId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        "200":
+          description: OK
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/AuthorisationResponse"
+  /accounts/{accountId}:
+    get:
+      tags:
+      - account-controller
+      operationId: getAccountById
+      parameters:
+      - name: accountId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        "200":
+          description: OK
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/AccountResponse"
+components:
+  schemas:
+    AuthorisationRequest:
+      type: object
+      properties:
+        accountId:
+          type: string
+          format: uuid
+        idempotencyKey:
+          type: string
+          maxLength: 20
+          minLength: 0
+        amount:
+          type: number
+          minimum: 0.01
+        currencyCode:
+          type: string
+          maxLength: 3
+          minLength: 3
+        merchantReference:
+          type: string
+          maxLength: 128
+          minLength: 0
+      required:
+      - accountId
+      - amount
+      - currencyCode
+      - idempotencyKey
+      - merchantReference
+    AuthorisationResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        accountId:
+          type: string
+          format: uuid
+        idempotencyKey:
+          type: string
+        amount:
+          type: number
+        currencyCode:
+          type: string
+        merchantReference:
+          type: string
+        status:
+          type: string
+          enum:
+          - AUTHORISED
+          - CAPTURED
+          - REVERSED
+          - DECLINED
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    ReverseRequest:
+      type: object
+      properties:
+        idempotencyKey:
+          type: string
+          maxLength: 20
+          minLength: 0
+        reasonCode:
+          type: string
+          description: Reason code for reversal
+          enum:
+          - NONE
+          - INSUFFICIENT_FUNDS
+          - ACCOUNT_LOCKED
+          - ACCOUNT_INACTIVE
+          - CURRENCY_MISMATCH
+          - INVALID_AMOUNT
+          - INVALID_STATE
+          - AUTHORISATION_NOT_FOUND
+          - DUPLICATE_REQUEST
+          - FRAUD_DECLINED
+          - CUSTOMER_REQUEST
+          - MERCHANT_REQUEST
+          - EXPIRED
+          - TIMEOUT
+          - SYSTEM_ERROR
+      required:
+      - idempotencyKey
+      - reasonCode
+    ReverseResponse:
+      type: object
+      properties:
+        authorisationId:
+          type: string
+          format: uuid
+        idempotencyKey:
+          type: string
+        reversedAmount:
+          type: number
+        currencyCode:
+          type: string
+        status:
+          type: string
+          enum:
+          - AUTHORISED
+          - CAPTURED
+          - REVERSED
+          - DECLINED
+        reasonCode:
+          type: string
+          enum:
+          - NONE
+          - INSUFFICIENT_FUNDS
+          - ACCOUNT_LOCKED
+          - ACCOUNT_INACTIVE
+          - CURRENCY_MISMATCH
+          - INVALID_AMOUNT
+          - INVALID_STATE
+          - AUTHORISATION_NOT_FOUND
+          - DUPLICATE_REQUEST
+          - FRAUD_DECLINED
+          - CUSTOMER_REQUEST
+          - MERCHANT_REQUEST
+          - EXPIRED
+          - TIMEOUT
+          - SYSTEM_ERROR
+        updatedAt:
+          type: string
+          format: date-time
+    CaptureRequest:
+      type: object
+      properties:
+        idempotencyKey:
+          type: string
+          maxLength: 20
+          minLength: 0
+      required:
+      - idempotencyKey
+    CaptureResponse:
+      type: object
+      properties:
+        authorisationId:
+          type: string
+          format: uuid
+        idempotencyKey:
+          type: string
+        capturedAmount:
+          type: number
+        currencyCode:
+          type: string
+        status:
+          type: string
+          enum:
+          - AUTHORISED
+          - CAPTURED
+          - REVERSED
+          - DECLINED
+        updatedAt:
+          type: string
+          format: date-time
+    CreateAccountRequest:
+      type: object
+      properties:
+        currencyCode:
+          type: string
+          minLength: 1
+          pattern: "^[A-Za-z]{3}$"
+      required:
+      - currencyCode
+    AccountResponse:
+      type: object
+      properties:
+        accountId:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum:
+          - ACTIVE
+          - LOCKED
+        currencyCode:
+          type: string
+        availableBalance:
+          type: number
+        reservedBalance:
+          type: number
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    DepositRequest:
+      type: object
+      properties:
+        amount:
+          type: number
+          minimum: 0.01
+        currencyCode:
+          type: string
+          minLength: 1
+      required:
+      - amount
+      - currencyCode

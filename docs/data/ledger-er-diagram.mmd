@@ -2,16 +2,16 @@ erDiagram
     LEDGER_ENTRY {
         uuid entry_id PK
         uuid event_id UK
-        varchar aggregate_type
+        varchar(20) aggregate_type
         uuid aggregate_id
         uuid account_id
         uuid authorisation_id
-        varchar event_type
-        varchar entry_status
-        decimal amount
-        varchar currency_code
-        varchar merchant_reference
-        varchar idempotency_key
+        varchar(50) event_type
+        varchar(20) entry_status
+        decimal(19_2) amount
+        varchar(3) currency_code
+        varchar(128) merchant_reference
+        varchar(30) idempotency_key
         timestamptz occurred_at
         timestamptz created_at
         jsonb payload
@@ -19,9 +19,9 @@ erDiagram
 
     LEDGER_EVENT_LOG {
         uuid event_id PK
-        varchar aggregate_type
+        varchar(20) aggregate_type
         uuid aggregate_id
-        varchar event_type
+        varchar(30) event_type
         jsonb payload
         uuid correlation_id
         timestamptz occurred_at
@@ -30,7 +30,7 @@ erDiagram
 
     PROCESSED_EVENT {
         uuid event_id PK
-        varchar event_type
+        varchar(30) event_type
         timestamptz processed_at
     }
 

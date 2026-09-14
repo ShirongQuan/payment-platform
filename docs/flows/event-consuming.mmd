@@ -6,6 +6,7 @@ sequenceDiagram
 	participant LProc as LedgerEventProcessor
 	participant AuthH as AuthorisationAuthorisedHandler
 	participant CapH as AuthorisationCapturedHandler
+	participant RevH as AuthorisationReversedHandler
 	participant PRepo as ProcessedEventRepository
 	participant LLog as LedgerEventLogRepository
 	participant LEntry as LedgerEntryRepository
@@ -33,9 +34,23 @@ sequenceDiagram
 		else duplicate
 			Note over CapH,PRepo: skip duplicate event
 		end
-	else unsupported event type
-		LProc-->>LCons: IllegalArgumentException
-		Note over LCons,Kafka: listener error handler retries or routes to DLT based on config
+	else eventType == AUTHORISATION_REVERSED
+		LProc->>RevH: handle(metadata, rawPayload)
+		RevH->>PRepo: tryInsertProcessedEvent(eventId, type, processedAt)
+		alt first-time event
+			RevH->>LLog: save(event log)
+			RevH->>LEntry: save(ledger entry)
+		else duplicate
+			Note over RevH,PRepo: skip duplicate event
+		end
+	else eventType == AUTHORISATION_DECLINED
+		Note over LProc: Intentional no-op - logged at debug and dropped.<br/>No handler, no processed_event row, no ledger entry.<br/>(A DECLINED authorisation never affected balances, so there is<br/>nothing to project.)
+	else unsupported / unknown event type
+		LProc-->>LCons: throw IllegalArgumentException
+		Note over LCons,Kafka: Non-retryable - DefaultErrorHandler routes straight to<br/>auth.events.ledger.dlt via DeadLetterPublishingRecoverer
+	else other runtime failure (e.g. DB unavailable)
+		LProc-->>LCons: throw RuntimeException
+		Note over LCons,Kafka: Retryable - retried 3x with 2s fixed backoff,<br/>then routed to auth.events.ledger.dlt if still failing
 	end
 
 

@@ -28,6 +28,6 @@ Trade-offs:
 ## Related
 
 - `docs/architecture/system-overview.md`
-- `docs/flows/event-publishing.mmd`
+- `docs/flows/event-publishing-sequence.mmd`
 - `docs/data/data-model.md`
 

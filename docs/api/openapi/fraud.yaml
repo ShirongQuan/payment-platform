@@ -1,0 +1,114 @@
+openapi: 3.1.0
+info:
+  title: Fraud Service API
+  description: API documentation for the Fraud service
+  version: V1
+servers:
+- url: http://localhost:9010
+  description: Generated server url
+paths:
+  /internal/test/failure-mode:
+    get:
+      tags:
+      - failure-mode-controller
+      operationId: getFailureMode
+      responses:
+        "200":
+          description: OK
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/FailureModeResponse"
+    post:
+      tags:
+      - failure-mode-controller
+      operationId: setFailureMode
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/FailureModeRequest"
+        required: true
+      responses:
+        "200":
+          description: OK
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/FailureModeResponse"
+  /fraud/check:
+    post:
+      tags:
+      - fraud-controller
+      operationId: check
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/FraudCheckRequest"
+        required: true
+      responses:
+        "200":
+          description: OK
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/FraudCheckResult"
+components:
+  schemas:
+    FailureModeRequest:
+      type: object
+      properties:
+        mode:
+          type: string
+          enum:
+          - "OFF"
+          - ALWAYS_500
+          - ALWAYS_503
+          - DELAY_2S
+          - RANDOM_50_PERCENT
+      required:
+      - mode
+    FailureModeResponse:
+      type: object
+      properties:
+        mode:
+          type: string
+          enum:
+          - "OFF"
+          - ALWAYS_500
+          - ALWAYS_503
+          - DELAY_2S
+          - RANDOM_50_PERCENT
+      required:
+      - mode
+    FraudCheckRequest:
+      type: object
+      properties:
+        accountId:
+          type: string
+          format: uuid
+        idempotencyKey:
+          type: string
+          minLength: 1
+        amount:
+          type: number
+          minimum: 0.01
+        currencyCode:
+          type: string
+          minLength: 1
+        merchantReference:
+          type: string
+          maxLength: 128
+          minLength: 0
+        ipAddress:
+          type: string
+          minLength: 1
+      required:
+      - accountId
+      - amount
+      - currencyCode
+      - idempotencyKey
+      - ipAddress
+      - merchantReference
+    FraudCheckResult: {}

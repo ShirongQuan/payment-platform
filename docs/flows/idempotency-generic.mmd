@@ -1,0 +1,70 @@
+%% Generic idempotency replay/conflict flow.
+%% Applies to any idempotency-keyed mutating endpoint in this platform:
+%%   - auth-service: POST /authorisations, POST /authorisations/{id}/captures,
+%%     POST /authorisations/{id}/reversals
+%%   - fraud-service: POST /fraud/check
+%% Scope key = (scopeId, idempotencyKey), e.g. (accountId, idempotencyKey) for authorise/fraud-check,
+%% or (authorisationId, idempotencyKey) for capture/reverse.
+%% Fingerprint = hash of the semantic request payload (see RequestHashing in shared-spring-lib),
+%% used to distinguish a safe replay from a conflicting reuse of the same key.
+sequenceDiagram
+	autonumber
+	actor Client
+	participant Svc as Service
+	participant Cache as Idempotency Cache (Redis)
+	participant DB as Datastore (unique constraint on scopeId + idempotencyKey)
+
+	rect rgba(0, 0, 0, 0)
+		note over Client, DB: 1) First request for this (scopeId, idempotencyKey)
+		Client->>Svc: Request A (scopeId, idempotencyKey=K, payload=P1)
+		Svc->>Cache: get(scopeId, K)
+		Cache-->>Svc: miss
+		Svc->>DB: conditional insert (scopeId, K, fingerprint(P1))
+		DB-->>Svc: inserted (0 prior rows)
+		Svc->>Svc: execute business operation
+		Svc->>DB: persist result / domain event
+		Svc->>Cache: store response (TTL)
+		Svc-->>Client: 200 OK (result R1)
+	end
+
+	rect rgba(0, 0, 0, 0)
+		note over Client, DB: 2) Retry: same key + same payload -> safe replay
+		Client->>Svc: Request B (scopeId, idempotencyKey=K, payload=P1)
+		Svc->>Cache: get(scopeId, K)
+		alt Cache hit
+			Cache-->>Svc: cached response R1
+			Svc-->>Client: 200 OK (replayed R1, no new side effect)
+		else Cache miss (e.g. TTL expired) - fall back to durable store
+			Svc->>DB: find existing row by (scopeId, K)
+			DB-->>Svc: existing row, fingerprint(P1) matches
+			Svc->>Svc: rebuild response from persisted state
+			Svc-->>Client: 200 OK (replayed R1, no new side effect)
+		end
+	end
+
+	rect rgba(0, 0, 0, 0)
+		note over Client, DB: 3) Retry: same key + different payload -> conflict
+		Client->>Svc: Request C (scopeId, idempotencyKey=K, payload=P2 != P1)
+		Svc->>Cache: get(scopeId, K)
+		Cache-->>Svc: cached response R1 (fingerprint stored = fingerprint(P1))
+		Svc->>Svc: compare fingerprint(P2) vs stored fingerprint(P1) -> mismatch
+		Svc-->>Client: 409 Conflict (IDEMPOTENCY_CONFLICT)
+	end
+
+	rect rgba(0, 0, 0, 0)
+		note over Client, DB: 4) Concurrent race: two first-time requests, same key, at the same time
+		par Request D (payload=P1)
+			Client->>Svc: Request D (scopeId, K, P1)
+			Svc->>DB: conditional insert (scopeId, K, fingerprint(P1))
+		and Request E (payload=P1, concurrent)
+			Client->>Svc: Request E (scopeId, K, P1)
+			Svc->>DB: conditional insert (scopeId, K, fingerprint(P1))
+		end
+		DB-->>Svc: one insert wins, the other violates the unique constraint
+		note over Svc: Loser does not fail the request - it re-reads the winner's<br/>committed row instead of retrying the write
+		Svc->>DB: find committed row by (scopeId, K)
+		DB-->>Svc: winner's row, fingerprint(P1) matches loser's payload
+		Svc-->>Client: 200 OK (both callers observe the same result R1)
+	end
+
+

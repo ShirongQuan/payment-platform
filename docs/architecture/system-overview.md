@@ -124,14 +124,14 @@ The main business workflows are:
 - authorise (implemented)
 - capture (implemented)
 - event publishing to ledger (implemented)
-- reverse (planned / placeholder path)
+- reverse (implemented)
 
 For step-by-step interactions, see:
 
 - [`../flows/authorise-sequence.mmd`](../flows/authorise-sequence.mmd)
 - [`../flows/capture-sequence.mmd`](../flows/capture-sequence.mmd)
 - [`../flows/reverse-sequence.mmd`](../flows/reverse-sequence.mmd)
-- [`../flows/event-publishing.mmd`](../flows/event-publishing.mmd)
+- [`../flows/event-publishing-sequence.mmd`](../flows/event-publishing-sequence.mmd)
 - [`../flows/event-consuming.mmd`](../flows/event-consuming.mmd)
 
 ## Reliability Patterns

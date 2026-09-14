@@ -1,6 +1,6 @@
 # Ledger Service API
 
-Base path: `/`
+Base path: `/` (server port `9020`)
 
 This document covers the important ledger-service endpoints and the expected behavior for:
 - request

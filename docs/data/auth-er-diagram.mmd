@@ -2,10 +2,10 @@ erDiagram
     ACCOUNT {
         uuid account_id PK
         bigint version
-        varchar currency_code
-        varchar account_status
-        decimal available_balance
-        decimal reserved_balance
+        varchar(3) currency_code
+        varchar(10) account_status
+        decimal(19_2) available_balance
+        decimal(19_2) reserved_balance
         timestamptz created_at
         timestamptz updated_at
     }
@@ -14,10 +14,10 @@ erDiagram
         uuid authorisation_id PK
         bigint version
         uuid account_id FK
-        varchar merchant_reference
-        decimal amount
-        varchar currency_code
-        varchar authorisation_status
+        varchar(128) merchant_reference
+        decimal(19_2) amount
+        varchar(3) currency_code
+        varchar(10) authorisation_status
         timestamptz created_at
         timestamptz updated_at
     }
@@ -26,11 +26,11 @@ erDiagram
         uuid event_id PK
         uuid authorisation_id FK
         uuid account_id FK
-        varchar event_type
-        varchar idempotency_key
-        decimal amount
-        varchar currency_code
-        varchar reason_code
+        varchar(40) event_type
+        varchar(30) idempotency_key
+        decimal(19_2) amount
+        varchar(3) currency_code
+        varchar(30) reason_code
         uuid correlation_id
         timestamptz created_at
     }
@@ -38,18 +38,19 @@ erDiagram
     OUTBOX_EVENT {
         uuid event_id PK
         bigint version
-        varchar aggregate_type
+        varchar(20) aggregate_type
         uuid aggregate_id
-        varchar event_type
+        varchar(30) event_type
         jsonb payload
-        varchar status
+        varchar(30) status
         int retry_count
-        varchar last_error
+        varchar(100) last_error
         timestamptz created_at
         timestamptz published_at
         timestamptz next_attempt_at
-        varchar idempotency_key
+        varchar(30) idempotency_key
         uuid correlation_id
+        varchar(55) trace_parent
         timestamptz claimed_at
         timestamptz claim_until
     }

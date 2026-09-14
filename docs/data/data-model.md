@@ -1,10 +1,11 @@
 # Data Model Overview
 
-This document summarizes the core tables used by `auth-service` and `ledger-service`.
+This document summarizes the core tables used by `auth-service`, `fraud-service`, and `ledger-service`.
 
 ## ER Diagrams
 
 - Auth DB: [`auth-er-diagram.mmd`](auth-er-diagram.mmd)
+- Fraud DB: [`fraud-er-diagram.mmd`](fraud-er-diagram.mmd)
 - Ledger DB: [`ledger-er-diagram.mmd`](ledger-er-diagram.mmd)
 
 ## Auth DB (auth-service)
@@ -28,6 +29,7 @@ This document summarizes the core tables used by `auth-service` and `ledger-serv
 - `outbox_event`
     - Transactional outbox for reliable asynchronous delivery to Kafka.
     - Event is written in the same transaction as business changes, then published by scheduler.
+    - Stores `trace_parent` so async publisher spans can link back to the originating request trace.
     - Includes retry state (`status`, `retry_count`, `next_attempt_at`, `last_error`) and claim lease fields (
       `claimed_at`, `claim_until`).
 
@@ -46,6 +48,7 @@ This document summarizes the core tables used by `auth-service` and `ledger-serv
 - `ledger_entry`
     - Read-optimized projection used by query APIs.
     - Stores the current immutable accounting entries derived from consumed events.
+    - `merchant_reference` supports up to 128 chars; `event_type` supports up to 50 chars.
 
 - `ledger_event_log`
     - Immutable event audit log of consumed Kafka events.
@@ -59,6 +62,21 @@ This document summarizes the core tables used by `auth-service` and `ledger-serv
 - Handler flow:
     - First insert into `processed_event` succeeds -> persist into `ledger_event_log` and `ledger_entry`.
     - Duplicate insert -> skip event processing safely.
+
+## Fraud DB (fraud-service)
+
+### Main tables
+
+- `fraud_evaluation`
+    - Durable record for one fraud evaluation per `(account_id, idempotency_key)` request.
+    - Stores request fingerprint (`request_hash`), risk outcome (`risk_score`, `decision`), and detailed rule output (`rule_result`).
+    - Persists account-lock recommendation signals via `lock_recommended` and `lock_reason_code`.
+
+### Idempotency strategy
+
+- `fraud_evaluation`
+    - Unique index `uq_authorisation_event_account_idempotency` on `(account_id, idempotency_key)` ensures deduplication per account.
+    - The service first claims a request with a `PENDING` row, then finalizes the same row with score/decision to handle concurrent duplicates safely.
 
 ## End-to-end event reliability
 

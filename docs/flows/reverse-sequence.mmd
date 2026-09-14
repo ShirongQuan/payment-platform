@@ -3,31 +3,58 @@ sequenceDiagram
 	actor Client
 	participant AC as AuthController
 	participant AS as AuthorisationServiceImpl
+	participant ATE as AuthorisationTransactionalExecutorImpl
+	participant AR as AuthorisationRepository
+	participant AER as AuthorisationEventRepository
+	participant AccR as AccountRepository
+	participant OES as OutboxEventServiceImpl
 
 	Client->>AC: POST /authorisations/{id}/reversals
 	AC->>AS: reverse(authorisationId, reverseRequest)
+	AS->>ATE: reverseInTransaction(authorisationId, reverseRequest, correlationId)
 
-	Note over AS: Current code path is TODO
-	AS-->>AC: null (reverse flow not implemented)
-	AC-->>Client: Implementation-dependent failure / empty response
+	ATE->>AR: findById(authorisationId)
+	AR-->>ATE: AuthorisationEntity
 
-	Note over AC,AS: Intended target flow (to implement)
-	rect rgb(245,245,245)
-		participant ATE as AuthorisationTransactionalExecutorImpl
-		participant AR as AuthorisationRepository
-		participant AER as AuthorisationEventRepository
-		participant AccR as AccountRepository
-		participant OES as OutboxEventServiceImpl
-
-		AS->>ATE: reverseInTransaction(authorisationId, reverseRequest)
-		ATE->>AR: findById(authorisationId)
+	alt status == REVERSED
+		ATE->>AER: findByAccountIdAndEventTypeAndIdempotencyKey(accountId, idemKey, AUTHORISATION_REVERSED)
+		alt reverse event exists for idempotency key
+			AER-->>ATE: existing reverse event
+			ATE-->>AS: previous ReverseResponse
+		else key mismatch / no matching event
+			ATE-->>AS: throw AuthorisationIllegalStateException (already REVERSED)
+		end
+	else status != AUTHORISED
+		ATE-->>AS: throw AuthorisationIllegalStateException (e.g. CAPTURED/DECLINED)
+	else status == AUTHORISED
 		ATE->>AccR: findById(accountId)
-		ATE->>ATE: validate legal state + idempotency
-		ATE->>ATE: release reserved/available balance per reverse rules
+		AccR-->>ATE: AccountEntity
+		ATE->>ATE: account.reverse(amount, currency)
+		Note over ATE: reservedBalance -= amount only -<br/>availableBalance untouched (funds were never debited from it)
+		ATE->>ATE: set authorisation status = REVERSED
+
 		ATE->>AR: saveAndFlush(authorisation REVERSED)
-		ATE->>AER: saveAndFlush(event AUTHORISATION_REVERSED)
+		ATE->>AER: saveAndFlush(event AUTHORISATION_REVERSED, reasonCode)
 		ATE->>OES: enqueueAuthorisation(..., OperationType.REVERSE)
+		OES->>OES: build REVERSE payload map
 		OES->>OES: save outbox event (status NEW)
 		ATE-->>AS: ReverseResponse
 	end
 
+	alt Concurrent idempotency race
+		ATE-->>AS: throw ConcurrentIdempotencyRaceException
+		AS->>AR: findById(authorisationId)
+		AS->>AER: findByAccountIdAndEventTypeAndIdempotencyKey(accountId, idemKey, AUTHORISATION_REVERSED)
+		alt reverse event found
+			AS-->>AC: recovered ReverseResponse
+		else
+			AS-->>AC: IdempotencyConflictException
+		end
+	else Concurrent account-version race (different idempotency key)
+		ATE-->>AS: throw AccountConcurrencyConflictException
+		AS-->>AC: 409 Conflict (retry hint)
+	else No race
+		AS-->>AC: ReverseResponse
+	end
+
+	AC-->>Client: 200 OK / error

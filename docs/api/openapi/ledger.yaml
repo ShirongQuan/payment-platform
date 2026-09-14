@@ -1,0 +1,102 @@
+openapi: 3.1.0
+info:
+  title: Ledger Service API
+  description: API documentation for the Ledger service
+  version: V1
+servers:
+- url: http://localhost:9020
+  description: Generated server url
+paths:
+  /authorisations/{authorisationId}:
+    get:
+      tags:
+      - ledger-query-controller
+      operationId: getAuthorisations
+      parameters:
+      - name: authorisationId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        "200":
+          description: OK
+          content:
+            '*/*':
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AuthenticationResponse"
+  /accounts/{accountId}/events:
+    get:
+      tags:
+      - ledger-query-controller
+      operationId: getAccountEvents
+      parameters:
+      - name: accountId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        "200":
+          description: OK
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/AccountEventsResponse"
+components:
+  schemas:
+    AuthenticationResponse:
+      type: object
+      properties:
+        authorisationId:
+          type: string
+          format: uuid
+        accountId:
+          type: string
+          format: uuid
+        merchantReference:
+          type: string
+        amount:
+          type: number
+        currencyCode:
+          type: string
+        status:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        sourceEventId:
+          type: string
+          format: uuid
+    AccountEvent:
+      type: object
+      properties:
+        eventId:
+          type: string
+          format: uuid
+        eventType:
+          type: string
+        aggregateId:
+          type: string
+          format: uuid
+        occurredAt:
+          type: string
+          format: date-time
+        amount:
+          type: number
+        currencyCode:
+          type: string
+    AccountEventsResponse:
+      type: object
+      properties:
+        accountId:
+          type: string
+          format: uuid
+        events:
+          type: array
+          items:
+            $ref: "#/components/schemas/AccountEvent"

@@ -1,0 +1,29 @@
+%% Outbox backlog recovery: detect -> triage -> retry -> DLQ/manual replay
+%% See docs/flows/outbox-backlog-recovery.md for the full explanation.
+flowchart TD
+	A["Signal: auth_outbox_backlog rising,\nauth_outbox_publish_attempts_total{result=failed} > 0,\nor auth_outbox_publish_lag_seconds elevated"] --> B[Detect]
+	B --> C["Query outbox_event GROUP BY status\n(FAILED rows are invisible to the backlog gauge)"]
+	C --> D{Row status?}
+
+	D -->|"PUBLISHING, claim_until < now"| E["Self-heals automatically:\nreclaimStalePublishing() -> status=NEW"]
+	E --> R
+
+	D -->|"NEW, next_attempt_at in future"| F["Waiting on backoff schedule\nNo action needed"]
+
+	D -->|"NEW, next_attempt_at far in past"| G["Scheduler not polling,\nor batch size too small\n-> investigate OutboxScheduler health"]
+
+	D -->|"FAILED, retry_count >= 5"| T[Triage]
+
+	T --> H{"Root cause of last_error?"}
+	H -->|"Transient infra\n(Kafka outage, network blip)"| I["Confirm Kafka / infra healthy again"]
+	H -->|"Bad data / non-retryable payload"| J["Requires code or data fix first"]
+
+	I --> K["Manual replay:\nUPDATE outbox_event\nSET status=NEW, retry_count=0,\nnext_attempt_at=now, last_error=null\nWHERE id=:eventId"]
+	J -->|"Fixed"| K
+	J -->|"Not fixed"| L["Leave FAILED for audit/escalation\n(no automatic requeue exists today)"]
+
+	K --> R["Scheduler resumes normal\nclaim -> publish -> retry loop"]
+	R --> M{Published?}
+	M -->|Yes| N["status=PUBLISHED\nbacklog gauge decreases"]
+	M -->|"No, exhausts retries again"| T
+

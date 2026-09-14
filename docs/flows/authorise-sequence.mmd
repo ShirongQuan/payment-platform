@@ -3,53 +3,99 @@ sequenceDiagram
 	actor Client
 	participant AC as AuthController
 	participant AS as AuthorisationServiceImpl
-	participant ATE as AuthorisationTransactionalExecutorImpl
+	participant Cache as Idempotency Cache (Redis)
 	participant AR as AuthorisationRepository
 	participant AccR as AccountRepository
+	participant FO as FraudOrchestrator
+	participant FS as fraud-service (POST /fraud/check)
+	participant ATE as AuthorisationTransactionalExecutorImpl
 	participant AER as AuthorisationEventRepository
 	participant OES as OutboxEventServiceImpl
 
 	Client->>AC: POST /authorisations
-	AC->>AS: authorise(request)
+	AC->>AS: authorise(request, clientIpAddress)
 	AS->>AS: normalizeAndValidateCurrency()
 
-	AS->>ATE: authoriseInTransaction(request, normalizedCurrency)
-	ATE->>AR: findByAccountIdAndIdempotencyKey(...)
-
-	alt Existing idempotent row found
-		AR-->>ATE: AuthorisationEntity
-		ATE-->>AS: AuthorisationResponse
-	else New request
-		ATE->>AccR: findById(accountId)
-		AccR-->>ATE: AccountEntity
-		ATE->>ATE: account.reserve(amount, currency)
-		ATE->>AccR: flush()  %% fail fast on DB constraints
-
-		alt reserve succeeded
-			ATE->>AR: saveAndFlush(authorisation AUTHORISED)
-			ATE->>AER: saveAndFlush(event AUTHORISATION_AUTHORISED)
-		else insufficient funds
-			ATE->>AR: saveAndFlush(authorisation DECLINED)
-			ATE->>AER: saveAndFlush(event AUTHORISATION_DECLINED)
-		end
-
-		ATE->>OES: enqueueAuthorisation(..., OperationType.AUTHORISE)
-		OES->>OES: build AUTHORISE payload map
-		OES->>OES: save outbox event (status NEW)
-		ATE-->>AS: AuthorisationResponse
-	end
-
-	alt Concurrent idempotency insert race
-		ATE-->>AS: throw ConcurrentIdempotencyRaceException
-		AS->>AR: findByAccountIdAndIdempotencyKey(...)
-		alt Matching winner payload
+	AS->>Cache: get(AUTHORISE, accountId, idempotencyKey)
+	alt Cache hit (fingerprint matches)
+		Cache-->>AS: cached AuthorisationResponse
+		AS-->>AC: replayed response (no DB/fraud call)
+	else Cache miss
+		AS->>AR: findByAccountIdAndAuthoriseEventTypesAndIdempotencyKey(...)
+		alt Existing row found (best-effort DB pre-check)
 			AR-->>AS: AuthorisationEntity
-			AS-->>AC: recovered idempotent response
-		else Mismatch or missing row
-			AS-->>AC: IdempotencyConflictException / IllegalStateException
+			AS-->>AC: idempotent replay / IdempotencyConflictException
+		else No existing row
+			AS->>AccR: findById(accountId)
+			AccR-->>AS: AccountEntity
+
+			alt account.status != ACTIVE
+				Note over AS,FO: Account-active gate: skip fraud-service call entirely for a<br/>LOCKED/INACTIVE account (saves the call, and guarantees a locked<br/>account can never slip through just because fraud-service is down)
+				AS->>AS: PreAuthDecision.AccountNotActive(status)
+			else account.status == ACTIVE
+				AS->>FO: evaluate(request, normalizedCurrency, clientIpAddress)
+				FO->>FS: POST /fraud/check (circuit breaker + 250ms time limiter)
+				alt fraud-service reachable
+					FS-->>FO: decision APPROVE / DECLINE (+ riskScore, lockAccountRecommended)
+				else timeout / circuit open / error
+					FO->>FO: apply fail-open policy (disabled by default)
+					FO-->>FO: FraudDecision.unavailable -> decline, or approve if trusted+tiny amount
+				end
+				FO-->>AS: PreAuthDecision.FraudEvaluated(fraudDecision)
+			end
+
+			AS->>ATE: authoriseInTransaction(request, normalizedCurrency, preAuthDecision, correlationId)
+			ATE->>AR: findByAccountIdAndAuthoriseEventTypesAndIdempotencyKey(...)
+			Note over ATE,AR: Authoritative idempotency check-and-insert guard against a<br/>concurrent request that raced past the best-effort check above
+
+			alt Existing idempotent row found (race)
+				AR-->>ATE: AuthorisationEntity
+				ATE-->>AS: throw ConcurrentIdempotencyRaceException
+			else New request
+				alt PreAuthDecision.AccountNotActive
+					ATE->>ATE: build DECLINED (reason ACCOUNT_LOCKED / ACCOUNT_INACTIVE)
+				else fraudDecision.isDeclined()
+					ATE->>ATE: build DECLINED (reason FRAUD_DECLINED)
+					opt fraudDecision.lockAccountRecommended && account ACTIVE
+						ATE->>AccR: accountEntity.setStatus(LOCKED)
+						Note over ATE,AccR: Persisted atomically with the DECLINED event at commit
+					end
+				else fraud approved
+					ATE->>AccR: account.reserve(amount, currency)
+					alt sufficient available balance
+						ATE->>AccR: flush()  %% fail fast on DB constraints
+						ATE->>ATE: build AUTHORISED
+					else insufficient funds
+						Note over ATE: InsufficientFundException caught -<br/>account left untouched, authorisation still persisted
+						ATE->>ATE: build DECLINED (reason INSUFFICIENT_FUNDS)
+					else concurrent account-version conflict (different idempotency key)
+						ATE-->>AS: throw AccountConcurrencyConflictException
+					end
+				end
+
+				ATE->>AR: saveAndFlush(authorisation AUTHORISED/DECLINED)
+				ATE->>AER: saveAndFlush(event AUTHORISATION_AUTHORISED/DECLINED)
+				ATE->>OES: enqueueAuthorisation(..., OperationType.AUTHORISE)
+				OES->>OES: build AUTHORISE payload map
+				OES->>OES: save outbox event (status NEW)
+				ATE-->>AS: AuthorisationResponse
+			end
+
+			alt Concurrent idempotency insert race
+				AS->>AR: findByAccountIdAndAuthoriseEventTypesAndIdempotencyKey(...)
+				alt Matching winner payload
+					AR-->>AS: AuthorisationEntity
+					AS-->>AC: recovered idempotent response
+				else Mismatch or missing row
+					AS-->>AC: IdempotencyConflictException / IllegalStateException
+				end
+			else Concurrent account-version conflict (different idempotency key)
+				AS-->>AC: 409 Conflict (retry hint)
+			else No race
+				AS->>Cache: store response (TTL)
+				AS-->>AC: AuthorisationResponse
+			end
 		end
-	else No race
-		AS-->>AC: AuthorisationResponse
 	end
 
 	AC-->>Client: 200 OK / error

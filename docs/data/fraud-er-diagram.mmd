@@ -1,0 +1,21 @@
+erDiagram
+    FRAUD_EVALUATION {
+        uuid evaluation_id PK
+        uuid account_id
+        decimal(19_2) amount
+        varchar(3) currency_code
+        varchar(128) merchant_reference
+        varchar(30) idempotency_key
+        int risk_score
+        varchar(16) decision
+        varchar(16) rules_version
+        jsonb rule_result
+        inet ip_address
+        varchar(64) request_hash
+        uuid correlation_id
+        boolean lock_recommended
+        varchar(64) lock_reason_code
+        timestamptz created_at
+    }
+
+

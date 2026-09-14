@@ -49,6 +49,9 @@ sequenceDiagram
 		else
 			AS-->>AC: IdempotencyConflictException
 		end
+	else Concurrent account-version conflict (different idempotency key)
+		ATE-->>AS: throw AccountConcurrencyConflictException
+		AS-->>AC: 409 Conflict (retry hint)
 	else No race
 		AS-->>AC: CaptureResponse
 	end

@@ -1,6 +1,6 @@
 # Auth Service API
 
-Base path: `/`
+Base path: `/` (server port `9000`)
 
 This document covers the important auth-service endpoints and the expected behavior for:
 
@@ -211,13 +211,27 @@ HTTP `200 OK`
 }
 ```
 
-If available balance is insufficient, the request still succeeds and returns `status: DECLINED` (same response shape).
+If available balance is insufficient, or the request is declined by the synchronous fraud pre-check
+(`POST /fraud/check` on fraud-service), the request still succeeds at the HTTP level and returns
+`status: DECLINED` (same response shape).
+
+### Fraud pre-check
+
+- Before reserving funds, auth-service calls fraud-service's `POST /fraud/check` synchronously
+  (see [Fraud API](./fraud-api.md)), guarded by a resilience4j circuit breaker + 250ms time limiter.
+- If fraud-service is unavailable/times out/circuit is open: request is declined
+  (`FRAUD_SERVICE_UNAVAILABLE`, risk score `100`) unless a fail-open policy applies. Fail-open is
+  disabled by default; when enabled it only allows a configured allow-list of trusted `accountId`s at
+  or below a configured max amount to proceed as `APPROVED` (risk score `40`,
+  reason `FRAUD_UNAVAILABLE_TRUSTED_TINY_AMOUNT`).
+- If fraud-service recommends locking the account (high risk score or repeated-decline pattern) and the
+  account is currently `ACTIVE`, auth-service locks the account as part of the same transaction.
 
 ### Status transitions
 
 - New authorisation is persisted as one of:
     - `AUTHORISED` (funds reserved)
-    - `DECLINED` (insufficient funds)
+    - `DECLINED` (insufficient funds, fraud decline, or fraud-service unavailable without fail-open)
 
 ### Error cases
 
@@ -334,14 +348,15 @@ HTTP `200 OK`
 
 ## POST `/authorisations/{authorisationId}/reversals`
 
-Reverse endpoint is exposed but currently not implemented in service logic.
+Reverses (releases) a previously authorised reservation, returning the reserved amount from
+`reservedBalance` back to `availableBalance`.
 
 ### Request
 
 ```json
 {
   "idempotencyKey": "reverse-001",
-  "reasonCode": "CUSTOMER_CANCELLED"
+  "reasonCode": "CUSTOMER_REQUEST"
 }
 ```
 
@@ -355,22 +370,43 @@ Constraints:
 
 ### Response
 
-Current implementation returns `null` from service, so controller returns HTTP `200` with empty body.
+HTTP `200 OK`
+
+```json
+{
+  "authorisationId": "uuid",
+  "idempotencyKey": "reverse-001",
+  "reversedAmount": 10.00,
+  "currencyCode": "GBP",
+  "status": "REVERSED",
+  "reasonCode": "CUSTOMER_REQUEST",
+  "updatedAt": "2026-07-31T13:00:00Z"
+}
+```
 
 ### Status transitions
 
-- Intended: likely `AUTHORISED -> REVERSED`
-- Current: no transition implemented.
+- `AUTHORISED -> REVERSED`: reserved amount is released, `account.reservedBalance -= amount`
+  (`availableBalance` is unaffected since the funds were never debited from it).
+- If already `REVERSED`, replay is possible when the idempotency key matches the previous reverse event.
 
 ### Error cases
 
-- Only request validation errors are currently guaranteed (`400` for invalid body).
-- Business/domain error handling is not implemented for reverse flow yet.
+- `400 Bad Request`: invalid request payload/validation
+- `404 Not Found`: authorisation not found (`AUTHORISATION_NOT_FOUND`)
+- `409 Conflict`: idempotency key conflict — already reversed with a different idempotency key, or same
+  key retried with a different `reasonCode` (`IDEMPOTENCY_CONFLICT`)
+- `409 Conflict`: invalid state of authorisation — reverse attempted on an authorisation that is not
+  `AUTHORISED` (e.g. `DECLINED` or `CAPTURED`) (`INVALID_AUTHORISATION_STATE`)
 
 ### Idempotency behavior
 
-// TODO: needs to be updated
-
-- Declared at API shape level via `idempotencyKey`.
-- Not implemented in business logic yet.
+- Scoped by `(authorisationId, idempotencyKey)`, fingerprinted on `(authorisationId, reasonCode)`.
+- If already reversed and the same reverse idempotency key is retried, the service returns the previous
+  reverse response.
+- If already reversed but a different idempotency key is provided, returns `409 IDEMPOTENCY_CONFLICT`.
+- Concurrent same-key races are handled by retrying lookup after transaction rollback
+  (`ConcurrentIdempotencyRaceException`), same pattern as capture.
+- A concurrent reverse/capture racing on the account's optimistic-lock version raises
+  `AccountConcurrencyConflictException`, surfaced to the caller as a `409` for the losing request.
 
