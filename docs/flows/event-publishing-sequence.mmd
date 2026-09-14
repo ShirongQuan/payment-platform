@@ -1,29 +1,29 @@
 sequenceDiagram
 	autonumber
-	participant Sch as OutboxScheduler (auth-service)
-	participant OES as OutboxEventServiceImpl
-	participant ORepo as OutboxEventRepository
-	participant Pub as OutboxKafkaPublisher
-	participant Kafka as Kafka topic: auth.events
+	participant Sch as OutboxScheduler<br/>(auth-service)
+	participant OES as OutboxEvent<br/>ServiceImpl
+	participant ORepo as OutboxEvent<br/>Repository
+	participant Pub as OutboxKafka<br/>Publisher
+	participant Kafka as Kafka topic:<br/>auth.events
 
 	loop every outbox.publisher.delay-ms
 		Sch->>OES: publishNextBatch(batchSize)
-		OES->>ORepo: reclaimStalePublishing(now, NEW, PUBLISHING)
+		OES->>ORepo: reclaimStalePublishing(now,<br/>NEW, PUBLISHING)
 		OES->>ORepo: findNextBatch(NEW, now, page)
 
 		loop each outbox event
-			OES->>ORepo: claimNewEvent(eventId, claimedAt, claimUntil, PUBLISHING, NEW)
+			OES->>ORepo: claimNewEvent(eventId,<br/>claimedAt, claimUntil,<br/>PUBLISHING, NEW)
 			alt claim succeeded
 				OES->>Pub: publishAsync(outboxEvent)
 				Pub->>Kafka: send(payload + headers)
 
 				alt publish success
-					OES->>ORepo: markPublished(eventId, now, PUBLISHED)
+					OES->>ORepo: markPublished(eventId,<br/>now, PUBLISHED)
 				else publish failure
 					alt backoffPolicy.shouldFail(nextRetryCount)
-						OES->>ORepo: markFailed(eventId, retryCount, error, FAILED)
+						OES->>ORepo: markFailed(eventId,<br/>retryCount, error, FAILED)
 					else retry later
-						OES->>ORepo: markRetry(eventId, retryCount, nextAttemptAt, error, NEW)
+						OES->>ORepo: markRetry(eventId,<br/>retryCount, nextAttemptAt,<br/>error, NEW)
 					end
 				end
 			else claim lost

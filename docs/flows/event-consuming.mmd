@@ -1,24 +1,24 @@
 sequenceDiagram
 	autonumber
-	participant Kafka as Kafka topic: auth.events
-	participant LCons as LedgerKafkaConsumer
-	participant Hdr as KafkaHeaderReader
-	participant LProc as LedgerEventProcessor
-	participant AuthH as AuthorisationAuthorisedHandler
-	participant CapH as AuthorisationCapturedHandler
-	participant RevH as AuthorisationReversedHandler
-	participant PRepo as ProcessedEventRepository
-	participant LLog as LedgerEventLogRepository
-	participant LEntry as LedgerEntryRepository
+	participant Kafka as Kafka topic:<br/>auth.events
+	participant LCons as Ledger<br/>KafkaConsumer
+	participant Hdr as Kafka<br/>HeaderReader
+	participant LProc as Ledger<br/>EventProcessor
+	participant AuthH as Authorisation<br/>AuthorisedHandler
+	participant CapH as Authorisation<br/>CapturedHandler
+	participant RevH as Authorisation<br/>ReversedHandler
+	participant PRepo as ProcessedEvent<br/>Repository
+	participant LLog as LedgerEventLog<br/>Repository
+	participant LEntry as LedgerEntry<br/>Repository
 
-	Kafka-->>LCons: consume record(key, value, headers)
+	Kafka-->>LCons: consume record(key,<br/>value, headers)
 	LCons->>Hdr: read(headers)
 	Hdr-->>LCons: EventMetadata
 	LCons->>LProc: process(metadata, rawPayload)
 
 	alt eventType == AUTHORISATION_AUTHORISED
 		LProc->>AuthH: handle(metadata, rawPayload)
-		AuthH->>PRepo: tryInsertProcessedEvent(eventId, type, processedAt)
+		AuthH->>PRepo: tryInsertProcessedEvent(eventId,<br/>type, processedAt)
 		alt first-time event
 			AuthH->>LLog: save(event log)
 			AuthH->>LEntry: save(ledger entry)
@@ -27,7 +27,7 @@ sequenceDiagram
 		end
 	else eventType == AUTHORISATION_CAPTURED
 		LProc->>CapH: handle(metadata, rawPayload)
-		CapH->>PRepo: tryInsertProcessedEvent(eventId, type, processedAt)
+		CapH->>PRepo: tryInsertProcessedEvent(eventId,<br/>type, processedAt)
 		alt first-time event
 			CapH->>LLog: save(event log)
 			CapH->>LEntry: save(ledger entry)
@@ -36,7 +36,7 @@ sequenceDiagram
 		end
 	else eventType == AUTHORISATION_REVERSED
 		LProc->>RevH: handle(metadata, rawPayload)
-		RevH->>PRepo: tryInsertProcessedEvent(eventId, type, processedAt)
+		RevH->>PRepo: tryInsertProcessedEvent(eventId,<br/>type, processedAt)
 		alt first-time event
 			RevH->>LLog: save(event log)
 			RevH->>LEntry: save(ledger entry)

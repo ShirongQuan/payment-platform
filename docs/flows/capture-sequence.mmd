@@ -1,23 +1,23 @@
 sequenceDiagram
 	autonumber
 	actor Client
-	participant AC as AuthController
-	participant AS as AuthorisationServiceImpl
-	participant ATE as AuthorisationTransactionalExecutorImpl
-	participant AR as AuthorisationRepository
-	participant AER as AuthorisationEventRepository
-	participant AccR as AccountRepository
-	participant OES as OutboxEventServiceImpl
+	participant AC as Auth<br/>Controller
+	participant AS as Authorisation<br/>ServiceImpl
+	participant ATE as Authorisation<br/>Transactional<br/>ExecutorImpl
+	participant AR as Authorisation<br/>Repository
+	participant AER as Authorisation<br/>EventRepository
+	participant AccR as Account<br/>Repository
+	participant OES as OutboxEvent<br/>ServiceImpl
 
 	Client->>AC: POST /authorisations/{id}/captures
-	AC->>AS: capture(authorisationId, captureRequest)
-	AS->>ATE: captureInTransaction(authorisationId, captureRequest)
+	AC->>AS: capture(authorisationId,<br/>captureRequest)
+	AS->>ATE: captureInTransaction(authorisationId,<br/>captureRequest)
 
 	ATE->>AR: findById(authorisationId)
 	AR-->>ATE: AuthorisationEntity
 
 	alt status == CAPTURED
-		ATE->>AER: findByAccountIdAndEventTypeAndIdempotencyKey(accountId, idemKey, AUTHORISATION_CAPTURED)
+		ATE->>AER: findByAccountIdAndEventTypeAndIdempotencyKey(accountId,<br/>idemKey, AUTHORISATION_CAPTURED)
 		alt capture event exists for idempotency key
 			AER-->>ATE: existing capture event
 			ATE-->>AS: previous CaptureResponse
@@ -34,7 +34,7 @@ sequenceDiagram
 
 		ATE->>AR: saveAndFlush(authorisation CAPTURED)
 		ATE->>AER: saveAndFlush(event AUTHORISATION_CAPTURED)
-		ATE->>OES: enqueueAuthorisation(..., OperationType.CAPTURE)
+		ATE->>OES: enqueueAuthorisation(...,<br/>OperationType.CAPTURE)
 		OES->>OES: build CAPTURE payload map
 		OES->>OES: save outbox event (status NEW)
 		ATE-->>AS: CaptureResponse
@@ -43,13 +43,13 @@ sequenceDiagram
 	alt Concurrent capture insert race
 		ATE-->>AS: throw ConcurrentIdempotencyRaceException
 		AS->>AR: findById(authorisationId)
-		AS->>AER: findByAccountIdAndEventTypeAndIdempotencyKey(accountId, idemKey, AUTHORISATION_CAPTURED)
+		AS->>AER: findByAccountIdAndEventTypeAndIdempotencyKey(accountId,<br/>idemKey, AUTHORISATION_CAPTURED)
 		alt capture event found
 			AS-->>AC: recovered CaptureResponse
 		else
 			AS-->>AC: IdempotencyConflictException
 		end
-	else Concurrent account-version conflict (different idempotency key)
+	else Concurrent account-version conflict<br/>(different idempotency key)
 		ATE-->>AS: throw AccountConcurrencyConflictException
 		AS-->>AC: 409 Conflict (retry hint)
 	else No race

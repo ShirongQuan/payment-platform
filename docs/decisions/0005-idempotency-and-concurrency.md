@@ -136,9 +136,14 @@ Costs:
 
 ## Related
 
+See also `docs/decisions/0007-idempotency-store-and-key-policy.md` for storage/policy (Redis vs DB, TTL, key
+scope, replay/conflict implementation details).
+
 - `docs/decisions/0001-use-kafka-outbox.md`
 - `docs/decisions/0002-full-capture-only.md`
 - `docs/decisions/0003-ledger-raw-and-normalized-events.md`
 - `docs/decisions/0004-use-event-and-dlt-topics.md`
+- `docs/decisions/0007-idempotency-store-and-key-policy.md`
+- `docs/decisions/0010-database-concurrency-approach.md`
 
 

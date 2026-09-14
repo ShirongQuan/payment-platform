@@ -1,31 +1,31 @@
 sequenceDiagram
 	autonumber
 	actor Client
-	participant AC as AuthController
-	participant AS as AuthorisationServiceImpl
-	participant ATE as AuthorisationTransactionalExecutorImpl
-	participant AR as AuthorisationRepository
-	participant AER as AuthorisationEventRepository
-	participant AccR as AccountRepository
-	participant OES as OutboxEventServiceImpl
+	participant AC as Auth<br/>Controller
+	participant AS as Authorisation<br/>ServiceImpl
+	participant ATE as Authorisation<br/>Transactional<br/>ExecutorImpl
+	participant AR as Authorisation<br/>Repository
+	participant AER as Authorisation<br/>EventRepository
+	participant AccR as Account<br/>Repository
+	participant OES as OutboxEvent<br/>ServiceImpl
 
 	Client->>AC: POST /authorisations/{id}/reversals
-	AC->>AS: reverse(authorisationId, reverseRequest)
-	AS->>ATE: reverseInTransaction(authorisationId, reverseRequest, correlationId)
+	AC->>AS: reverse(authorisationId,<br/>reverseRequest)
+	AS->>ATE: reverseInTransaction(authorisationId,<br/>reverseRequest, correlationId)
 
 	ATE->>AR: findById(authorisationId)
 	AR-->>ATE: AuthorisationEntity
 
 	alt status == REVERSED
-		ATE->>AER: findByAccountIdAndEventTypeAndIdempotencyKey(accountId, idemKey, AUTHORISATION_REVERSED)
+		ATE->>AER: findByAccountIdAndEventTypeAndIdempotencyKey(accountId,<br/>idemKey, AUTHORISATION_REVERSED)
 		alt reverse event exists for idempotency key
 			AER-->>ATE: existing reverse event
 			ATE-->>AS: previous ReverseResponse
 		else key mismatch / no matching event
-			ATE-->>AS: throw AuthorisationIllegalStateException (already REVERSED)
+			ATE-->>AS: throw AuthorisationIllegalStateException<br/>(already REVERSED)
 		end
 	else status != AUTHORISED
-		ATE-->>AS: throw AuthorisationIllegalStateException (e.g. CAPTURED/DECLINED)
+		ATE-->>AS: throw AuthorisationIllegalStateException<br/>(e.g. CAPTURED/DECLINED)
 	else status == AUTHORISED
 		ATE->>AccR: findById(accountId)
 		AccR-->>ATE: AccountEntity
@@ -34,8 +34,8 @@ sequenceDiagram
 		ATE->>ATE: set authorisation status = REVERSED
 
 		ATE->>AR: saveAndFlush(authorisation REVERSED)
-		ATE->>AER: saveAndFlush(event AUTHORISATION_REVERSED, reasonCode)
-		ATE->>OES: enqueueAuthorisation(..., OperationType.REVERSE)
+		ATE->>AER: saveAndFlush(event AUTHORISATION_REVERSED,<br/>reasonCode)
+		ATE->>OES: enqueueAuthorisation(...,<br/>OperationType.REVERSE)
 		OES->>OES: build REVERSE payload map
 		OES->>OES: save outbox event (status NEW)
 		ATE-->>AS: ReverseResponse
@@ -44,13 +44,13 @@ sequenceDiagram
 	alt Concurrent idempotency race
 		ATE-->>AS: throw ConcurrentIdempotencyRaceException
 		AS->>AR: findById(authorisationId)
-		AS->>AER: findByAccountIdAndEventTypeAndIdempotencyKey(accountId, idemKey, AUTHORISATION_REVERSED)
+		AS->>AER: findByAccountIdAndEventTypeAndIdempotencyKey(accountId,<br/>idemKey, AUTHORISATION_REVERSED)
 		alt reverse event found
 			AS-->>AC: recovered ReverseResponse
 		else
 			AS-->>AC: IdempotencyConflictException
 		end
-	else Concurrent account-version race (different idempotency key)
+	else Concurrent account-version race<br/>(different idempotency key)
 		ATE-->>AS: throw AccountConcurrencyConflictException
 		AS-->>AC: 409 Conflict (retry hint)
 	else No race

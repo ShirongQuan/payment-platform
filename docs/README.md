@@ -23,4 +23,4 @@
 - [API Overview](./api/overview.md)
 - [Security & Threat Model](./security/threat-model.md)
 - [Testing Strategy](./testing/strategy.md)
-- [ADRs](./adr/)
+- [ADRs](./decisions/README.md)
