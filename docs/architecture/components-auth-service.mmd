@@ -1,0 +1,85 @@
+flowchart TB
+    Client(["Client"])
+
+    subgraph AuthService["auth-service"]
+        direction TB
+
+        subgraph Controllers["Controllers"]
+            direction LR
+            Ctrl["AuthorisationController /<br/>AccountController"]
+            ExHandler["AuthExceptionHandler"]
+        end
+
+        subgraph AppServices["Application services"]
+            direction TB
+            Svc["AuthorisationServiceImpl<br/>(orchestrator)"]
+            Idem["IdempotencyService"]
+
+            subgraph Txn["Transaction boundary"]
+                Exec["AuthorisationTransactionalExecutorImpl"]
+            end
+        end
+
+        subgraph Clients["Outbound clients"]
+            FraudOrch["FraudOrchestrator /<br/>ResilientFraudGateway"]
+        end
+
+        subgraph Domain["Domain"]
+            direction LR
+            AccEntity["AccountEntity"]
+            AuthEntity["AuthorisationEntity"]
+            EventEntity["AuthorisationEventEntity"]
+        end
+
+        subgraph Repos["Repositories"]
+            direction LR
+            AccRepo["AccountRepository"]
+            AuthRepo["AuthorisationRepository"]
+            EventRepo["AuthorisationEventRepository"]
+        end
+
+        subgraph Outbox["Outbox"]
+            direction LR
+            OutboxSvc["OutboxEventServiceImpl"]
+            OutboxRepo["OutboxEventRepository"]
+            Scheduler["OutboxScheduler /<br/>OutboxKafkaPublisher<br/>(background, own txn)"]
+        end
+    end
+
+    Redis[("Redis")]
+    FraudSvc[["fraud-service"]]
+    DB[("auth_db<br/>(PostgreSQL)")]
+    Kafka[("Kafka: auth.events")]
+
+    Client -->|"HTTP request"| Ctrl
+    Ctrl --> Svc
+    Svc <-->|"get / store (TTL)"| Idem
+    Idem <--> Redis
+    Svc -->|"pre-check read"| AuthRepo
+    Svc -->|"evaluate(...)"| FraudOrch
+    FraudOrch -->|"POST /fraud/check"| FraudSvc
+    Svc -->|"authoriseInTransaction /<br/>captureInTransaction /<br/>reverseInTransaction"| Exec
+
+    Exec --> AccEntity
+    Exec --> AuthEntity
+    Exec --> EventEntity
+    Exec --> AccRepo
+    Exec --> AuthRepo
+    Exec --> EventRepo
+    Exec --> OutboxSvc
+
+    AccRepo <--> DB
+    AuthRepo <--> DB
+    EventRepo <--> DB
+    OutboxSvc --> OutboxRepo
+    OutboxRepo -->|"insert outbox_event<br/>(same txn)"| DB
+
+    Exec -.->|"throws on conflict"| Svc
+    Ctrl -.->|"domain exceptions"| ExHandler
+    ExHandler -->|"ProblemDetail"| Client
+
+    Scheduler --> OutboxRepo
+    Scheduler -->|"poll / claim / publish"| DB
+    Scheduler -->|"publish"| Kafka
+
+

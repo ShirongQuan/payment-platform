@@ -1,0 +1,55 @@
+flowchart TB
+    Client(["Client / Swagger / Postman / Load Test"])
+    Ops(["Admin / Ops"])
+
+    subgraph Platform["Payment Platform (system boundary)"]
+        direction TB
+
+        subgraph Services["Application services (internal)"]
+            direction LR
+            Auth["auth-service :9000<br/>(accounts, authorise,<br/>capture, reverse, outbox)"]
+            Fraud["fraud-service :9010<br/>(risk decisioning)"]
+            Ledger["ledger-service :9020<br/>(event projection,<br/>read-only query API)"]
+        end
+
+        subgraph Infra["Platform infrastructure (internal)"]
+            direction LR
+            Postgres[("PostgreSQL<br/>auth_db / fraud_db / ledger_db")]
+            Redis[("Redis<br/>idempotency cache +<br/>velocity counters")]
+            KafkaTopic[("Kafka<br/>auth.events (+ DLT)")]
+        end
+
+        subgraph Obs["Observability Stack (internal, separate boundary)"]
+            direction LR
+            OTel["OTel Collector"]
+            Tempo["Tempo"]
+            Prometheus["Prometheus"]
+            Grafana["Grafana"]
+        end
+    end
+
+    Client -->|"HTTP"| Auth
+    Client -->|"HTTP (read-only)"| Ledger
+    Ops -->|"dashboards / traces"| Grafana
+    Ops -->|"manual recovery<br/>(Kafka UI / pgAdmin)"| Infra
+
+    Auth -->|"POST /fraud/check<br/>(circuit breaker + 250ms timeout)"| Fraud
+    Auth -->|"publish outbox events"| KafkaTopic
+    KafkaTopic -->|"consume + dedupe"| Ledger
+
+    Auth -->|"JPA"| Postgres
+    Fraud -->|"JPA"| Postgres
+    Ledger -->|"JPA"| Postgres
+
+    Auth -->|"idempotency cache (TTL)"| Redis
+    Fraud -->|"sliding-window<br/>velocity counters"| Redis
+
+    Auth -.->|"OTLP traces + metrics"| OTel
+    Fraud -.->|"OTLP traces + metrics"| OTel
+    Ledger -.->|"OTLP traces + metrics"| OTel
+    OTel --> Tempo
+    OTel --> Prometheus
+    Tempo --> Grafana
+    Prometheus --> Grafana
+
+

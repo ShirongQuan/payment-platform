@@ -37,9 +37,11 @@ root (e.g. `http://localhost:9000/accounts`), not `/api/v1/...`.
 
 ## Security
 
-- **No authentication or authorization is currently implemented** on any service (no JWT, API key,
-  or mTLS). There is no API gateway in front of the services — each service is reachable directly on
-  its configured port. This is a known gap; see Suggestions below.
+- Application-level authentication/authorization (Spring Security + JWT, customer vs. admin role separation)
+  is planned — see [roadmap Next Steps #1](../roadmap.md#5-next-steps-prioritized). Today, each service is
+  reachable directly on its configured port with no gateway in front of them; an API gateway is also planned
+  (see [roadmap Next Steps #4](../roadmap.md#5-next-steps-prioritized)). See
+  [Trust Boundaries](../architecture/trust-boundaries.md) for the full picture.
 - Services call each other over plain HTTP (e.g. auth-service → fraud-service via
   `fraud.base-url`, default `http://localhost:9010`).
 

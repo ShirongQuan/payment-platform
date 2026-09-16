@@ -1,6 +1,6 @@
 # Payment Platform MVP Progress
 
-> Last updated: 2026-09-14  
+> Last updated: 2026-09-15  
 > Scope: Personal MVP for demonstration and learning
 
 Legend: ✅ Implemented for MVP · 🟡 Partial/Basic · 🔵 Planned if time permits
@@ -122,7 +122,7 @@ A feature is MVP-done if it:
   `POST /accounts/{id}/deposits` — see section 4 below; this is a deliberate scope cut, not an
   oversight.
 - 🔵 No pessimistic locking (`SELECT ... FOR UPDATE`) implementation exists yet as a comparison
-  point against the optimistic path — see "If More Time" below.
+  point against the optimistic path — see "Next Steps" below.
 
 ### Observability (demo level)
 
@@ -173,19 +173,6 @@ A feature is MVP-done if it:
 
 ---
 
-## 4) Explicit MVP Limitations (Intentional)
-
-These are intentionally out-of-scope for MVP:
-
-- Idempotency on `POST /accounts` and `POST /accounts/{id}/deposits` (account creation/deposits are
-  test/setup conveniences in this demo, not the payment-authorisation critical path the idempotency
-  work targets) — full idempotency coverage across every endpoint is a production concern, see below
-- A generic/pluggable pessimistic-locking mode for reserve/capture/reverse (only optimistic locking
-    + idempotency-driven race recovery is implemented)
-- Advanced reconciliation and incident automation
-
----
-
 ## 5) Next Steps (Prioritized)
 
 1. 🔵 Implement scoped, realistic authentication with Spring Security + JWT, enforcing user/admin role separation so
@@ -193,29 +180,47 @@ These are intentionally out-of-scope for MVP:
 2. 🔵 Demonstrate operational correctness by adding a scheduled reconciliation service that cross-checks authorizations,
    outbox events, and ledger entries, flags inconsistencies, and persists reconciliation results (optionally with
    single-run scheduler coordination via Redis/ShedLock).
-3. 🔵 Extend idempotency to `POST /accounts` and `POST /accounts/{id}/deposits`
-4. 🔵 Add a pessimistic-locking implementation (`SELECT ... FOR UPDATE` /
+3. 🔵 Add a customer-facing UI — a minimal web console (account overview, authorise/capture/reverse actions,
+   transaction/event history) so the platform can be demoed and exercised without an API client (Swagger/Postman),
+   giving the public API its first real external consumer.
+4. 🔵 Add an API gateway in front of `auth-service` and `ledger-service` — a single ingress point for routing,
+   centralized authentication/authorization enforcement (pairs with item 1), and generic HTTP-level rate limiting;
+   TLS termination and other infrastructure hardening for the gateway itself are tracked under
+   [Production Considerations](#6-production-considerations).
+5. 🔵 Add a pessimistic-locking implementation (`SELECT ... FOR UPDATE` /
    `@Lock(LockModeType.PESSIMISTIC_WRITE)`) for reserve/capture/reverse as a side-by-side comparison
    against the current optimistic-locking + idempotency-race-recovery approach (throughput vs.
    contention trade-offs under the existing `load-tests/generate-concurrency-conflicts.sh` scenario)
-5. 🔵 Expand failure-path tests (timeouts, duplicate events, DLT replay)
+6. 🔵 Extend idempotency to `POST /accounts` and `POST /accounts/{id}/deposits`
+7. 🔵 Expand failure-path tests (timeouts, duplicate events, DLT replay)
+8. 🔵 Enforce CI merge gates in GitHub branch protection/rulesets by requiring the `.github/workflows/ci.yml` status check on `main`
+9. 🔵 Promote `docs/testing/scenarios.md` into executable E2E coverage by automating the critical scenario matrix
+10. 🔵 Publish a quantitative load baseline report (fixed env profile + p50/p95/p99 latency, throughput, error rate, resource usage) and track regression thresholds release-to-release
 
 ---
 
 ## 6) Production Considerations
 
-These are known, deliberate gaps versus a real production posture — called out explicitly so they
-aren't mistaken for oversights:
+These are deliberate scope boundaries for a personal MVP versus a real production posture — called out
+explicitly as forward-looking infrastructure/platform work, not oversights:
 
 - **Full idempotency coverage**: only the payment-critical path (authorise/capture/reverse on
   auth-service, check on fraud-service) is idempotent today. `POST /accounts` and
-  `POST /accounts/{id}/deposits` are not — a production system would need idempotency (or at least
-  strict input validation/authz) on every mutating endpoint, not just the ones demonstrated here.
-- **Auth hardening / compliance**: no authentication or authorization exists on any service (no
-  JWT, API key, or mTLS, and no gateway) — every endpoint is reachable directly on its configured
-  port. Production would require service-to-service auth, request authn/authz, secrets management,
-  and a compliance posture (audit logging, PCI-relevant controls, etc.) appropriate to a real
-  payments system.
+  `POST /accounts/{id}/deposits` are not — see [Next Steps](#5-next-steps-prioritized) item 6; a
+  production system would need idempotency (or at least strict input validation/authz) on every
+  mutating endpoint, not just the ones demonstrated here.
+- **Auth hardening / compliance**: application-level authentication/authorization (Spring Security +
+  JWT, role separation) is planned — see [Next Steps](#5-next-steps-prioritized) item 1. Beyond that,
+  a production deployment would add service-to-service auth (mTLS or signed service tokens),
+  secrets management/rotation, and a compliance posture (audit logging, PCI-relevant controls, etc.)
+  appropriate to a real payments system.
+- **Transport security and network hardening**: TLS termination (public API and internal
+  service-to-service calls), a reverse proxy/WAF in front of public endpoints, authenticated/encrypted
+  transport for Kafka (SASL/mTLS) and Redis (`requirepass`/ACLs), topic-level Kafka ACLs, per-service
+  least-privilege database roles, and network policies restricting database/broker/cache reachability
+  to their owning services — these are standard infrastructure-layer concerns for any deployment
+  environment (e.g. Kubernetes + service mesh, cloud load balancer + WAF) and are intentionally out of
+  scope for this single-host docker-compose MVP.
 - **SLOs/alerts**: metrics and dashboards exist (see Observability above), but there are no defined
   SLOs or alerting rules (e.g. Prometheus Alertmanager) — thresholds, paging policy, and error
   budgets would need to be defined for production.
@@ -224,11 +229,11 @@ aren't mistaken for oversights:
   restore runbook.
 - **Generic HTTP-level rate limiting**: in production, generic/infra-level rate limiting (e.g. "max
   N requests/sec per IP or API key across the whole API surface") belongs at the infrastructure
-  layer — an API gateway or reverse proxy — not inside each service's application code, so it
-  protects every service uniformly, rejects abusive traffic before it reaches business logic/DB/
-  Redis, and can be tuned without redeploying any service. This project intentionally has no such
-  gateway/reverse proxy layer. (The velocity-based anti-abuse signal that *does* exist is a
-  different, application/business-layer concern — see Reliability patterns above.)
+  layer — an API gateway or reverse proxy (see [Next Steps](#5-next-steps-prioritized) item 4) — not
+  inside each service's application code, so it protects every service uniformly, rejects abusive
+  traffic before it reaches business logic/DB/Redis, and can be tuned without redeploying any
+  service. (The velocity-based anti-abuse signal that *does* exist today is a different,
+  application/business-layer concern — see Reliability patterns above.)
 
 ---
 

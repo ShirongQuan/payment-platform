@@ -1,0 +1,50 @@
+flowchart TB
+    Client(["Client"])
+
+    subgraph PublicBoundary["Public API boundary"]
+        Auth["auth-service"]
+        Ledger["ledger-service<br/>(read-only)"]
+    end
+
+    subgraph InternalBoundary["Internal service boundary"]
+        Fraud["fraud-service"]
+    end
+
+    subgraph DataBoundary["Data boundary — financial / behavioral data at rest"]
+        AuthDB[("auth_db<br/>balances, authorisations")]
+        FraudDB[("fraud_db<br/>ip_address, risk_score")]
+        LedgerDB[("ledger_db<br/>ledger entries, raw events")]
+        RedisStore[("Redis<br/>idempotency cache,<br/>velocity counters")]
+    end
+
+    subgraph MessagingBoundary["Messaging boundary"]
+        KafkaTopic[("Kafka<br/>auth.events (+ DLT)")]
+    end
+
+    subgraph OpsBoundary["Ops boundary"]
+        Grafana["Grafana / Kafka UI /<br/>pgAdmin / RedisInsight"]
+    end
+
+    Client -->|"HTTP<br/>[correlation-id assigned here]"| Auth
+    Client -->|"HTTP (read-only)"| Ledger
+    Auth -->|"HTTP<br/>(circuit breaker + timeout)"| Fraud
+
+    Auth -->|"JPA (own schema only)"| AuthDB
+    Fraud -->|"JPA (own schema only)"| FraudDB
+    Ledger -->|"JPA (own schema only)"| LedgerDB
+    Auth -->|"idempotent response cache"| RedisStore
+    Fraud -->|"velocity counters"| RedisStore
+
+    Auth -->|"publish [audit: correlationId,<br/>eventId, traceparent headers]"| KafkaTopic
+    KafkaTopic -->|"consume + dedupe<br/>[processed_event guard]"| Ledger
+
+    Auth -.->|"traces/metrics"| Grafana
+    Fraud -.->|"traces/metrics"| Grafana
+    Ledger -.->|"traces/metrics"| Grafana
+
+    style PublicBoundary stroke-dasharray: 5 5
+    style InternalBoundary stroke-dasharray: 5 5
+    style DataBoundary stroke-dasharray: 5 5
+    style MessagingBoundary stroke-dasharray: 5 5
+    style OpsBoundary stroke-dasharray: 5 5
+

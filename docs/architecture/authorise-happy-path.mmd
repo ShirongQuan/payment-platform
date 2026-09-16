@@ -1,0 +1,24 @@
+sequenceDiagram
+    autonumber
+    actor Client
+    participant Ctrl as Auth<br/>Controller
+    participant Svc as Authorisation<br/>ServiceImpl
+    participant Cache as Idempotency<br/>Cache (Redis)
+    participant Fraud as Fraud<br/>Orchestrator
+    participant Exec as Transactional<br/>Executor
+    participant DB as auth_db
+
+    Client ->> Ctrl: POST /authorisations
+    Ctrl ->> Svc: authorise(request)
+    Svc ->> Cache: get(scopeId, idempotencyKey)
+    Cache -->> Svc: miss
+    Svc ->> Fraud: evaluate(request)
+    Fraud -->> Svc: APPROVE (risk score)
+    Svc ->> Exec: authoriseInTransaction(...)
+    Exec ->> DB: insert authorisation +<br/>event + outbox row (1 txn)
+    DB -->> Exec: committed
+    Exec -->> Svc: AuthorisationResponse
+    Svc ->> Cache: store response (TTL)
+    Svc -->> Ctrl: AuthorisationResponse
+    Ctrl -->> Client: 200 OK
+

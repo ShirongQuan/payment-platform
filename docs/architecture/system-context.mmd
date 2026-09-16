@@ -1,0 +1,11 @@
+flowchart TB
+    Customer(["Customer / Client App"])
+    Ops(["Admin / Ops"])
+
+    Platform[["Payment Platform"]]
+
+    Customer -->|" authorise / capture /<br/>reverse / query "| Platform
+    Ops -->|" dashboards, traces,<br/>manual recovery "| Platform
+
+
+
