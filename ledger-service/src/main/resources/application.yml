@@ -43,7 +43,7 @@ spring:
       observation-enabled: true
 
 server:
-  port: 9020
+  port: ${SERVER_PORT:9020}
 
 management:
   endpoints:

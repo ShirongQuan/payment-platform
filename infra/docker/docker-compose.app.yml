@@ -1,0 +1,133 @@
+# Application-service overlay for the payment platform.
+#
+# Usage (from this directory):
+#   docker compose -f docker-compose.yml -f docker-compose.app.yml up -d
+#
+# This file adds the auth/fraud/ledger-service containers on top of the infra
+# stack defined in docker-compose.yml (postgres, redis, kafka, otel-collector, ...).
+# Image refs default to the values below but can be overridden via env vars, e.g.:
+#   AUTH_SERVICE_IMAGE=shirongquan/auth-service:1.0.0 docker compose -f docker-compose.yml -f docker-compose.app.yml up -d
+#
+# Ports: each service's port is controlled by a single *_SERVICE_PORT variable
+# (default shown below), reused for the host<->container port mapping, the
+# SERVER_PORT env var passed into the app, and the healthcheck URL - so
+# changing one value (e.g. `AUTH_SERVICE_PORT=9100 docker compose ... up -d`)
+# keeps everything in sync instead of requiring edits in 3 different places.
+
+services:
+
+  # --------------------------------------------      auth-service   -------------------------------------------------
+  auth-service:
+    image: ${AUTH_SERVICE_IMAGE:-shirongquan/auth-service:1.0.0}
+    container_name: auth-service
+    ports:
+      - "${AUTH_SERVICE_PORT:-9000}:${AUTH_SERVICE_PORT:-9000}"
+    environment:
+      SERVER_PORT: ${AUTH_SERVICE_PORT:-9000}
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/auth_db
+      SPRING_DATASOURCE_USERNAME: postgres
+      SPRING_DATASOURCE_PASSWORD: postgres
+      SPRING_DATA_REDIS_HOST: redis
+      SPRING_DATA_REDIS_PORT: 6379
+      SPRING_DATA_REDIS_DATABASE: 0
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka-1:9092,kafka-2:9092,kafka-3:9092
+      FRAUD_BASE_URL: http://fraud-service:${FRAUD_SERVICE_PORT:-9010}
+      OTEL_EXPORTER_OTLP_TRACES_ENDPOINT: http://otel-collector:4318/v1/traces
+      TRACING_SAMPLING_PROBABILITY: 1.0
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      kafka-1:
+        condition: service_healthy
+      kafka-2:
+        condition: service_healthy
+      kafka-3:
+        condition: service_healthy
+      kafka-topic-init:
+        condition: service_completed_successfully
+      otel-collector:
+        condition: service_healthy
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:${AUTH_SERVICE_PORT:-9000}/actuator/health" ]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    restart: unless-stopped
+
+  # --------------------------------------------      fraud-service   -------------------------------------------------
+  fraud-service:
+    image: ${FRAUD_SERVICE_IMAGE:-shirongquan/fraud-service:1.0.0}
+    container_name: fraud-service
+    ports:
+      - "${FRAUD_SERVICE_PORT:-9010}:${FRAUD_SERVICE_PORT:-9010}"
+    environment:
+      # Activates the dev/test-only FailureModeController (/internal/test/failure-mode), used to
+      # remotely toggle chaos/failure injection for local load/resilience testing. Override with
+      # FRAUD_SERVICE_PROFILE=<empty or prod-like value> to disable it, e.g. to more closely mirror
+      # a production deployment.
+      SPRING_PROFILES_ACTIVE: ${FRAUD_SERVICE_PROFILE:-dev}
+      SERVER_PORT: ${FRAUD_SERVICE_PORT:-9010}
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/fraud_db
+      SPRING_DATASOURCE_USERNAME: postgres
+      SPRING_DATASOURCE_PASSWORD: postgres
+      SPRING_DATA_REDIS_HOST: redis
+      SPRING_DATA_REDIS_PORT: 6379
+      SPRING_DATA_REDIS_DATABASE: 0
+      OTEL_EXPORTER_OTLP_TRACES_ENDPOINT: http://otel-collector:4318/v1/traces
+      TRACING_SAMPLING_PROBABILITY: 1.0
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      otel-collector:
+        condition: service_healthy
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:${FRAUD_SERVICE_PORT:-9010}/actuator/health" ]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    restart: unless-stopped
+
+  # --------------------------------------------      ledger-service   -------------------------------------------------
+  ledger-service:
+    image: ${LEDGER_SERVICE_IMAGE:-shirongquan/ledger-service:1.0.0}
+    container_name: ledger-service
+    ports:
+      - "${LEDGER_SERVICE_PORT:-9020}:${LEDGER_SERVICE_PORT:-9020}"
+    environment:
+      SERVER_PORT: ${LEDGER_SERVICE_PORT:-9020}
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/ledger_db
+      SPRING_DATASOURCE_USERNAME: postgres
+      SPRING_DATASOURCE_PASSWORD: postgres
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka-1:9092,kafka-2:9092,kafka-3:9092
+      OTEL_EXPORTER_OTLP_TRACES_ENDPOINT: http://otel-collector:4318/v1/traces
+      TRACING_SAMPLING_PROBABILITY: 1.0
+    depends_on:
+      postgres:
+        condition: service_healthy
+      kafka-1:
+        condition: service_healthy
+      kafka-2:
+        condition: service_healthy
+      kafka-3:
+        condition: service_healthy
+      kafka-topic-init:
+        condition: service_completed_successfully
+      otel-collector:
+        condition: service_healthy
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:${LEDGER_SERVICE_PORT:-9020}/actuator/health" ]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    restart: unless-stopped
+
+
+
+

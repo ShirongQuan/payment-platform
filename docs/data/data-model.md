@@ -1,5 +1,13 @@
 # Data Model Overview
 
+## Table of Contents
+
+- [ER Diagrams](#er-diagrams)
+- [Auth DB (auth-service)](#auth-db-auth-service)
+- [Ledger DB (ledger-service)](#ledger-db-ledger-service)
+- [Fraud DB (fraud-service)](#fraud-db-fraud-service)
+- [End-to-end event reliability](#end-to-end-event-reliability)
+
 This document summarizes the core tables used by `auth-service`, `fraud-service`, and `ledger-service`.
 
 ## ER Diagrams

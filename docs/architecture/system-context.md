@@ -1,5 +1,13 @@
 # System Context (C4 Level 1)
 
+## Table of Contents
+
+- [What the platform does](#what-the-platform-does)
+- [External actors / systems](#external-actors--systems)
+- [System boundary and responsibilities](#system-boundary-and-responsibilities)
+- [Top 3 priorities for next step](#top-3-priorities-for-next-step)
+- [Diagram](#diagram)
+
 ## What the platform does
 
 The Payment Platform is a Spring Boot-based payment authorisation system that lets a client reserve funds
@@ -62,17 +70,7 @@ no separate team/release boundary between them).
 
 ## Diagram
 
-Source: [`system-context.mmd`](./system-context.mmd)
-
-```mermaid
-flowchart TB
-    Customer(["Customer / Client App"])
-    Ops(["Admin / Ops"])
-
-    Platform[["Payment Platform"]]
-
-    Customer -->|" authorise / capture /<br/>reverse / query "| Platform
-    Ops -->|" dashboards, traces,<br/>manual recovery "| Platform
-```
+Source: [`system-context.mmd`](./system-context.mmd) — open in a Mermaid-compatible viewer (the
+Mermaid VS Code/IntelliJ plugin, or [mermaid.live](https://mermaid.live)) to render it.
 
 

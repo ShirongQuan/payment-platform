@@ -1,5 +1,21 @@
 # Failure Scenarios
 
+## Table of Contents
+
+- [Purpose](#purpose)
+- [Scope](#scope)
+- [Failure scenario catalog](#failure-scenario-catalog)
+    - [1) Duplicate API request (same idempotency key)](#1-duplicate-api-request-same-idempotency-key)
+    - [2) Client timeout after server commit](#2-client-timeout-after-server-commit)
+    - [3) Outbox publish transient failure (producer side)](#3-outbox-publish-transient-failure-producer-side)
+    - [4) Duplicate event delivery to ledger consumer](#4-duplicate-event-delivery-to-ledger-consumer)
+    - [5) Invalid state transition (business rule violation)](#5-invalid-state-transition-business-rule-violation)
+    - [6) Partial downstream failure during processing](#6-partial-downstream-failure-during-processing)
+    - [7) Fraud decline and account auto-lock](#7-fraud-decline-and-account-auto-lock)
+- [Scenario-to-diagram map](#scenario-to-diagram-map)
+- [Quick triage checklist](#quick-triage-checklist)
+- [Known MVP limitations](#known-mvp-limitations)
+
 ## Purpose
 
 Document expected behavior when key runtime failures occur, and how to diagnose/recover during demo and development.

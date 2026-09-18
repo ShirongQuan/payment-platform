@@ -1,5 +1,13 @@
 # Flow Diagrams
 
+## Table of Contents
+
+- [Start Here (Recommended Reading Order)](#start-here-recommended-reading-order)
+- [Documents in this folder](#documents-in-this-folder)
+- [Diagram Index](#diagram-index)
+- [Quick Guidance](#quick-guidance)
+- [MVP Scope Note](#mvp-scope-note)
+
 This folder contains Mermaid sequence diagrams and companion documentation for key runtime flows across `auth-service`
 and `ledger-service`.
 
@@ -117,6 +125,13 @@ Covers:
 - **retry** — the automatic claim → publish → backoff loop
 - **DLQ/manual replay** — the manual requeue path for terminal `FAILED` rows (no automated
   dead-letter/replay mechanism exists today)
+
+### `payment-lifecycle-state.mmd` / `account-lock-state.mmd`
+
+Use alongside [payment-lifecycle.md](./payment-lifecycle.md#lifecycle-at-a-glance) for the
+authorisation and account-level state diagrams at a glance (a closely related, slightly more
+detailed pair of the same two diagrams also lives in
+[`../domain/state-machine.md`](../domain/state-machine.md#diagram)).
 
 ---
 

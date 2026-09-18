@@ -1,5 +1,16 @@
 # Auth Service API
 
+## Table of Contents
+
+- [Shared Error Format](#shared-error-format)
+- [POST `/accounts`](#post-accounts)
+- [GET `/accounts/{accountId}`](#get-accountsaccountid)
+- [POST `/accounts/{accountId}/deposits`](#post-accountsaccountiddeposits)
+- [POST `/authorisations`](#post-authorisations)
+- [GET `/authorisations/{authorisationId}`](#get-authorisationsauthorisationid)
+- [POST `/authorisations/{authorisationId}/captures`](#post-authorisationsauthorisationidcaptures)
+- [POST `/authorisations/{authorisationId}/reversals`](#post-authorisationsauthorisationidreversals)
+
 Base path: `/` (server port `9000`)
 
 This document covers the important auth-service endpoints and the expected behavior for:

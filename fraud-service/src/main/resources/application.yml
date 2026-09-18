@@ -22,7 +22,7 @@ spring:
       database: ${SPRING_DATA_REDIS_DATABASE:0}
 
 server:
-  port: 9010
+  port: ${SERVER_PORT:9010}
 
 
 management:

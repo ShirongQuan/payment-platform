@@ -4,6 +4,15 @@ This document defines the baseline telemetry standard for the payment platform.
 
 For planned improvements that are not yet implemented, track them in the roadmap: [`docs/roadmap.md`](../roadmap.md).
 
+## Table of Contents
+
+- [1) Logging Standard](#1-logging-standard)
+- [2) Metrics List](#2-metrics-list)
+- [3) Trace Model](#3-trace-model)
+- [4) OTel Setup](#4-otel-setup)
+- [5) Dashboards](#5-dashboards)
+- [6) Correlating Logs, Metrics, and Traces](#6-correlating-logs-metrics-and-traces)
+
 ## 1) Logging Standard
 
 Use structured JSON logs for all services (`auth-service`, `fraud-service`, `ledger-service`, shared libs).
@@ -235,6 +244,62 @@ All panels below live in the **Payment Platform Overview** dashboard (`infra/gra
 | Screenshot | ![DB concurrency conflicts](./dashboard-screenshots/db-concurrency-conflicts.png) |
 
 Add screenshot files to `docs/observability/dashboard-screenshots/` using the file names referenced above.
+
+## 6) Correlating Logs, Metrics, and Traces
+
+> Note on log format: today's console output is the plain-text pattern configured in each
+> service's `application.yml` (`logging.pattern.console`), not the structured-JSON shape shown in
+> the [example log event](#example-log-event) above. The JSON field table is the target logging
+> standard; moving the console appender to emit that shape is tracked in
+> [`docs/roadmap.md`](../roadmap.md). The worked example below uses the log line as it actually
+> appears today, so it can be reproduced exactly.
+
+Every request-scoped log line already carries the two identifiers needed to jump straight from
+"something interesting in a log" to "the exact trace and metric data point it came from":
+
+- `[traceId,spanId]` — populated by Micrometer Tracing/OpenTelemetry instrumentation.
+- `[correlationId]` — populated by `shared-spring-lib`'s `CorrelationIdFilter`/`CorrelationIdResolver`
+  (propagated across service calls via the `X-Correlation-Id` header; generated if absent).
+
+### Worked example
+
+1. Send an authorise request (see [Demo Guide § Authorize a Payment](../getting-started/demo-guide.md#authorize-a-payment)),
+   then tail auth-service's logs (container mode) or read its console output (IDE mode):
+
+   ```bash
+   docker compose -f infra/docker/docker-compose.yml -f infra/docker/docker-compose.app.yml \
+     logs --tail=200 auth-service | grep "Received authorise request"
+   ```
+
+2. You'll see a line shaped like this (DEBUG level, since `org.example.auth.authorisation` is set to
+   `DEBUG` by default):
+
+   ```text
+   2026-09-17T10:15:32.418+00:00 DEBUG 1 --- [auth-service] [nio-9000-exec-3] [9f4e9a9e2cc4ce6d9e8f6f6d4f1e7d12,c6d7b2f1ae1b0938] [2f3f4d18-1290-4cb3-9f65-b8d3182f2301] org.example.auth.authorisation.api.AuthorisationController : Received authorise request, accountId=11111111-1111-1111-1111-111111111111, idempotencyKey=demo-auth-001, clientIpAddress=172.19.0.1
+   ```
+
+   Here `traceId=9f4e9a9e2cc4ce6d9e8f6f6d4f1e7d12`, `spanId=c6d7b2f1ae1b0938`, and
+   `correlationId=2f3f4d18-1290-4cb3-9f65-b8d3182f2301`.
+
+3. Paste the `traceId` into a Tempo query (Grafana → Explore → Tempo datasource):
+
+   ```text
+   { trace:id = "9f4e9a9e2cc4ce6d9e8f6f6d4f1e7d12" }
+   ```
+
+   The resulting trace's span waterfall is the exact request the log line belongs to — including
+   the `auth-service → fraud-service` fraud-check span and the DB transaction span.
+
+4. Note the trace's start time, then open the **Payment Platform Overview** dashboard and set the
+   time range to a narrow window around it. The request shows up as one data point in
+   `HTTP p95 latency` / `Auth request outcomes (last 5m)` — a concrete example of one log line, one
+   trace, and one metric sample all describing the same event.
+
+A captured example of this three-way view (log line + Tempo trace + Grafana panel) lives at
+`docs/observability/dashboard-screenshots/log-trace-metric-correlation.png` (see that folder's
+[README](./dashboard-screenshots/README.md) for what to capture if the file isn't there yet). The
+step-by-step demo version of this walkthrough is in
+[`docs/getting-started/demo-guide.md` § Correlate a Log Line to a Trace](../getting-started/demo-guide.md#correlate-a-log-line-to-a-trace).
 
 
 

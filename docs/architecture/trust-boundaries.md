@@ -1,5 +1,17 @@
 # Trust Boundaries
 
+## Table of Contents
+
+- [Boundaries in the platform](#boundaries-in-the-platform)
+    - [1) Public API boundary (Client -> auth-service / ledger-service)](#1-public-api-boundary-client---auth-service--ledger-service)
+    - [2) Internal service boundary (auth-service -> fraud-service)](#2-internal-service-boundary-auth-service---fraud-service)
+    - [3) Data boundary (financial / behavioral data at rest)](#3-data-boundary-financial--behavioral-data-at-rest)
+    - [4) Messaging boundary (Kafka: auth-service -> ledger-service)](#4-messaging-boundary-kafka-auth-service---ledger-service)
+- [AuthN / AuthZ across boundaries](#authn--authz-across-boundaries)
+- [Sensitive data handling](#sensitive-data-handling)
+- [Diagram](#diagram)
+- [Related](#related)
+
 This document describes the trust zones the Payment Platform's *application layer* crosses today — the
 boundaries between the public API, internal service calls, data stores, and messaging — and what each boundary
 enforces at the application level. It intentionally does not assess the system against a production security
@@ -96,55 +108,8 @@ this document.
 Trust boundaries as a simplified data-flow diagram. Dashed boxes mark the application-level trust zones described
 above.
 
-Source: [`trust-boundaries.mmd`](./trust-boundaries.mmd)
-
-```mermaid
-flowchart TB
-    Client(["Client"])
-
-    subgraph PublicBoundary["Public API boundary"]
-        Auth["auth-service"]
-        Ledger["ledger-service<br/>(read-only)"]
-    end
-
-    subgraph InternalBoundary["Internal service boundary"]
-        Fraud["fraud-service"]
-    end
-
-    subgraph DataBoundary["Data boundary — financial / behavioral data at rest"]
-        AuthDB[("auth_db<br/>balances, authorisations")]
-        FraudDB[("fraud_db<br/>ip_address, risk_score")]
-        LedgerDB[("ledger_db<br/>ledger entries, raw events")]
-        RedisStore[("Redis<br/>idempotency cache,<br/>velocity counters")]
-    end
-
-    subgraph MessagingBoundary["Messaging boundary"]
-        KafkaTopic[("Kafka<br/>auth.events (+ DLT)")]
-    end
-
-    subgraph OpsBoundary["Ops boundary"]
-        Grafana["Grafana / Kafka UI /<br/>pgAdmin / RedisInsight"]
-    end
-
-    Client -->|" HTTP<br/>[correlation-id assigned here] "| Auth
-    Client -->|" HTTP (read-only) "| Ledger
-    Auth -->|" HTTP<br/>(circuit breaker + timeout) "| Fraud
-    Auth -->|" JPA (own schema only) "| AuthDB
-    Fraud -->|" JPA (own schema only) "| FraudDB
-    Ledger -->|" JPA (own schema only) "| LedgerDB
-    Auth -->|" idempotent response cache "| RedisStore
-    Fraud -->|" velocity counters "| RedisStore
-    Auth -->|" publish [audit: correlationId,<br/>eventId, traceparent headers] "| KafkaTopic
-    KafkaTopic -->|" consume + dedupe<br/>[processed_event guard] "| Ledger
-    Auth -.->|" traces/metrics "| Grafana
-    Fraud -.->|" traces/metrics "| Grafana
-    Ledger -.->|" traces/metrics "| Grafana
-    style PublicBoundary stroke-dasharray: 5 5
-    style InternalBoundary stroke-dasharray: 5 5
-    style DataBoundary stroke-dasharray: 5 5
-    style MessagingBoundary stroke-dasharray: 5 5
-    style OpsBoundary stroke-dasharray: 5 5
-```
+Source: [`trust-boundaries.mmd`](./trust-boundaries.mmd) — open in a Mermaid-compatible viewer (the
+Mermaid VS Code/IntelliJ plugin, or [mermaid.live](https://mermaid.live)) to render it.
 
 ## Related
 

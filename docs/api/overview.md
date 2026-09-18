@@ -1,5 +1,13 @@
 # API Overview
 
+## Table of Contents
+
+- [Purpose](#purpose)
+- [Services](#services)
+- [Common conventions](#common-conventions)
+- [Security](#security)
+- [Links](#links)
+
 ## Purpose
 
 Cross-service API conventions for the payment platform.

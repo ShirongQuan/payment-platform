@@ -1,5 +1,14 @@
 # Local Development Guide
 
+## Table of Contents
+
+- [Prerequisites](#prerequisites)
+- [Start Dependencies](#start-dependencies)
+- [Run Services](#run-services)
+- [Test Commands](#test-commands)
+- [Sample Requests](#sample-requests)
+- [Related Docs](#related-docs)
+
 This guide covers local development for `payment-platform`:
 - prerequisites
 - how to start dependencies

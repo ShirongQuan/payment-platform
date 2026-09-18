@@ -1,5 +1,17 @@
 # Outbox Backlog Recovery
 
+## Table of Contents
+
+- [Purpose](#purpose)
+- [Background](#background)
+- [Detect](#detect)
+- [Triage](#triage)
+- [Retry (automatic)](#retry-automatic)
+- [DLQ / Manual replay](#dlq--manual-replay)
+- [Metrics & dashboards](#metrics--dashboards)
+- [Known MVP limitation / suggested improvement](#known-mvp-limitation--suggested-improvement)
+- [Related](#related)
+
 ## Purpose
 
 Explain how to detect, triage, and recover from a growing auth-service outbox backlog or a

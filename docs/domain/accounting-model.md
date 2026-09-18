@@ -1,5 +1,18 @@
 # Accounting Model
 
+## Table of Contents
+
+- [Purpose & Scope](#purpose--scope)
+    - [What is journaled](#what-is-journaled)
+- [1) Ledger Model](#1-ledger-model)
+    - [Accounts](#accounts)
+    - [Entry structure](#entry-structure)
+- [2) Core Invariants](#2-core-invariants)
+- [3) Posting Rules by Event](#3-posting-rules-by-event)
+- [4) Worked Examples](#4-worked-examples)
+- [5) Reconciliation Notes](#5-reconciliation-notes)
+- [Related](#related)
+
 ## Purpose & Scope
 
 This document defines the business rules for how payment lifecycle events are recorded as ledger entries in this platform. It is business-rule focused, not an implementation guide — for code, see the file references at the end of each section.

@@ -1,55 +1,96 @@
-* DB
-  docker exec -it payment-platform-postgres bash
-  psql -U postgres -d postgres
+# Operational Runbook
 
-  \l -- list databases
-  \c auth_db -- switch database
-  \dt -- list tables in current DB
-  SELECT now();
-  \q
+## Table of Contents
 
-redis:
+- [Database access](#database-access)
+- [Redis access](#redis-access)
+- [Auth-service networking note](#auth-service-networking-note)
+- [Tempo trace queries (TraceQL)](#tempo-trace-queries-traceql)
+- [Outbox -> Kafka -> ledger-service span link](#outbox---kafka---ledger-service-span-link)
+- [Prometheus queries](#prometheus-queries)
+- [Generating mock data for ledger-service Kafka consumer / DLT metrics](#generating-mock-data-for-ledger-service-kafka-consumer--dlt-metrics)
+    - [0. Prerequisites](#0-prerequisites)
+    - [1. Trigger an immediate DLT publish (non-retryable path)](#1-trigger-an-immediate-dlt-publish-non-retryable-path)
+    - [2. Verify the metrics incremented](#2-verify-the-metrics-incremented)
+    - [3. Verify the record actually landed in the DLT topic](#3-verify-the-record-actually-landed-in-the-dlt-topic)
+    - [4. Generate throughput / consumer-lag data](#4-generate-throughput--consumer-lag-data)
+    - [Notes / gotchas](#notes--gotchas)
 
+## Database access
+
+```bash
+docker exec -it payment-platform-postgres bash
+psql -U postgres -d postgres
+```
+
+```sql
+\l -- list databases
+\c auth_db -- switch database
+\dt -- list tables in current DB
+SELECT now();
+\q
+```
+
+## Redis access
+
+```bash
 docker exec -it redis redis-cli
 SELECT 1
 keys fraud:ip:*
+```
 
-auth-service networking note:
+## Auth-service networking note
 
 - `server.forward-headers-strategy=framework` is enabled.
 - Deploy behind a trusted proxy/load balancer that strips inbound `X-Forwarded-*` headers from clients and sets
   sanitized values.
 
-Useful queries for your project
-All auth-service traces
-traceql
-{ resource.service.name = "auth-service" }
+## Tempo trace queries (TraceQL)
 
-(grafana.com)
-Only error traces from auth-service
-traceql
+Useful queries for your project.
+
+**All auth-service traces:**
+
+```traceql
+{ resource.service.name = "auth-service" }
+```
+
+**Only error traces from auth-service:**
+
+```traceql
 { resource.service.name = "auth-service" && status = error }
+```
 
 TraceQL supports filtering by both service name and span status. (grafana.com)
-Auth endpoint traces
-If your controller span name is something like POST /api/v1/auths:
-traceql
+
+**Auth endpoint traces:** if your controller span name is something like `POST /api/v1/auths`:
+
+```traceql
 { resource.service.name = "auth-service" && name = "POST /api/v1/auths" }
+```
 
 Filtering by both service and span name is the standard way to find traces for a specific operation. (grafana.com)
-Slow auth requests
-traceql
+
+**Slow auth requests:**
+
+```traceql
 { resource.service.name = "auth-service" && duration > 200ms }
+```
 
 TraceQL supports duration filters on spans. (grafana.com)
-Root traces started by auth-service
-traceql
-{ trace:rootService = "auth-service" }
 
-trace:rootService is a trace-level intrinsic and is usually more efficient when you want traces whose root service is
+**Root traces started by auth-service:**
+
+```traceql
+{ trace:rootService = "auth-service" }
+```
+
+`trace:rootService` is a trace-level intrinsic and is usually more efficient when you want traces whose root service is
 auth-service. (grafana.com)
 
-TraceQL:
+**Other useful filters:**
+
+```traceql
 { resource.service.name = "auth-service" && name != "http get /actuator/prometheus" }
 
 { resource.service.name = "auth-service" && name != "http get /actuator/prometheus" && name != "task
@@ -58,52 +99,60 @@ outboxScheduler.publishOutboxEvents" }
 { resource.service.name = "fraud-service" && name != "http get /actuator/prometheus" }
 
 { resource.service.name = "ledger-service" && name != "http get /actuator/prometheus" }
+```
 
-Query by trace ID
-Use either of these:
+**Query by trace ID.** Use either of these:
 
-traceql
+```traceql
 { trace:id = "41928b92edf1cdbe0ba6594baee5ae9" }
+```
+
 or in Grafana Explore, just paste the raw trace ID:
 
-Text
+```text
 41928b92edf1cdbe0ba6594baee5ae9
+```
+
 Grafana documents both approaches. (grafana.com)
 
-Query by span ID
-Use the span intrinsic:
+**Query by span ID.** Use the span intrinsic:
 
-traceql
+```traceql
 { span:id = "e9dba1c9a0273305" }
-TraceQL supports scoped intrinsics such as trace:id, span:name, and link intrinsics like link:spanID and link:traceID;
-span-level filtering is done inside { ... } expressions. (grafana.com)
+```
 
-Outbox -> Kafka -> ledger-service span link
-The outbox publisher (OutboxKafkaPublisher) can't make the Kafka producer span a direct child of the
-original auth request span, because publishing happens later on an unrelated @Scheduled thread (no
+TraceQL supports scoped intrinsics such as `trace:id`, `span:name`, and link intrinsics like `link:spanID` and
+`link:traceID`; span-level filtering is done inside `{ ... }` expressions. (grafana.com)
+
+## Outbox -> Kafka -> ledger-service span link
+
+The outbox publisher (`OutboxKafkaPublisher`) can't make the Kafka producer span a direct child of the
+original auth request span, because publishing happens later on an unrelated `@Scheduled` thread (no
 in-memory trace context survives the outbox table round-trip). Instead it captures the original
-request's traceparent when the outbox row is created, and attaches it as a span Link on the
-"outbox.kafka.publish" producer span when it actually publishes.
+request's `traceparent` when the outbox row is created, and attaches it as a span Link on the
+`outbox.kafka.publish` producer span when it actually publishes.
 
-IMPORTANT - the Link lives on the PUBLISH side, not the original request side:
+**IMPORTANT** — the Link lives on the PUBLISH side, not the original request side:
 
-- "outbox.kafka.publish" is a span in its OWN separate trace (started by the @Scheduled publisher
-  tick), NOT part of the original "POST /api/v1/auths" trace, even though both are emitted by
+- `outbox.kafka.publish` is a span in its OWN separate trace (started by the `@Scheduled` publisher
+  tick), NOT part of the original `POST /api/v1/auths` trace, even though both are emitted by
   auth-service.
-- The Link on "outbox.kafka.publish" points BACK to the original request trace that created the
+- The Link on `outbox.kafka.publish` points BACK to the original request trace that created the
   outbox row.
 - So you always start from the outbox publish trace and follow the link backward to the request
   trace - you will NOT find anything in the original request trace itself; it has no idea a
   publish happened later.
 
-To find the "outbox.kafka.publish" spans (these are their own traces):
-traceql
+To find the `outbox.kafka.publish` spans (these are their own traces):
+
+```traceql
 { resource.service.name = "auth-service" && name = "outbox.kafka.publish" }
+```
 
 To view the link in Grafana:
 
-1. Explore -> Tempo datasource -> run the query above to list outbox.kafka.publish spans/traces.
-2. Open one of those traces and click the "outbox.kafka.publish" span in the waterfall.
+1. Explore -> Tempo datasource -> run the query above to list `outbox.kafka.publish` spans/traces.
+2. Open one of those traces and click the `outbox.kafka.publish` span in the waterfall.
 3. In the span detail panel, look for the "Links" section - it shows the linked trace/span ID
    (the ORIGINAL request trace that created this outbox event).
 4. Click the linked trace ID to jump backward into that original request trace (e.g. to see the
@@ -111,14 +160,22 @@ To view the link in Grafana:
 
 To query in the other direction - given an original request's trace ID, find the outbox publish
 span(s) that link back to it:
-traceql
-{ link:traceID = "<original-request-trace-id>" }
 
+```traceql
+{ link:traceID = "<original-request-trace-id>" }
+```
+
+## Prometheus queries
+
+```promql
 sum by (result) (rate(auth_requests_total[5m]))
 
-Approval rate: sum(rate(auth_authorisations_total{status="AUTHORISED"}[5m])) / sum(rate(auth_authorisations_total[5m]))
-Decline breakdown by reason: sum by (reason) (rate(auth_authorisations_total{status="DECLINED"}[5m]))rate(
-auth_authorisations_total{status="AUTHORISED"}[5m])) / sum(rate(auth_authorisations_total[5m]))
+# Approval rate
+sum(rate(auth_authorisations_total{status="AUTHORISED"}[5m])) / sum(rate(auth_authorisations_total[5m]))
+
+# Decline breakdown by reason
+sum by (reason) (rate(auth_authorisations_total{status="DECLINED"}[5m]))
+```
 
 ## Generating mock data for ledger-service Kafka consumer / DLT metrics
 

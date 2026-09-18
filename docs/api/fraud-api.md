@@ -1,5 +1,11 @@
 # Fraud Service API
 
+## Table of Contents
+
+- [Shared Error Format](#shared-error-format)
+- [POST `/fraud/check`](#post-fraudcheck)
+- [Caller-side resilience (auth-service)](#caller-side-resilience-auth-service)
+
 Base path: `/` (server port `9010`)
 
 This document covers the important fraud-service endpoint and the expected behavior for:

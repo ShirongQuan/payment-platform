@@ -61,7 +61,7 @@ idempotency:
 
 
 server:
-  port: 9000
+  port: ${SERVER_PORT:9000}
   # Let Spring resolve client address/protocol from sanitized proxy forwarding headers.
   forward-headers-strategy: framework
 

@@ -1,5 +1,19 @@
 # ADR 0005: Idempotency and Concurrency Rules for Authorisation Flows
 
+## Table of Contents
+
+- [1) Context](#1-context)
+- [2) Decision](#2-decision)
+- [3) Scope of Idempotency](#3-scope-of-idempotency)
+- [4) Request Replay Semantics](#4-request-replay-semantics)
+- [5) Concurrency Handling](#5-concurrency-handling)
+- [6) Downstream Event Idempotency](#6-downstream-event-idempotency)
+- [7) Error Handling](#7-error-handling)
+- [8) Trade-offs](#8-trade-offs)
+- [9) Alternatives Considered](#9-alternatives-considered)
+- [10) Consequences](#10-consequences)
+- [Related](#related)
+
 - Status: Accepted
 - Date: 2026-08-06
 

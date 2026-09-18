@@ -1,5 +1,21 @@
 # Payment Lifecycle
 
+## Table of Contents
+
+- [Purpose](#purpose)
+- [Scope](#scope)
+- [Out of scope (for MVP)](#out-of-scope-for-mvp)
+- [Lifecycle at a glance](#lifecycle-at-a-glance)
+- [Sequence diagrams](#sequence-diagrams)
+- [1) Authorisation flow](#1-authorisation-flow)
+- [2) Capture flow](#2-capture-flow)
+- [3) Reverse flow](#3-reverse-flow)
+- [4) Ledger projection (consume side)](#4-ledger-projection-consume-side)
+- [Step-to-data/event mapping](#step-to-dataevent-mapping)
+- [Idempotency expectations (MVP)](#idempotency-expectations-mvp)
+- [Observability hooks](#observability-hooks)
+- [MVP notes for reviewers](#mvp-notes-for-reviewers)
+
 ## Purpose
 
 Describe the canonical payment flow for this MVP platform and map each step to state transitions, persistence, and
@@ -23,16 +39,7 @@ emitted events.
 
 ## Lifecycle at a glance
 
-```mermaid
-stateDiagram-v2
-    [*] --> AUTHORISED : sufficient funds & fraud approved
-    [*] --> DECLINED : insufficient funds, fraud decline,\nor account not ACTIVE
-    AUTHORISED --> CAPTURED
-    AUTHORISED --> REVERSED
-    DECLINED --> [*]
-    CAPTURED --> [*]
-    REVERSED --> [*]
-```
+Source: [`payment-lifecycle-state.mmd`](./payment-lifecycle-state.mmd)
 
 This matches `AuthorisationStatus` exactly (`auth-service`): `AUTHORISED`, `CAPTURED`, `REVERSED`,
 `DECLINED`. There is no `REFUNDED` state and no post-capture reversal — once `CAPTURED`, the
@@ -41,11 +48,7 @@ authorisation is never `AUTHORISED` and then declined; declines happen at creati
 
 A second, account-level state machine runs alongside this one:
 
-```mermaid
-stateDiagram-v2
-    [*] --> ACTIVE
-    ACTIVE --> LOCKED : fraud-service recommends a lock\n(high risk score or repeated-decline pattern)
-```
+Source: [`account-lock-state.mmd`](./account-lock-state.mmd)
 
 `AccountStatus` is `ACTIVE`/`LOCKED`. A `LOCKED` account rejects new authorisations
 (`reason=ACCOUNT_LOCKED`) before fraud-service is even called. There is currently no automated or

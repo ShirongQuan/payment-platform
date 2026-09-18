@@ -1,5 +1,14 @@
 # Idempotency
 
+## Table of Contents
+
+- [Purpose](#purpose)
+- [Global policy](#global-policy)
+- [Request lifecycle (auth-service)](#request-lifecycle-auth-service)
+- [Response behavior](#response-behavior)
+- [Service notes](#service-notes)
+- [Failure cases](#failure-cases)
+
 ## Purpose
 
 Prevent duplicate financial side effects for retried requests (reserve, capture, reverse, and fraud

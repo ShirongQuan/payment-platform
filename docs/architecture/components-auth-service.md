@@ -1,5 +1,15 @@
 # Components — auth-service (C4 Level 3)
 
+## Table of Contents
+
+- [Component diagram](#component-diagram)
+- [Sequence: authorise happy path (mini)](#sequence-authorise-happy-path-mini)
+- [Responsibility table](#responsibility-table)
+- [Boundary notes](#boundary-notes)
+    - [Transaction boundary](#transaction-boundary)
+    - [Idempotency / concurrency points](#idempotency--concurrency-points)
+    - [External calls](#external-calls)
+
 This zooms into the `auth-service` container from [Containers](./containers.md) and shows its key internal
 building blocks for the authorise/capture/reverse write path. Scope: **auth-service only** — `fraud-service` and
 `ledger-service` appear only as external dependencies (an outbound client call and, indirectly, a Kafka
@@ -11,123 +21,13 @@ Components are grouped into the six categories that make up `auth-service`: **co
 services** (orchestrator + idempotency + the transactional executor), **domain** (entities), **repositories**,
 **outbox**, and **outbound clients**.
 
-Source: [`components-auth-service.mmd`](./components-auth-service.mmd)
-
-```mermaid
-flowchart TB
-    Client(["Client"])
-
-    subgraph AuthService["auth-service"]
-        direction TB
-
-        subgraph Controllers["Controllers"]
-            direction LR
-            Ctrl["AuthorisationController /<br/>AccountController"]
-            ExHandler["AuthExceptionHandler"]
-        end
-
-        subgraph AppServices["Application services"]
-            direction TB
-            Svc["AuthorisationServiceImpl<br/>(orchestrator)"]
-            Idem["IdempotencyService"]
-
-            subgraph Txn["Transaction boundary"]
-                Exec["AuthorisationTransactionalExecutorImpl"]
-            end
-        end
-
-        subgraph Clients["Outbound clients"]
-            FraudOrch["FraudOrchestrator /<br/>ResilientFraudGateway"]
-        end
-
-        subgraph Domain["Domain"]
-            direction LR
-            AccEntity["AccountEntity"]
-            AuthEntity["AuthorisationEntity"]
-            EventEntity["AuthorisationEventEntity"]
-        end
-
-        subgraph Repos["Repositories"]
-            direction LR
-            AccRepo["AccountRepository"]
-            AuthRepo["AuthorisationRepository"]
-            EventRepo["AuthorisationEventRepository"]
-        end
-
-        subgraph Outbox["Outbox"]
-            direction LR
-            OutboxSvc["OutboxEventServiceImpl"]
-            OutboxRepo["OutboxEventRepository"]
-            Scheduler["OutboxScheduler /<br/>OutboxKafkaPublisher<br/>(background, own txn)"]
-        end
-    end
-
-    Redis[("Redis")]
-    FraudSvc[["fraud-service"]]
-    DB[("auth_db<br/>(PostgreSQL)")]
-    Kafka[("Kafka: auth.events")]
-
-    Client -->|"HTTP request"| Ctrl
-    Ctrl --> Svc
-    Svc <-->|"get / store (TTL)"| Idem
-    Idem <--> Redis
-    Svc -->|"pre-check read"| AuthRepo
-    Svc -->|"evaluate(...)"| FraudOrch
-    FraudOrch -->|"POST /fraud/check"| FraudSvc
-    Svc -->|"authoriseInTransaction /<br/>captureInTransaction /<br/>reverseInTransaction"| Exec
-
-    Exec --> AccEntity
-    Exec --> AuthEntity
-    Exec --> EventEntity
-    Exec --> AccRepo
-    Exec --> AuthRepo
-    Exec --> EventRepo
-    Exec --> OutboxSvc
-
-    AccRepo <--> DB
-    AuthRepo <--> DB
-    EventRepo <--> DB
-    OutboxSvc --> OutboxRepo
-    OutboxRepo -->|"insert outbox_event<br/>(same txn)"| DB
-
-    Exec -.->|"throws on conflict"| Svc
-    Ctrl -.->|"domain exceptions"| ExHandler
-    ExHandler -->|"ProblemDetail"| Client
-
-    Scheduler --> OutboxRepo
-    Scheduler -->|"poll / claim / publish"| DB
-    Scheduler -->|"publish"| Kafka
-```
+Source: [`components-auth-service.mmd`](./components-auth-service.mmd) — open in a Mermaid-compatible
+viewer (the Mermaid VS Code/IntelliJ plugin, or [mermaid.live](https://mermaid.live)) to render it.
 
 ## Sequence: authorise happy path (mini)
 
-Source: [`authorise-happy-path.mmd`](./authorise-happy-path.mmd)
-
-```mermaid
-sequenceDiagram
-    autonumber
-    actor Client
-    participant Ctrl as Auth<br/>Controller
-    participant Svc as Authorisation<br/>ServiceImpl
-    participant Cache as Idempotency<br/>Cache (Redis)
-    participant Fraud as Fraud<br/>Orchestrator
-    participant Exec as Transactional<br/>Executor
-    participant DB as auth_db
-
-    Client ->> Ctrl: POST /authorisations
-    Ctrl ->> Svc: authorise(request)
-    Svc ->> Cache: get(scopeId, idempotencyKey)
-    Cache -->> Svc: miss
-    Svc ->> Fraud: evaluate(request)
-    Fraud -->> Svc: APPROVE (risk score)
-    Svc ->> Exec: authoriseInTransaction(...)
-    Exec ->> DB: insert authorisation +<br/>event + outbox row (1 txn)
-    DB -->> Exec: committed
-    Exec -->> Svc: AuthorisationResponse
-    Svc ->> Cache: store response (TTL)
-    Svc -->> Ctrl: AuthorisationResponse
-    Ctrl -->> Client: 200 OK
-```
+Source: [`authorise-happy-path.mmd`](./authorise-happy-path.mmd) — open in a Mermaid-compatible
+viewer (the Mermaid VS Code/IntelliJ plugin, or [mermaid.live](https://mermaid.live)) to render it.
 
 ## Responsibility table
 

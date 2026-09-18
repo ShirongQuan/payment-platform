@@ -3,6 +3,20 @@
 > Last updated: 2026-09-15
 > Purpose: correctness checklist for payment-critical behavior
 
+## Table of Contents
+
+- [1) How to use this catalog](#1-how-to-use-this-catalog)
+- [2) Business-critical scenarios](#2-business-critical-scenarios)
+    - [S1) Authorize success](#s1-authorize-success)
+    - [S2) Insufficient funds decline](#s2-insufficient-funds-decline)
+    - [S3) Duplicate request with same idempotency key and same payload](#s3-duplicate-request-with-same-idempotency-key-and-same-payload)
+    - [S4) Duplicate idempotency key with different payload](#s4-duplicate-idempotency-key-with-different-payload)
+    - [S5) Capture after authorization](#s5-capture-after-authorization)
+    - [S6) Refund/reversal flow (MVP = reversal)](#s6-refundreversal-flow-mvp--reversal)
+    - [S7) Timeout/retry and eventual consistency](#s7-timeoutretry-and-eventual-consistency)
+- [3) Scenario-to-test-type matrix](#3-scenario-to-test-type-matrix)
+- [4) Exit criteria for scenario coverage](#4-exit-criteria-for-scenario-coverage)
+
 ## 1) How to use this catalog
 
 - each scenario below is a required proof point, not just an example

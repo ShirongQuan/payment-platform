@@ -1,5 +1,15 @@
 # Alerts and SLOs
 
+## Table of Contents
+
+- [Current Status](#current-status)
+- [Candidate SLIs/SLOs (Initial Proposal)](#candidate-slisslos-initial-proposal)
+- [Proposed Initial Alerts (Draft Thresholds)](#proposed-initial-alerts-draft-thresholds)
+    - [Page-worthy alerts](#page-worthy-alerts)
+    - [Ticket/async alerts](#ticketasync-alerts)
+- [Ownership and Escalation](#ownership-and-escalation)
+- [Adoption Plan (Next Phase)](#adoption-plan-next-phase)
+
 This document is the initial operating draft for service-level objectives and alerting.
 
 For gaps we have today, add concrete follow-up tasks in next phase planning: [`docs/roadmap.md`](../roadmap.md).

@@ -5,6 +5,16 @@
 
 Legend: ✅ Implemented for MVP · 🟡 Partial/Basic · 🔵 Planned if time permits
 
+## Table of Contents
+
+- [1) MVP Goal](#1-mvp-goal)
+- [2) What "Done for MVP" Means](#2-what-done-for-mvp-means)
+- [3) Current MVP Progress](#3-current-mvp-progress)
+- [5) Next Steps (Prioritized)](#5-next-steps-prioritized)
+- [6) Production Considerations](#6-production-considerations)
+- [7) Demo Script Checklist](#7-demo-script-checklist)
+- [8) Reviewer Guidance](#8-reviewer-guidance)
+
 ## 1) MVP Goal
 
 Demonstrate an end-to-end payment flow with realistic architecture patterns:

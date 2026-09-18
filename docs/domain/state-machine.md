@@ -1,5 +1,21 @@
 # Payment State Machine
 
+## Table of Contents
+
+- [Aggregates](#aggregates)
+- [States](#states)
+    - [Authorisation states (implemented)](#authorisation-states-implemented)
+    - [Account states (implemented)](#account-states-implemented)
+    - [Planned states (not implemented)](#planned-states-not-implemented)
+- [Allowed Transitions](#allowed-transitions)
+    - [Account-level transition (parallel state machine)](#account-level-transition-parallel-state-machine)
+- [Guards / Preconditions](#guards--preconditions)
+- [Terminal States](#terminal-states)
+- [Concurrency / Idempotency Behavior](#concurrency--idempotency-behavior)
+- [Error Mapping](#error-mapping)
+- [Diagram](#diagram)
+- [Related](#related)
+
 ## Aggregates
 
 Two independent state machines govern payment behavior:
@@ -107,27 +123,12 @@ Note the distinction between a **business decline** (insufficient funds, fraud d
 
 ## Diagram
 
-**Authorisation state machine:** [`payment-state-machine.mmd`](./payment-state-machine.mmd)
+**Authorisation state machine:** [`payment-state-machine.mmd`](./payment-state-machine.mmd) — open
+in a Mermaid-compatible viewer (the Mermaid VS Code/IntelliJ plugin, or
+[mermaid.live](https://mermaid.live)) to render it.
 
-```mermaid
-stateDiagram-v2
-    [*] --> AUTHORISED : sufficient funds & fraud approved
-    [*] --> DECLINED : insufficient funds, fraud decline,\nor account not ACTIVE
-    AUTHORISED --> CAPTURED : capture (full amount)
-    AUTHORISED --> REVERSED : reverse (full amount)
-    DECLINED --> [*]
-    CAPTURED --> [*]
-    REVERSED --> [*]
-```
-
-**Parallel account-level gate:** [`account-state-machine.mmd`](./account-state-machine.mmd)
-
-```mermaid
-stateDiagram-v2
-    [*] --> ACTIVE
-    ACTIVE --> LOCKED : fraud-service recommends a lock\n(high risk score or repeated-decline pattern)
-    LOCKED --> ACTIVE : manual DB operation only (no API path today)
-```
+**Parallel account-level gate:** [`account-state-machine.mmd`](./account-state-machine.mmd) — same
+viewing options as above.
 
 ## Related
 

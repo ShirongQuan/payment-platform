@@ -1,5 +1,19 @@
 # Containers (C4 Level 2)
 
+## Table of Contents
+
+- [Runtime units](#runtime-units)
+    - [Application services (internal)](#application-services-internal)
+    - [Shared library (not independently deployed)](#shared-library-not-independently-deployed)
+    - [Platform infrastructure (internal)](#platform-infrastructure-internal)
+    - [Observability Stack (internal, separate sub-boundary)](#observability-stack-internal-separate-sub-boundary)
+    - [Admin/dev tooling (internal, ops-facing)](#admindev-tooling-internal-ops-facing)
+- [Key interactions](#key-interactions)
+    - [Synchronous (REST, request/response)](#synchronous-rest-requestresponse)
+    - [Asynchronous (Kafka, at-least-once)](#asynchronous-kafka-at-least-once)
+    - [Data access](#data-access)
+- [Diagram](#diagram)
+
 This zooms into the [System Context](./system-context.md) and shows the main deployable/runtime units that make
 up the Payment Platform. All of these — the three application services, Kafka/Redis/PostgreSQL, and the
 observability stack — are internal to the platform's single deployment/environment today (no separate team or
@@ -82,63 +96,8 @@ authorise/capture/reverse traffic; it only degrades what Ops can *see*.
 
 ## Diagram
 
-Source: [`containers.mmd`](./containers.mmd)
-
-```mermaid
-flowchart TB
-    Client(["Client / Swagger / Postman / Load Test"])
-    Ops(["Admin / Ops"])
-
-    subgraph Platform["Payment Platform (system boundary)"]
-        direction TB
-
-        subgraph Services["Application services (internal)"]
-            direction LR
-            Auth["auth-service :9000<br/>(accounts, authorise,<br/>capture, reverse, outbox)"]
-            Fraud["fraud-service :9010<br/>(risk decisioning)"]
-            Ledger["ledger-service :9020<br/>(event projection,<br/>read-only query API)"]
-        end
-
-        subgraph Infra["Platform infrastructure (internal)"]
-            direction LR
-            Postgres[("PostgreSQL<br/>auth_db / fraud_db / ledger_db")]
-            Redis[("Redis<br/>idempotency cache +<br/>velocity counters")]
-            KafkaTopic[("Kafka<br/>auth.events (+ DLT)")]
-        end
-
-        subgraph Obs["Observability Stack (internal, separate boundary)"]
-            direction LR
-            OTel["OTel Collector"]
-            Tempo["Tempo"]
-            Prometheus["Prometheus"]
-            Grafana["Grafana"]
-        end
-    end
-
-    Client -->|"HTTP"| Auth
-    Client -->|"HTTP (read-only)"| Ledger
-    Ops -->|"dashboards / traces"| Grafana
-    Ops -->|"manual recovery<br/>(Kafka UI / pgAdmin)"| Infra
-
-    Auth -->|"POST /fraud/check<br/>(circuit breaker + 250ms timeout)"| Fraud
-    Auth -->|"publish outbox events"| KafkaTopic
-    KafkaTopic -->|"consume + dedupe"| Ledger
-
-    Auth -->|"JPA"| Postgres
-    Fraud -->|"JPA"| Postgres
-    Ledger -->|"JPA"| Postgres
-
-    Auth -->|"idempotency cache (TTL)"| Redis
-    Fraud -->|"sliding-window<br/>velocity counters"| Redis
-
-    Auth -.->|"OTLP traces + metrics"| OTel
-    Fraud -.->|"OTLP traces + metrics"| OTel
-    Ledger -.->|"OTLP traces + metrics"| OTel
-    OTel --> Tempo
-    OTel --> Prometheus
-    Tempo --> Grafana
-    Prometheus --> Grafana
-```
+Source: [`containers.mmd`](./containers.mmd) — open in a Mermaid-compatible viewer (the Mermaid
+VS Code/IntelliJ plugin, or [mermaid.live](https://mermaid.live)) to render it.
 
 
 

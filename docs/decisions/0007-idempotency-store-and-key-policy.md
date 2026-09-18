@@ -1,5 +1,17 @@
 # ADR 0007: Idempotency Store Strategy and Key Policy (Auth/Fraud)
 
+## Table of Contents
+
+- [Context](#context)
+- [Decision](#decision)
+    - [Storage choice: Redis (auth-service), DB unique constraint (fraud-service)](#storage-choice-redis-auth-service-db-unique-constraint-fraud-service)
+    - [Key scope](#key-scope)
+    - [TTL](#ttl)
+    - [Replay / conflict semantics](#replay--conflict-semantics)
+- [Consequences](#consequences)
+- [Alternatives Considered](#alternatives-considered)
+- [Related](#related)
+
 - Status: Accepted
 - Date: 2026-08-13
 

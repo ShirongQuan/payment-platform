@@ -3,6 +3,17 @@
 > Last updated: 2026-09-15
 > Scope: payment-platform MVP with production-oriented test policy
 
+## Table of Contents
+
+- [1) Testing goals](#1-testing-goals)
+- [2) Test pyramid for this repository](#2-test-pyramid-for-this-repository)
+    - [2.1 Unit tests](#21-unit-tests)
+    - [2.2 Integration tests](#22-integration-tests)
+    - [2.3 End-to-end tests](#23-end-to-end-tests)
+- [3) Test environments and tooling](#3-test-environments-and-tooling)
+- [4) CI gates](#4-ci-gates)
+- [5) Coverage philosophy](#5-coverage-philosophy)
+
 ## 1) Testing goals
 
 ### MVP expectations (what "good" means now)

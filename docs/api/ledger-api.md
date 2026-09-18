@@ -1,5 +1,10 @@
 # Ledger Service API
 
+## Table of Contents
+
+- [GET `/authorisations/{authorisationId}`](#get-authorisationsauthorisationid)
+- [GET `/accounts/{accountId}/events`](#get-accountsaccountidevents)
+
 Base path: `/` (server port `9020`)
 
 This document covers the important ledger-service endpoints and the expected behavior for:

@@ -351,7 +351,7 @@
             "spanNulls": false,
             "stacking": {
               "group": "A",
-              "mode": "normal"
+              "mode": "none"
             },
             "thresholdsStyle": {
               "mode": "off"
@@ -371,14 +371,14 @@
         "overrides": [
           {
             "matcher": {
-              "id": "byRegexp",
-              "options": "5.."
+              "id": "byName",
+              "options": "auth-service - 200"
             },
             "properties": [
               {
                 "id": "color",
                 "value": {
-                  "fixedColor": "red",
+                  "fixedColor": "dark-green",
                   "mode": "fixed"
                 }
               }
@@ -386,8 +386,38 @@
           },
           {
             "matcher": {
-              "id": "byRegexp",
-              "options": "4.."
+              "id": "byName",
+              "options": "fraud-service - 200"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "yellow",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "ledger-service - 200"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "light-blue",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "fraud-service - 404"
             },
             "properties": [
               {
@@ -401,14 +431,14 @@
           },
           {
             "matcher": {
-              "id": "byRegexp",
-              "options": "2.."
+              "id": "byName",
+              "options": "fraud-service - 503"
             },
             "properties": [
               {
                 "id": "color",
                 "value": {
-                  "fixedColor": "green",
+                  "fixedColor": "red",
                   "mode": "fixed"
                 }
               }
@@ -440,10 +470,24 @@
       "targets": [
         {
           "editorMode": "code",
-          "expr": "sum by (application, status) (increase(http_server_requests_seconds_count{uri!~\".*(prometheus|health).*\",status!=\"304\"}[1m]))",
+          "expr": "sum by (application, status) (increase(http_server_requests_seconds_count{uri!~\".*(prometheus|health).*\", status=~\"2..\"}[1m]))",
           "legendFormat": "{{application}} - {{status}}",
           "range": true,
           "refId": "A"
+        },
+        {
+          "editorMode": "code",
+          "expr": "sum by (application, status) (increase(http_server_requests_seconds_count{uri!~\".*(prometheus|health).*\", status=~\"4..\"}[1m]))",
+          "legendFormat": "{{application}} - {{status}}",
+          "range": true,
+          "refId": "B"
+        },
+        {
+          "editorMode": "code",
+          "expr": "sum by (application, status) (increase(http_server_requests_seconds_count{uri!~\".*(prometheus|health).*\", status=~\"5..\"}[1m]))",
+          "legendFormat": "{{application}} - {{status}}",
+          "range": true,
+          "refId": "C"
         }
       ],
       "title": "HTTP request throughput by application & status (1m)",
