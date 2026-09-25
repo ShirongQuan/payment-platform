@@ -18,7 +18,7 @@ Trust boundaries as a simplified data-flow diagram. Dashed boxes mark the applic
 below.
 
 <p>
-  <a href="diagrams/trust-boundaries.svg" target="_blank" rel="noopener noreferrer">
+  <a href="diagrams/trust-boundaries.svg?raw=true" target="_blank" rel="noopener noreferrer">
     <img src="diagrams/trust-boundaries.svg" alt="Trust boundaries diagram" width="100%" />
   </a>
 </p>

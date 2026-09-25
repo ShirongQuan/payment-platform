@@ -11,7 +11,7 @@
 ## Diagram
 
 <p>
-  <a href="diagrams/system-context.svg" target="_blank" rel="noopener noreferrer">
+  <a href="diagrams/system-context.svg?raw=true" target="_blank" rel="noopener noreferrer">
     <img src="diagrams/system-context.svg" alt="System Context (C4 Level 1) diagram" width="100%" />
   </a>
 </p>

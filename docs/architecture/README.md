@@ -10,7 +10,7 @@ C4-style architecture documentation for the Payment Platform, from broadest zoom
 (Customer/Client App, Admin/Ops), and their major interactions. No internal services are shown at this level.
 
 <p>
-  <a href="diagrams/system-context.svg" target="_blank" rel="noopener noreferrer">
+  <a href="diagrams/system-context.svg?raw=true" target="_blank" rel="noopener noreferrer">
     <img src="diagrams/system-context.svg" alt="System Context (C4 Level 1) diagram" width="100%" />
   </a>
 </p>
@@ -26,7 +26,7 @@ Click the diagram to open the full-size SVG.*
 interactions.
 
 <p>
-  <a href="diagrams/containers.svg" target="_blank" rel="noopener noreferrer">
+  <a href="diagrams/containers.svg?raw=true" target="_blank" rel="noopener noreferrer">
     <img src="diagrams/containers.svg" alt="Containers (C4 Level 2) diagram" width="100%" />
   </a>
 </p>
@@ -42,7 +42,7 @@ happy path" sequence, a responsibility table, and boundary notes (transaction bo
 points, external calls).
 
 <p>
-  <a href="diagrams/components-auth-service.svg" target="_blank" rel="noopener noreferrer">
+  <a href="diagrams/components-auth-service.svg?raw=true" target="_blank" rel="noopener noreferrer">
     <img src="diagrams/components-auth-service.svg" alt="Components — auth-service (C4 Level 3) diagram" width="100%" />
   </a>
 </p>
@@ -51,7 +51,7 @@ points, external calls).
 outbox, and outbound clients. Click the diagram to open the full-size SVG.*
 
 <p>
-  <a href="diagrams/authorise-happy-path.svg" target="_blank" rel="noopener noreferrer">
+  <a href="diagrams/authorise-happy-path.svg?raw=true" target="_blank" rel="noopener noreferrer">
     <img src="diagrams/authorise-happy-path.svg" alt="Sequence: authorise happy path diagram" width="100%" />
   </a>
 </p>
@@ -69,7 +69,7 @@ auth, etc.) and planned application-level controls (e.g. authentication) are lin
 [roadmap](../roadmap.md) rather than assessed here.
 
 <p>
-  <a href="diagrams/trust-boundaries.svg" target="_blank" rel="noopener noreferrer">
+  <a href="diagrams/trust-boundaries.svg?raw=true" target="_blank" rel="noopener noreferrer">
     <img src="diagrams/trust-boundaries.svg" alt="Trust boundaries diagram" width="100%" />
   </a>
 </p>
@@ -83,7 +83,3 @@ to open the full-size SVG.*
   idempotency, event publishing/consuming).
 - [Data Model](../data/data-model.md) — table-level detail per service database.
 - [ADRs](../decisions/README.md) — the "why" behind the decisions referenced throughout these docs.
-
-
-
-
