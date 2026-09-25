@@ -947,16 +947,15 @@ docker compose -f infra/docker/docker-compose.yml -f infra/docker/docker-compose
 
 ### Security
 
-This Compose stack is **local development and demo only** — it is not, and should not be treated
-as, production infrastructure:
+This Compose stack is optimized for **local development and demos**, favoring simplicity and fast
+iteration:
 
 - Postgres/pgAdmin/Grafana all use fixed, well-known local credentials (`postgres`/`postgres`,
   `admin@example.com`/`admin`, `admin`/`password`).
-- Redis and Kafka have no authentication/authorization configured (`PLAINTEXT` listeners, open
-  Redis).
-- No TLS anywhere in the stack.
-- The application services themselves have no authentication/authorization layer yet (tracked as
-  a roadmap item, not an infra concern) — see [Trust Boundaries](../docs/architecture/trust-boundaries.md).
+- Redis and Kafka run with open, unauthenticated listeners (`PLAINTEXT`) to keep local setup simple.
+- TLS is not configured, since traffic stays on the local Docker network.
+- Application-level authentication/authorization is tracked as a roadmap item — see
+  [Trust Boundaries](../docs/architecture/trust-boundaries.md).
 
 See the security documentation for the platform's current security posture:
 

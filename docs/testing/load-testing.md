@@ -43,7 +43,7 @@ This report answers three practical questions for the MVP:
   traffic generation, not a percentile-accurate load-testing framework.
 - Does not exercise `POST /accounts` / `POST /accounts/{id}/deposits` under load — these are
   test/setup conveniences, not payment-critical endpoints (see
-  [idempotency.md](../api/idempotency.md)).
+  [Idempotency](../api/README.md#idempotency)).
 
 For **how** to actually run these scripts, see **[load-tests/README.md](../../load-tests/README.md)**.
 

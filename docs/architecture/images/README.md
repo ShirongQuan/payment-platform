@@ -6,7 +6,7 @@ section.
 Expected file:
 
 - `architecture-overview.png` — a rendered export of the high-level architecture diagram (either
-  the root README's inline Mermaid diagram, or [`../containers.mmd`](../containers.mmd)), showing
+  the root README's inline Mermaid diagram, or [`../containers.mmd`](../diagrams/containers.mmd)), showing
   `auth-service` / `fraud-service` / `ledger-service`, their infrastructure dependencies, and the
   observability stack.
 

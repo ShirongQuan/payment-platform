@@ -39,7 +39,7 @@ emitted events.
 
 ## Lifecycle at a glance
 
-Source: [`payment-lifecycle-state.mmd`](./payment-lifecycle-state.mmd)
+Source: [`payment-lifecycle-state.mmd`](diagrams/payment-lifecycle-state.mmd)
 
 This matches `AuthorisationStatus` exactly (`auth-service`): `AUTHORISED`, `CAPTURED`, `REVERSED`,
 `DECLINED`. There is no `REFUNDED` state and no post-capture reversal — once `CAPTURED`, the
@@ -48,7 +48,7 @@ authorisation is never `AUTHORISED` and then declined; declines happen at creati
 
 A second, account-level state machine runs alongside this one:
 
-Source: [`account-lock-state.mmd`](./account-lock-state.mmd)
+Source: [`account-lock-state.mmd`](diagrams/account-lock-state.mmd)
 
 `AccountStatus` is `ACTIVE`/`LOCKED`. A `LOCKED` account rejects new authorisations
 (`reason=ACCOUNT_LOCKED`) before fraud-service is even called. There is currently no automated or
@@ -58,6 +58,7 @@ API-driven path back to `ACTIVE` — see Out of scope above.
 
 ## Sequence diagrams
 
+- Simplified happy-path overview (used in the root README): `payment-lifecycle-happy-path.mmd`
 - Authorise (incl. fraud pre-check + account-lock gate): `authorise-sequence.mmd`
 - Capture: `capture-sequence.mmd`
 - Reverse: `reverse-sequence.mmd`
@@ -75,7 +76,7 @@ API-driven path back to `ACTIVE` — see Out of scope above.
 ### Preconditions
 
 - **No authentication/authorization exists on this endpoint** (or any endpoint in this platform) —
-  this is a known MVP gap, not an implemented control (see `docs/roadmap.md`).
+  this is tracked as a roadmap item, not an implemented control (see `docs/roadmap.md`).
 - Required request fields are present and valid (`accountId`, `idempotencyKey`, `amount`,
   `currencyCode`, `merchantReference`).
 - `idempotencyKey` is required and scoped to `(accountId, idempotencyKey)`.
@@ -188,12 +189,12 @@ to the available balance.
 ledger-service consumes `auth.events` and projects three of the four event types into
 ledger entries + an event log:
 
-| Event type                  | Ledger-side handling                                                    |
-|------------------------------|---------------------------------------------------------------------------|
-| `AUTHORISATION_AUTHORISED`  | Projected (`AuthorisationAuthorisedHandler`)                             |
-| `AUTHORISATION_CAPTURED`    | Projected (`AuthorisationCapturedHandler`)                               |
-| `AUTHORISATION_REVERSED`    | Projected (`AuthorisationReversedHandler`)                               |
-| `AUTHORISATION_DECLINED`    | **Intentionally ignored** — no handler, no ledger entry (nothing to project since balances were never touched) |
+| Event type                 | Ledger-side handling                                                                                           |
+|----------------------------|----------------------------------------------------------------------------------------------------------------|
+| `AUTHORISATION_AUTHORISED` | Projected (`AuthorisationAuthorisedHandler`)                                                                   |
+| `AUTHORISATION_CAPTURED`   | Projected (`AuthorisationCapturedHandler`)                                                                     |
+| `AUTHORISATION_REVERSED`   | Projected (`AuthorisationReversedHandler`)                                                                     |
+| `AUTHORISATION_DECLINED`   | **Intentionally ignored** — no handler, no ledger entry (nothing to project since balances were never touched) |
 
 Every projected event is deduplicated by `eventId` via `processed_event` (`INSERT ... ON CONFLICT
 DO NOTHING`), giving effectively-once projection over Kafka's at-least-once delivery. A genuinely
@@ -205,12 +206,12 @@ backoff before falling back to the DLT.
 
 ## Step-to-data/event mapping
 
-| Flow step                  | Primary write(s)                                  | Outbox event               | Ledger-side expectation                        |
-|-----------------------------|-----------------------------------------------------|-----------------------------|---------------------------------------------------|
-| Authorise → funds reserved  | authorisation (`AUTHORISED`) + account reservation  | `AUTHORISATION_AUTHORISED` | Ledger entry + event log projected               |
-| Authorise → declined        | authorisation (`DECLINED`) only (+ account lock, if applicable) | `AUTHORISATION_DECLINED`   | Ignored — no ledger entry (see section 4)        |
-| Capture accepted            | authorisation (`CAPTURED`) + reserved-balance debit | `AUTHORISATION_CAPTURED`   | Ledger entry + event log projected               |
-| Reverse accepted            | authorisation (`REVERSED`) + reserved→available release | `AUTHORISATION_REVERSED`   | Ledger entry + event log projected               |
+| Flow step                  | Primary write(s)                                                | Outbox event               | Ledger-side expectation                   |
+|----------------------------|-----------------------------------------------------------------|----------------------------|-------------------------------------------|
+| Authorise → funds reserved | authorisation (`AUTHORISED`) + account reservation              | `AUTHORISATION_AUTHORISED` | Ledger entry + event log projected        |
+| Authorise → declined       | authorisation (`DECLINED`) only (+ account lock, if applicable) | `AUTHORISATION_DECLINED`   | Ignored — no ledger entry (see section 4) |
+| Capture accepted           | authorisation (`CAPTURED`) + reserved-balance debit             | `AUTHORISATION_CAPTURED`   | Ledger entry + event log projected        |
+| Reverse accepted           | authorisation (`REVERSED`) + reserved→available release         | `AUTHORISATION_REVERSED`   | Ledger entry + event log projected        |
 
 ---
 
@@ -222,8 +223,8 @@ backoff before falling back to the DLT.
 - `POST /accounts` and `POST /accounts/{id}/deposits`: **not** idempotent — intentionally out of
   scope for this MVP (these are test/setup conveniences, not the payment-critical path).
 
-See also: [`../api/idempotency.md`](../api/idempotency.md) and
-[`idempotency-generic.mmd`](./idempotency-generic.mmd) for the generic replay/conflict decision
+See also: [`../api/README.md#idempotency`](../api/README.md#idempotency) and
+[`idempotency-generic.mmd`](diagrams/idempotency-generic.mmd) for the generic replay/conflict decision
 logic shared by every idempotent endpoint.
 
 ---

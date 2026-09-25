@@ -24,7 +24,7 @@
 
 ## 4) Integration & governance
 
-- [API Overview](./api/overview.md)
+- [API Overview](./api/README.md)
 - [Security & Threat Model](./security/threat-model.md)
 - [Data Protection](./security/data-protection.md)
 - [Audit & Compliance](./security/audit-compliance.md)

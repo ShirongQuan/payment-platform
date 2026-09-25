@@ -2,11 +2,22 @@
 
 ## Table of Contents
 
+- [Diagram](#diagram)
 - [What the platform does](#what-the-platform-does)
 - [External actors / systems](#external-actors--systems)
 - [System boundary and responsibilities](#system-boundary-and-responsibilities)
 - [Top 3 priorities for next step](#top-3-priorities-for-next-step)
-- [Diagram](#diagram)
+
+## Diagram
+
+<p>
+  <a href="diagrams/system-context.svg" target="_blank" rel="noopener noreferrer">
+    <img src="diagrams/system-context.svg" alt="System Context (C4 Level 1) diagram" width="100%" />
+  </a>
+</p>
+
+*Figure 6: System Context (C4 Level 1) — external actors/systems and the Payment Platform system boundary.
+Click the diagram to open the full-size SVG.*
 
 ## What the platform does
 
@@ -22,10 +33,10 @@ Everything outside the Payment Platform's own deployment: the people/systems tha
 who operate it. There is no external bank/card-network simulator in this MVP — authorisation decisions are made
 entirely within the platform (fraud-service), not delegated to a simulated downstream processor.
 
-| Actor / System | Type | Interaction |
-|---|---|---|
+| Actor / System            | Type                    | Interaction                                                                                                                                                                                                                |
+|---------------------------|-------------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | **Customer / Client App** | Person (via API caller) | Issues `authorise` / `capture` / `reverse` requests and reads account/authorisation state. In this MVP, "customer" traffic is simulated by Swagger UI, Postman, or the load-test scripts — there is no end-user front end. |
-| **Admin / Ops** | Person | Operates the platform: inspects dashboards, traces, Kafka topics, and databases; runs manual recovery actions (e.g. outbox replay) per the [runbook](../development/runbook.md). |
+| **Admin / Ops**           | Person                  | Operates the platform: inspects dashboards, traces, Kafka topics, and databases; runs manual recovery actions (e.g. outbox replay) per the [runbook](../development/runbook.md).                                           |
 
 ## System boundary and responsibilities
 
@@ -68,9 +79,5 @@ no separate team/release boundary between them).
    would let the platform be demoed and exercised without an API client, and would be the first real external
    actor consuming the public API as intended.
 
-## Diagram
-
-Source: [`system-context.mmd`](./system-context.mmd) — open in a Mermaid-compatible viewer (the
-Mermaid VS Code/IntelliJ plugin, or [mermaid.live](https://mermaid.live)) to render it.
 
 

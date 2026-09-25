@@ -9,7 +9,7 @@
 - [Retry (automatic)](#retry-automatic)
 - [DLQ / Manual replay](#dlq--manual-replay)
 - [Metrics & dashboards](#metrics--dashboards)
-- [Known MVP limitation / suggested improvement](#known-mvp-limitation--suggested-improvement)
+- [Current scope & suggested improvement](#current-scope--suggested-improvement)
 - [Related](#related)
 
 ## Purpose
@@ -57,12 +57,12 @@ action.
 For any row not progressing to `PUBLISHED`, inspect `status`, `retry_count`, `last_error`, and
 `next_attempt_at`:
 
-| status       | condition                          | meaning                                                     |
-|--------------|-------------------------------------|--------------------------------------------------------------|
-| `PUBLISHING` | `claim_until < now`                 | stale claim — will self-heal on the next scheduler cycle    |
-| `NEW`        | `next_attempt_at` in the future     | waiting on backoff — normal, no action needed                |
-| `NEW`        | `next_attempt_at` far in the past   | scheduler not running, or batch size too small for backlog   |
-| `FAILED`     | `retry_count >= 5`                  | exhausted automatic retries — needs a triage decision below  |
+| status       | condition                         | meaning                                                     |
+|--------------|-----------------------------------|-------------------------------------------------------------|
+| `PUBLISHING` | `claim_until < now`               | stale claim — will self-heal on the next scheduler cycle    |
+| `NEW`        | `next_attempt_at` in the future   | waiting on backoff — normal, no action needed               |
+| `NEW`        | `next_attempt_at` far in the past | scheduler not running, or batch size too small for backlog  |
+| `FAILED`     | `retry_count >= 5`                | exhausted automatic retries — needs a triage decision below |
 
 For `FAILED` rows, read `last_error` (truncated to 100 chars) and correlate by `event_id` /
 `correlation_id` with logs and traces (Tempo) to find the root cause, typically one of:
@@ -100,7 +100,7 @@ is a **manual operation**:
    for audit/investigation rather than requeuing it blindly.
 
 See the decision flow in
-[`outbox-backlog-recovery-flow.mmd`](./outbox-backlog-recovery-flow.mmd) for the full
+[`outbox-backlog-recovery-flow.mmd`](diagrams/outbox-backlog-recovery-flow.mmd) for the full
 detect → triage → retry → manual-replay path.
 
 ## Metrics & dashboards
@@ -111,7 +111,7 @@ detect → triage → retry → manual-replay path.
   outcome.
 - Grafana: `payment-platform-overview.json` (`infra/grafana/dashboards/`).
 
-## Known MVP limitation / suggested improvement
+## Current scope & suggested improvement
 
 - No admin endpoint or scheduled job exists to auto-requeue `FAILED` rows — recovery today is a
   manual SQL update, as described above.
@@ -122,9 +122,9 @@ detect → triage → retry → manual-replay path.
 
 ## Related
 
-- [`outbox-backlog-recovery-flow.mmd`](./outbox-backlog-recovery-flow.mmd) — decision-logic
+- [`outbox-backlog-recovery-flow.mmd`](diagrams/outbox-backlog-recovery-flow.mmd) — decision-logic
   flowchart for this doc.
-- [`event-publishing-sequence.mmd`](./event-publishing-sequence.mmd) — sequence diagram for the normal
+- [`event-publishing-sequence.mmd`](diagrams/event-publishing-sequence.mmd) — sequence diagram for the normal
   publish/retry/fail path.
 - [`failure-scenarios.md`](./failure-scenarios.md) — scenario 3 (outbox publish transient
   failure).

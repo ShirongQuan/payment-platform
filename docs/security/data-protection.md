@@ -81,8 +81,8 @@ Each service only ever queries its own database — there is no cross-schema acc
   (`SPRING_DATASOURCE_USERNAME`/`SPRING_DATASOURCE_PASSWORD`) with local-development fallback
   defaults (`postgres`/`postgres`) inlined in each service's `application.yml`. There is no
   dedicated secrets vault/manager in the stack.
-- **Gap**: no rotation, no centralized secrets store (e.g. Vault/AWS Secrets Manager), and the
-  fallback defaults would need to be removed before any real deployment.
+- **Next**: no rotation or centralized secrets store (e.g. Vault/AWS Secrets Manager) yet; the
+  fallback defaults are intended for local demo use only.
 - **Next step**: secrets management/rotation is tracked in
   [roadmap Production Considerations](../roadmap.md#6-production-considerations), alongside
   service-to-service auth and per-service least-privilege DB roles.

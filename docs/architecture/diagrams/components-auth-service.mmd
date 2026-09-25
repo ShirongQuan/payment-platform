@@ -44,12 +44,20 @@ flowchart TB
             OutboxRepo["OutboxEventRepository"]
             Scheduler["OutboxScheduler /<br/>OutboxKafkaPublisher<br/>(background, own txn)"]
         end
+
+        subgraph Observability["Observability (cross-cutting)"]
+            direction LR
+            AutoInstr["Spring Boot auto-instrumentation<br/>(HTTP server, RestClient, JPA, Kafka producer)"]
+            AuthMetrics["AuthMetrics<br/>(manual Micrometer counters/timers)"]
+        end
     end
 
     Redis[("Redis")]
     FraudSvc[["fraud-service"]]
     DB[("auth_db<br/>(PostgreSQL)")]
     Kafka[("Kafka: auth.events")]
+    OTel["OTel Collector"]
+    Prometheus["Prometheus"]
 
     Client -->|"HTTP request"| Ctrl
     Ctrl --> Svc
@@ -72,6 +80,7 @@ flowchart TB
     AuthRepo <--> DB
     EventRepo <--> DB
     OutboxSvc --> OutboxRepo
+    OutboxSvc -.->|"captures current<br/>traceparent into row"| OutboxRepo
     OutboxRepo -->|"insert outbox_event<br/>(same txn)"| DB
 
     Exec -.->|"throws on conflict"| Svc
@@ -80,6 +89,21 @@ flowchart TB
 
     Scheduler --> OutboxRepo
     Scheduler -->|"poll / claim / publish"| DB
-    Scheduler -->|"publish"| Kafka
+    Scheduler -->|"publish<br/>(reads stored traceparent<br/>as header)"| Kafka
+
+    Ctrl -.->|"span + http.server.requests"| AutoInstr
+    FraudOrch -.->|"span (RestClient)"| AutoInstr
+    AccRepo -.->|"span (JPA)"| AutoInstr
+    AuthRepo -.->|"span (JPA)"| AutoInstr
+    EventRepo -.->|"span (JPA)"| AutoInstr
+    Scheduler -.->|"span (Kafka producer)"| AutoInstr
+    AutoInstr -.->|"OTLP traces<br/>(+ span-derived metrics)"| OTel
+
+    Svc -.->|"auth_authorisations_total"| AuthMetrics
+    FraudOrch -.->|"auth_fraud_check_duration_seconds"| AuthMetrics
+    Idem -.->|"auth_idempotency_cache_total"| AuthMetrics
+    Exec -.->|"auth_concurrency_conflict_total"| AuthMetrics
+    Scheduler -.->|"auth_outbox_publish_lag_seconds,<br/>auth_outbox_backlog"| AuthMetrics
+    AuthMetrics -.->|"expose /actuator/prometheus"| Prometheus
 
 

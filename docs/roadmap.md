@@ -196,16 +196,22 @@ A feature is MVP-done if it:
 4. 🔵 Add an API gateway in front of `auth-service` and `ledger-service` — a single ingress point for routing,
    centralized authentication/authorization enforcement (pairs with item 1), and generic HTTP-level rate limiting;
    TLS termination and other infrastructure hardening for the gateway itself are tracked under
-   [Production Considerations](#6-production-considerations).
+   [Production Considerations](#6-production-considerations). This is also the natural point to introduce a
+   versioned `/api/v1` context path (today's endpoints are intentionally un-prefixed — see
+   [API docs](./api/README.md#services) — since there are no external consumers yet); the gateway would route
+   `/api/v1/auth/*`, `/api/v1/fraud/*`, `/api/v1/ledger/*` to each service without requiring the services
+   themselves to change their internal paths.
 5. 🔵 Add a pessimistic-locking implementation (`SELECT ... FOR UPDATE` /
    `@Lock(LockModeType.PESSIMISTIC_WRITE)`) for reserve/capture/reverse as a side-by-side comparison
    against the current optimistic-locking + idempotency-race-recovery approach (throughput vs.
    contention trade-offs under the existing `load-tests/generate-concurrency-conflicts.sh` scenario)
 6. 🔵 Extend idempotency to `POST /accounts` and `POST /accounts/{id}/deposits`
 7. 🔵 Expand failure-path tests (timeouts, duplicate events, DLT replay)
-8. 🔵 Enforce CI merge gates in GitHub branch protection/rulesets by requiring the `.github/workflows/ci.yml` status check on `main`
+8. 🔵 Enforce CI merge gates in GitHub branch protection/rulesets by requiring the `.github/workflows/ci.yml` status
+   check on `main`
 9. 🔵 Promote `docs/testing/scenarios.md` into executable E2E coverage by automating the critical scenario matrix
-10. 🔵 Publish a quantitative load baseline report (fixed env profile + p50/p95/p99 latency, throughput, error rate, resource usage) and track regression thresholds release-to-release
+10. 🔵 Publish a quantitative load baseline report (fixed env profile + p50/p95/p99 latency, throughput, error rate,
+    resource usage) and track regression thresholds release-to-release
 
 ---
 
@@ -234,9 +240,6 @@ explicitly as forward-looking infrastructure/platform work, not oversights:
 - **SLOs/alerts**: metrics and dashboards exist (see Observability above), but there are no defined
   SLOs or alerting rules (e.g. Prometheus Alertmanager) — thresholds, paging policy, and error
   budgets would need to be defined for production.
-- **Multi-region/DR**: the whole stack runs as a single-region `docker-compose` topology (single
-  Postgres, single Redis, one Kafka cluster) with no cross-region replication, failover, or backup/
-  restore runbook.
 - **Generic HTTP-level rate limiting**: in production, generic/infra-level rate limiting (e.g. "max
   N requests/sec per IP or API key across the whole API surface") belongs at the infrastructure
   layer — an API gateway or reverse proxy (see [Next Steps](#5-next-steps-prioritized) item 4) — not

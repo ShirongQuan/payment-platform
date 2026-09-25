@@ -57,7 +57,7 @@ compliance posture statement.
 | 3 | **Privilege abuse** | Since there is no authentication/authorization, every caller effectively has the same (full) access to every endpoint on a given service, including operationally sensitive ones (e.g. would-be admin actions). | Currently **no privilege separation exists** — there is no concept of "admin" vs "customer" caller. This is the platform's most significant current security gap. |
 | 4 | **Fraud automation** (scripted/bot-driven authorise attempts, account probing) | An automated client submits a high rate of authorise requests to probe balances, trigger declines, or abuse the account-lock side effect. | Partially mitigated: `fraud-service`'s Redis-backed sliding-window velocity rules flag >3 requests/5s from the same IP or account (`IP_VELOCITY_EXCEEDED`, `ACCOUNT_VELOCITY_EXCEEDED`) and feed the risk score; a high risk score or repeated-decline pattern can auto-`LOCK` the account. This is a business-layer signal, not infrastructure-level rate limiting/blocking (see [ADR 0006](../decisions/0006-redis-sliding-window-rate-limit.md)). |
 | 5 | **Data exposure via logs/traces** | Financial fields (amount, account id) and behavioral fields (IP address) appear in plaintext in application logs and trace spans, since none of this data is classified as regulated PII today. | No masking/redaction is applied; see [`data-protection.md` § Logging Redaction](./data-protection.md#logging-redactionmasking-rules) for the full assessment. |
-| 6 | **Credential/secret leakage** | Local-dev default DB credentials (`postgres`/`postgres`) are checked into `application.yml` as fallback values. | Low real-world exposure in this MVP context (fallbacks only apply when the environment variable is unset, and the whole stack runs on a single-host `docker-compose` network), but the pattern itself is not production-appropriate — see [`data-protection.md` § Secrets Handling](./data-protection.md#secrets-handling). |
+| 6 | **Credential/secret leakage** | Local-dev default DB credentials (`postgres`/`postgres`) are checked into `application.yml` as fallback values. | Scoped to this demo's single-host `docker-compose` network, and the fallback only applies when the environment variable is unset. Secrets management/rotation is tracked as a roadmap item for any future deployment beyond local demo use — see [`data-protection.md` § Secrets Handling](./data-protection.md#secrets-handling). |
 
 ## Risk Rating
 
@@ -68,7 +68,7 @@ compliance posture statement.
 | Replay (non-idempotent endpoints) | Medium (`POST /accounts`, deposits only) | Medium | **Medium** | Payment-critical endpoints are already protected; only account-creation/deposit endpoints are exposed. |
 | Fraud automation | Medium | Medium | **Medium** | Velocity-based signals exist and feed risk scoring/auto-lock, but there's no hard request-rate ceiling — a sufficiently distributed attacker could still stay under the velocity thresholds. |
 | Data exposure via logs/traces | Low | Low–Medium | **Low–Medium** | No regulated PII is stored today (see [`data-protection.md`](./data-protection.md#data-classification)); exposure is of financial amounts/IPs, not names/card numbers. |
-| Credential/secret leakage | Low (single-host demo topology) | Medium (would be High in a real deployment) | **Low (today) / High (if deployed as-is to production)** | The pattern would need to change before any real deployment — tracked explicitly in the roadmap. |
+| Credential/secret leakage | Low (single-host demo topology) | Medium (would grow with wider deployment) | **Low (in this demo scope)** | The pattern is appropriate for local demo use; secrets management/rotation is tracked as a roadmap item for any future deployment. |
 
 ## Mitigations
 
@@ -109,8 +109,8 @@ compliance posture statement.
 ## Residual Risks & Assumptions
 
 - **Assumption**: the current deployment target is a single-host `docker-compose` demo/MVP
-  environment, not a production/internet-facing deployment. Several risks rated High above would
-  need to be closed *before* any real deployment, not merely tracked as roadmap items.
+  environment. The roadmap tracks the additional hardening (authn/authz, transport encryption,
+  secrets management) that a wider deployment would build on top of this foundation.
 - **Residual risk**: even after planned authn/authz lands, generic infra-level rate limiting and
   WAF-style protections remain a separate, still-unaddressed layer — tracked as a distinct roadmap
   item rather than assumed to be covered by request authentication alone.

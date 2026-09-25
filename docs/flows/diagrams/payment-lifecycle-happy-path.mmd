@@ -1,0 +1,30 @@
+sequenceDiagram
+    autonumber
+    actor Client
+    participant Auth as auth-service
+    participant Cache as Redis<br/>(idempotency cache)
+    participant Fraud as fraud-service
+    participant DB as Postgres<br/>(auth-service)
+    participant Kafka as Kafka topic:<br/>auth.events
+    participant Ledger as ledger-service
+    participant LDB as Postgres<br/>(ledger-service)
+    Note over Client, LDB: Happy path only - see per-flow sequence diagrams<br/>(authorise/capture/reverse-sequence.mmd) for idempotency,<br/>concurrency, and failure handling
+    Client ->> Auth: POST /authorisations<br/>(authorise, amount, idempotencyKey)
+    Auth ->> Cache: check idempotency key
+    Cache -->> Auth: cache miss
+    Auth ->> Fraud: POST /fraud/check
+    Fraud -->> Auth: APPROVE
+    Auth ->> DB: reserve funds +<br/>save authorisation (AUTHORISED)<br/>+ outbox event
+    Auth ->> Cache: store response (TTL)
+    Auth -->> Client: 201 Created (AUTHORISED)
+    Auth ->> Kafka: publish AUTHORISATION_AUTHORISED<br/>(outbox poller)
+    Kafka -->> Ledger: consume<br/>AUTHORISATION_AUTHORISED
+    Ledger ->> LDB: save ledger entry +<br/>event log
+    Client ->> Auth: POST /authorisations/{id}/captures<br/>(idempotencyKey)
+    Auth ->> DB: settle reserved funds +<br/>save authorisation (CAPTURED)<br/>+ outbox event
+    Auth -->> Client: 200 OK (CAPTURED)
+    Auth ->> Kafka: publish AUTHORISATION_CAPTURED<br/>(outbox poller)
+    Kafka -->> Ledger: consume<br/>AUTHORISATION_CAPTURED
+    Ledger ->> LDB: save ledger entry +<br/>event log
+
+

@@ -1,4 +1,5 @@
 stateDiagram-v2
     [*] --> ACTIVE
     ACTIVE --> LOCKED : fraud-service recommends a lock\n(high risk score or repeated-decline pattern)
+    LOCKED --> ACTIVE : manual DB operation only (no API path today)
 

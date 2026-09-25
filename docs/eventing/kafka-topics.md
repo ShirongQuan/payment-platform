@@ -16,19 +16,19 @@
 
 ## Topic Catalog
 
-| Topic                       | Producer       | Consumer(s)                     | Payload schema                                                                 | Retention                          |
-|------------------------------|----------------|----------------------------------|----------------------------------------------------------------------------------|--------------------------------------|
-| `auth.events`                | `auth-service` (`OutboxKafkaPublisher`) | `ledger-service` (`LedgerKafkaConsumer`, group `ledger-service`) | JSON body per `event_type`: `AuthorisationAuthorisedPayload`, `AuthorisationCapturedPayload`, `AuthorisationReversedPayload`, plus headers (`eventId`, `aggregateType`, `aggregateId`, `eventType`, `occurredAt`, `correlationId`, `schemaVersion`, `traceparent`) | 6 partitions, replication factor 3 (`infra/kafka/create-topics.sh`); default broker retention (no topic-level `retention.ms` override configured) |
-| `auth.events.ledger.dlt`     | `ledger-service` (`DeadLetterPublishingRecoverer`, on consumer exhaustion) | none today (operator inspection only) | Same JSON payload/headers as the originating `auth.events` record, republished as-is after retry exhaustion | 6 partitions, replication factor 3 (`infra/kafka/create-topics.sh`); default broker retention |
+| Topic                    | Producer                                                                   | Consumer(s)                                                      | Payload schema                                                                                                                                                                                                                                                     | Retention                                                                                                                                         |
+|--------------------------|----------------------------------------------------------------------------|------------------------------------------------------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|---------------------------------------------------------------------------------------------------------------------------------------------------|
+| `auth.events`            | `auth-service` (`OutboxKafkaPublisher`)                                    | `ledger-service` (`LedgerKafkaConsumer`, group `ledger-service`) | JSON body per `event_type`: `AuthorisationAuthorisedPayload`, `AuthorisationCapturedPayload`, `AuthorisationReversedPayload`, plus headers (`eventId`, `aggregateType`, `aggregateId`, `eventType`, `occurredAt`, `correlationId`, `schemaVersion`, `traceparent`) | 6 partitions, replication factor 3 (`infra/kafka/create-topics.sh`); default broker retention (no topic-level `retention.ms` override configured) |
+| `auth.events.ledger.dlt` | `ledger-service` (`DeadLetterPublishingRecoverer`, on consumer exhaustion) | none today (operator inspection only)                            | Same JSON payload/headers as the originating `auth.events` record, republished as-is after retry exhaustion                                                                                                                                                        | 6 partitions, replication factor 3 (`infra/kafka/create-topics.sh`); default broker retention                                                     |
 
 Both topics are created by `infra/kafka/create-topics.sh` at environment bring-up.
 
 ## Message Keys
 
-| Topic                   | Key                          | Why                                                                                                  |
-|--------------------------|-------------------------------|--------------------------------------------------------------------------------------------------------|
-| `auth.events`             | `aggregateId` (the authorisation id, `UUID`) | Guarantees all events for the same authorisation (e.g. `AUTHORISED` → `CAPTURED`/`REVERSED`) land on the same partition, preserving per-aggregate ordering for the ledger consumer's projection logic. |
-| `auth.events.ledger.dlt`  | Same key as the original record, republished to the same partition number on the DLT | Preserves the same per-aggregate ordering property on the DLT so replay/inspection tooling can reason about ordering the same way as the main topic. |
+| Topic                    | Key                                                                                  | Why                                                                                                                                                                                                    |
+|--------------------------|--------------------------------------------------------------------------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `auth.events`            | `aggregateId` (the authorisation id, `UUID`)                                         | Guarantees all events for the same authorisation (e.g. `AUTHORISED` → `CAPTURED`/`REVERSED`) land on the same partition, preserving per-aggregate ordering for the ledger consumer's projection logic. |
+| `auth.events.ledger.dlt` | Same key as the original record, republished to the same partition number on the DLT | Preserves the same per-aggregate ordering property on the DLT so replay/inspection tooling can reason about ordering the same way as the main topic.                                                   |
 
 Producer key type is `UUID` (`UUIDSerializer`); consumer key type is correspondingly `UUID`
 (`UUIDDeserializer`).
@@ -164,8 +164,8 @@ before a production deployment:
 - [`outbox-pattern.md`](./outbox-pattern.md) — how events are reliably produced onto `auth.events`
   in the first place.
 - [ADR 0004: Use Separate Main Event and DLT Topics](../decisions/0004-use-event-and-dlt-topics.md)
-- [`docs/flows/event-consuming.mmd`](../flows/event-consuming.mmd)
-- [`docs/api/idempotency.md`](../api/idempotency.md) — consumer-side dedup contract in the broader
+- [`docs/flows/event-consuming.mmd`](../flows/diagrams/event-consuming.mmd)
+- [API docs — Idempotency](../api/README.md#idempotency) — consumer-side dedup contract in the broader
   idempotency design.
 
 

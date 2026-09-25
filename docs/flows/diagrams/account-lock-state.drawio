@@ -1,0 +1,59 @@
+<mxfile host="app.diagrams.net">
+  <diagram name="Page-1" id="L898qhrlPrruiIPu-NLh">
+    <mxGraphModel dx="1737" dy="800" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="827" pageHeight="1169" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <UserObject label="" mermaidData="{&#xa;  &quot;data&quot;: &quot;stateDiagram-v2\n    [*] --&gt; ACTIVE\n    ACTIVE --&gt; LOCKED : fraud-service recommends a lock\\n(high risk score or repeated-decline pattern)\n    LOCKED --&gt; ACTIVE : manual DB operation only (no API path today)\n\n&quot;,&#xa;  &quot;config&quot;: null&#xa;}" id="S8IN9gjaHOvFuv_bkHwy-1">
+          <mxCell connectable="0" parent="1" style="group;transparentBounds=1;editIcon=1;lockedGroup=0;groupPadding=10;labelBackgroundColor=none;" vertex="1">
+            <mxGeometry as="geometry" />
+          </mxCell>
+        </UserObject>
+        <UserObject label="" mermaidId="n:root_start" mermaidBaseStyle="ellipse;html=1;fillColor=light-dark(#333333,#cccccc);strokeColor=light-dark(#333333,#cccccc);fontColor=light-dark(#333333,#cccccc);fontFamily=Trebuchet MS,Verdana,Arial,sans-serif;fontSize=16;" mermaidBaseValue="" id="S8IN9gjaHOvFuv_bkHwy-2">
+          <mxCell parent="S8IN9gjaHOvFuv_bkHwy-1" style="ellipse;html=1;fontFamily=Trebuchet MS,Verdana,Arial,sans-serif;fontSize=16;labelBackgroundColor=none;" vertex="1">
+            <mxGeometry height="14" width="14" x="199" y="30" as="geometry" />
+          </mxCell>
+        </UserObject>
+        <UserObject label="ACTIVE" mermaidId="n:ACTIVE" mermaidBaseStyle="rounded=1;absoluteArcSize=1;arcSize=10;html=1;whiteSpace=wrap;strokeWidth=1;fillColor=light-dark(#ECECFF,#1f2020);strokeColor=light-dark(#9370DB,#cccccc);fontColor=light-dark(#333333,#cccccc);fontFamily=Trebuchet MS,Verdana,Arial,sans-serif;fontSize=16;" mermaidBaseValue="ACTIVE" id="S8IN9gjaHOvFuv_bkHwy-3">
+          <mxCell parent="S8IN9gjaHOvFuv_bkHwy-1" style="rounded=1;absoluteArcSize=1;arcSize=10;html=1;whiteSpace=wrap;strokeWidth=1;fontFamily=Trebuchet MS,Verdana,Arial,sans-serif;fontSize=16;labelBackgroundColor=none;fillColor=#eeeeee;strokeColor=#36393d;" vertex="1">
+            <mxGeometry height="40" width="67" x="172" y="94" as="geometry" />
+          </mxCell>
+        </UserObject>
+        <UserObject label="LOCKED" mermaidId="n:LOCKED" mermaidBaseStyle="rounded=1;absoluteArcSize=1;arcSize=10;html=1;whiteSpace=wrap;strokeWidth=1;fillColor=light-dark(#ECECFF,#1f2020);strokeColor=light-dark(#9370DB,#cccccc);fontColor=light-dark(#333333,#cccccc);fontFamily=Trebuchet MS,Verdana,Arial,sans-serif;fontSize=16;" mermaidBaseValue="LOCKED" id="S8IN9gjaHOvFuv_bkHwy-4">
+          <mxCell parent="S8IN9gjaHOvFuv_bkHwy-1" style="rounded=1;absoluteArcSize=1;arcSize=10;html=1;whiteSpace=wrap;strokeWidth=1;fontFamily=Trebuchet MS,Verdana,Arial,sans-serif;fontSize=16;labelBackgroundColor=none;fillColor=#eeeeee;strokeColor=#36393d;" vertex="1">
+            <mxGeometry height="40" width="72" x="174" y="310" as="geometry" />
+          </mxCell>
+        </UserObject>
+        <UserObject label="" mermaidId="e:root_start-&gt;ACTIVE#0" mermaidBaseStyle="curved=1;startArrow=none;endArrow=classic;endSize=9;fillColor=none;strokeColor=light-dark(#333333,#cccccc);exitX=0.5;exitY=1;entryX=0.5;entryY=0;" mermaidBaseValue="" id="S8IN9gjaHOvFuv_bkHwy-5">
+          <mxCell edge="1" parent="S8IN9gjaHOvFuv_bkHwy-1" source="S8IN9gjaHOvFuv_bkHwy-2" style="curved=1;startArrow=none;endArrow=classic;endSize=9;fillColor=none;exitX=0.5;exitY=1;entryX=0.5;entryY=0;rounded=0;labelBackgroundColor=none;fontColor=default;" target="S8IN9gjaHOvFuv_bkHwy-3">
+            <mxGeometry relative="1" as="geometry">
+              <Array as="points" />
+            </mxGeometry>
+          </mxCell>
+        </UserObject>
+        <UserObject label="fraud-service recommends a lock&#xa;(high risk score or repeated-decline pattern)" mermaidId="e:ACTIVE-&gt;LOCKED#0" mermaidBaseStyle="curved=1;startArrow=none;endArrow=classic;endSize=9;fillColor=none;strokeColor=light-dark(#333333,#cccccc);html=1;fontSize=16;labelBackgroundColor=#E8E8E88D;fontFamily=Trebuchet MS,Verdana,Arial,sans-serif;fontColor=light-dark(#333333,#cccccc);exitX=0.6940298507462687;exitY=1;entryX=0.6805555555555556;entryY=0;curved=1;exitX=0.69;exitY=1;entryX=0.68;entryY=0;" mermaidBaseValue="fraud-service recommends a lock&#xa;(high risk score or repeated-decline pattern)" id="S8IN9gjaHOvFuv_bkHwy-6">
+          <mxCell edge="1" parent="S8IN9gjaHOvFuv_bkHwy-1" source="S8IN9gjaHOvFuv_bkHwy-3" style="startArrow=none;endArrow=classic;endSize=9;fillColor=none;html=1;fontSize=16;labelBackgroundColor=none;fontFamily=Trebuchet MS,Verdana,Arial,sans-serif;fontColor=default;exitX=0;exitY=0.5;entryX=0;entryY=0.5;rounded=0;edgeStyle=orthogonalEdgeStyle;exitDx=0;exitDy=0;entryDx=0;entryDy=0;" target="S8IN9gjaHOvFuv_bkHwy-4">
+            <mxGeometry relative="1" x="0.0348" as="geometry">
+              <mxPoint as="offset" />
+              <Array as="points">
+                <mxPoint x="80" y="114" />
+                <mxPoint x="80" y="330" />
+              </Array>
+            </mxGeometry>
+          </mxCell>
+        </UserObject>
+        <UserObject label="manual DB operation" mermaidId="e:LOCKED-&gt;ACTIVE#0" mermaidBaseStyle="curved=1;startArrow=none;endArrow=classic;endSize=9;fillColor=none;strokeColor=light-dark(#333333,#cccccc);html=1;fontSize=16;labelBackgroundColor=#E8E8E88D;fontFamily=Trebuchet MS,Verdana,Arial,sans-serif;fontColor=light-dark(#333333,#cccccc);exitX=0.3194444444444444;exitY=0;entryX=0.30597014925373134;entryY=1;curved=1;exitX=0.32;exitY=0;entryX=0.31;entryY=1;" mermaidBaseValue="manual DB operation only (no API path today)" id="S8IN9gjaHOvFuv_bkHwy-7">
+          <mxCell edge="1" parent="S8IN9gjaHOvFuv_bkHwy-1" source="S8IN9gjaHOvFuv_bkHwy-4" style="startArrow=none;endArrow=classic;endSize=9;fillColor=none;html=1;fontSize=16;labelBackgroundColor=none;fontFamily=Trebuchet MS,Verdana,Arial,sans-serif;fontColor=default;exitX=1;exitY=0.5;entryX=1;entryY=0.5;rounded=0;edgeStyle=orthogonalEdgeStyle;exitDx=0;exitDy=0;entryDx=0;entryDy=0;" target="S8IN9gjaHOvFuv_bkHwy-3">
+            <mxGeometry relative="1" x="0.1873" as="geometry">
+              <mxPoint as="offset" />
+              <Array as="points">
+                <mxPoint x="340" y="330" />
+                <mxPoint x="340" y="114" />
+              </Array>
+            </mxGeometry>
+          </mxCell>
+        </UserObject>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

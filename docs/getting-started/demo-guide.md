@@ -134,6 +134,11 @@ Expected response (`200 OK`):
 }
 ```
 
+<!-- TODO: take screenshot — Swagger UI mid-`POST /authorisations` call (or terminal curl
+     request/response) showing the `200 OK` / `status: AUTHORISED` response above, then save it as
+     `docs/getting-started/images/demo-authorise-flow.png`. -->
+![Authorize a payment flow](./images/demo-authorise-flow.png)
+
 Save the returned `id` as `AUTH_ID`. Behind the scenes: `auth-service` synchronously calls
 `fraud-service`'s `POST /fraud/check`, reserves funds (`availableBalance` decreases,
 `reservedBalance` increases), persists an `AUTHORISATION_AUTHORISED` domain event, and writes a
@@ -227,6 +232,12 @@ The second call returns the account's full event timeline as projected by `ledge
 nice moment to highlight that `ledger-service` never talks to `auth-service` directly; it only
 consumes Kafka events, per [`docs/eventing/kafka-topics.md`](../eventing/kafka-topics.md).
 
+<!-- TODO: take screenshot — Kafka UI (`http://localhost:9091`) browsing the `auth.events` topic,
+     showing the `AUTHORISATION_AUTHORISED`/`AUTHORISATION_CAPTURED`/`AUTHORISATION_REVERSED`
+     records and their headers, then save it as
+     `docs/getting-started/images/demo-kafka-events.png`. -->
+![Kafka UI showing auth.events topic](./images/demo-kafka-events.png)
+
 ## View Metrics and Dashboards
 
 Open Grafana at `http://localhost:3000` (login `admin` / `password`, unless overridden) and select
@@ -251,6 +262,12 @@ histogram_quantile(0.95, sum by (le) (rate(auth_outbox_publish_lag_seconds_bucke
 See [`docs/observability/telemetry.md`](../observability/telemetry.md) for the full panel/metric
 reference.
 
+<!-- TODO: take screenshot — Grafana "Payment Platform Overview" dashboard
+     (`http://localhost:3000`) showing the panel grid described above (HTTP p95 latency, outbox
+     lag/backlog, consumer throughput, idempotency outcomes), then save it as
+     `docs/getting-started/images/demo-grafana-overview.png`. -->
+![Grafana Payment Platform Overview dashboard](./images/demo-grafana-overview.png)
+
 ## Inspect Distributed Traces
 
 Open Tempo through Grafana Explore (`http://localhost:3000` → Explore → Tempo datasource) and run:
@@ -272,6 +289,12 @@ request via a span **Link**, since it runs on a later `@Scheduled` publisher tic
 Open one of those spans and look at its **Links** panel to jump back to the original authorise
 request's trace — a good example of how tracing bridges a transactional-outbox handoff. See
 [`docs/development/runbook.md`](../development/runbook.md) for more TraceQL examples.
+
+<!-- TODO: take screenshot — Tempo trace waterfall (via Grafana Explore) for a
+     `POST /authorisations` trace, showing the `auth-service → fraud-service` client/server span
+     pair and the DB transaction span, then save it as
+     `docs/getting-started/images/demo-tempo-trace.png`. -->
+![Tempo trace waterfall for an authorise request](./images/demo-tempo-trace.png)
 
 ## Correlate a Log Line to a Trace
 
@@ -338,6 +361,11 @@ curl -sS -X POST "http://localhost:9010/internal/test/failure-mode" \
 
 Send a few more authorise requests to show the breaker recovering `HALF_OPEN → CLOSED`.
 
+<!-- TODO: take screenshot — Grafana `Circuit breaker call outcomes (fraudService)` panel
+     (`http://localhost:3000`) showing the `OPEN` state during the fraud-service outage, then save
+     it as `docs/getting-started/images/demo-circuit-breaker.png`. -->
+![Grafana panel showing the fraudService circuit breaker OPEN](./images/demo-circuit-breaker.png)
+
 ### Outbox lag and dead-letter-topic (DLT) routing
 
 To *see* outbox lag build and drain: stop `auth-service`'s outbox scheduler from doing its job by
@@ -368,6 +396,11 @@ exception` Grafana panel light up:
 ```bash
 curl -s http://localhost:9020/actuator/prometheus | grep ledger_kafka_dlt_published_total
 ```
+
+<!-- TODO: take screenshot — Grafana `DLT publishes/min by topic and exception` panel
+     (`http://localhost:3000`) spiking after the malformed event lands on the dead-letter topic,
+     then save it as `docs/getting-started/images/demo-dlt-panel.png`. -->
+![Grafana panel showing a DLT publish spike](./images/demo-dlt-panel.png)
 
 Prefer a fully scripted version of this entire demo (bulk traffic, circuit breaker, DLT, dedup, and
 concurrency-conflict phases in one run)? Use:

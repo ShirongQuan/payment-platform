@@ -2,6 +2,7 @@
 
 ## Table of Contents
 
+- [Diagram](#diagram)
 - [Boundaries in the platform](#boundaries-in-the-platform)
     - [1) Public API boundary (Client -> auth-service / ledger-service)](#1-public-api-boundary-client---auth-service--ledger-service)
     - [2) Internal service boundary (auth-service -> fraud-service)](#2-internal-service-boundary-auth-service---fraud-service)
@@ -9,15 +10,28 @@
     - [4) Messaging boundary (Kafka: auth-service -> ledger-service)](#4-messaging-boundary-kafka-auth-service---ledger-service)
 - [AuthN / AuthZ across boundaries](#authn--authz-across-boundaries)
 - [Sensitive data handling](#sensitive-data-handling)
-- [Diagram](#diagram)
 - [Related](#related)
+
+## Diagram
+
+Trust boundaries as a simplified data-flow diagram. Dashed boxes mark the application-level trust zones described
+below.
+
+<p>
+  <a href="diagrams/trust-boundaries.svg" target="_blank" rel="noopener noreferrer">
+    <img src="diagrams/trust-boundaries.svg" alt="Trust boundaries diagram" width="100%" />
+  </a>
+</p>
+
+*Figure 10: Trust boundaries — public API, internal service, data, and messaging boundaries. Click the diagram
+to open the full-size SVG.*
 
 This document describes the trust zones the Payment Platform's *application layer* crosses today — the
 boundaries between the public API, internal service calls, data stores, and messaging — and what each boundary
-enforces at the application level. It intentionally does not assess the system against a production security
-standard: infrastructure-level concerns (TLS, reverse proxy/WAF, network policy, broker/cache authentication,
-etc.) are a deployment-environment decision, not an application-implementation one, and are tracked in the
-[roadmap's Production Considerations](../roadmap.md#6-production-considerations) instead. Where an
+enforces at the application level. Infrastructure-level concerns (TLS, reverse proxy/WAF, network policy,
+broker/cache authentication, etc.) are a deployment-environment decision rather than an application-implementation
+one, and are tracked in the [roadmap's Production Considerations](../roadmap.md#6-production-considerations)
+instead. Where an
 application-level control (e.g. authentication) is planned rather than implemented yet, this doc says so and
 links to the relevant [roadmap Next Steps](../roadmap.md#5-next-steps-prioritized) item.
 
@@ -74,10 +88,10 @@ links to the relevant [roadmap Next Steps](../roadmap.md#5-next-steps-prioritize
 
 ## AuthN / AuthZ across boundaries
 
-| Boundary | AuthN today | AuthZ today | Plan |
-|---|---|---|---|
-| Public API | None | None | Spring Security + JWT with role separation — [roadmap Next Steps #1](../roadmap.md#5-next-steps-prioritized) |
-| auth-service -> fraud-service | Internal-only deployment (network-scoped) | None | Service-to-service auth (mTLS/signed token) — infrastructure hardening, see [Production Considerations](../roadmap.md#6-production-considerations) |
+| Boundary                      | AuthN today                               | AuthZ today | Plan                                                                                                                                               |
+|-------------------------------|-------------------------------------------|-------------|----------------------------------------------------------------------------------------------------------------------------------------------------|
+| Public API                    | None                                      | None        | Spring Security + JWT with role separation — [roadmap Next Steps #1](../roadmap.md#5-next-steps-prioritized)                                       |
+| auth-service -> fraud-service | Internal-only deployment (network-scoped) | None        | Service-to-service auth (mTLS/signed token) — infrastructure hardening, see [Production Considerations](../roadmap.md#6-production-considerations) |
 
 Database, Kafka, and Redis network-level authentication (per-service DB roles, SASL/mTLS, `requirepass`/ACLs),
 plus SSO/RBAC for ops tooling (Grafana, Kafka UI, pgAdmin, RedisInsight), are infrastructure/deployment concerns
@@ -103,13 +117,6 @@ this document.
 - **Transport/at-rest encryption:** planned as infrastructure-layer work appropriate to the target deployment
   environment — see the [roadmap's Production Considerations](../roadmap.md#6-production-considerations).
 
-## Diagram
-
-Trust boundaries as a simplified data-flow diagram. Dashed boxes mark the application-level trust zones described
-above.
-
-Source: [`trust-boundaries.mmd`](./trust-boundaries.mmd) — open in a Mermaid-compatible viewer (the
-Mermaid VS Code/IntelliJ plugin, or [mermaid.live](https://mermaid.live)) to render it.
 
 ## Related
 
@@ -120,6 +127,6 @@ Mermaid VS Code/IntelliJ plugin, or [mermaid.live](https://mermaid.live)) to ren
 - [Roadmap — Production Considerations](../roadmap.md#6-production-considerations)
 - [ADR 0006 — Redis sliding-window rate limiting](../decisions/0006-redis-sliding-window-rate-limit.md)
 - [ADR 0007 — Idempotency store and key policy](../decisions/0007-idempotency-store-and-key-policy.md)
-- [API Overview — Security](../api/overview.md#security)
+- [API docs — Security](../api/README.md#security)
 
 

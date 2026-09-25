@@ -44,12 +44,16 @@ flowchart TB
     Auth -->|"idempotency cache (TTL)"| Redis
     Fraud -->|"sliding-window<br/>velocity counters"| Redis
 
-    Auth -.->|"OTLP traces + metrics"| OTel
-    Fraud -.->|"OTLP traces + metrics"| OTel
-    Ledger -.->|"OTLP traces + metrics"| OTel
+    Auth -.->|"OTLP traces (push)"| OTel
+    Fraud -.->|"OTLP traces (push)"| OTel
+    Ledger -.->|"OTLP traces (push)"| OTel
     OTel --> Tempo
-    OTel --> Prometheus
+    OTel -->|"span-derived metrics<br/>(scraped from :8889)"| Prometheus
     Tempo --> Grafana
     Prometheus --> Grafana
+
+    Prometheus -.->|"scrape /actuator/prometheus<br/>(app + JVM metrics, pull)"| Auth
+    Prometheus -.->|"scrape /actuator/prometheus<br/>(app + JVM metrics, pull)"| Fraud
+    Prometheus -.->|"scrape /actuator/prometheus<br/>(app + JVM metrics, pull)"| Ledger
 
 

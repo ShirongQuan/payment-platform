@@ -14,7 +14,7 @@
     - [7) Fraud decline and account auto-lock](#7-fraud-decline-and-account-auto-lock)
 - [Scenario-to-diagram map](#scenario-to-diagram-map)
 - [Quick triage checklist](#quick-triage-checklist)
-- [Known MVP limitations](#known-mvp-limitations)
+- [Current scope notes](#current-scope-notes)
 
 ## Purpose
 
@@ -101,7 +101,7 @@ Kafka temporarily unavailable or publish attempt fails.
 4. Reprocess stuck records if manual command/tooling exists.
 
 See [outbox-backlog-recovery.md](./outbox-backlog-recovery.md) and its companion flowchart
-[outbox-backlog-recovery-flow.mmd](./outbox-backlog-recovery-flow.mmd) for the full
+[outbox-backlog-recovery-flow.mmd](diagrams/outbox-backlog-recovery-flow.mmd) for the full
 detect → triage → retry → DLQ/manual-replay decision logic, including exactly how to manually
 requeue a terminally `FAILED` outbox row (no automated dead-letter/replay path exists today).
 
@@ -212,14 +212,14 @@ fraud-service was unreachable/timed out and no fail-open policy applied.
 
 ## Scenario-to-diagram map
 
-| Scenario                        | Primary diagram(s)                                          |
-|----------------------------------|--------------------------------------------------------------|
-| Duplicate API request           | `authorise-sequence.mmd`, `capture-sequence.mmd`, `idempotency-generic.mmd` |
-| Timeout after commit             | `authorise-sequence.mmd`, `capture-sequence.mmd`             |
-| Publish retry/failure            | `event-publishing-sequence.mmd`, `outbox-backlog-recovery-flow.mmd` |
-| Duplicate consume                | `event-consuming.mmd`                                         |
-| Invalid transition               | `capture-sequence.mmd`, `reverse-sequence.mmd`                |
-| Fraud decline / account auto-lock | `authorise-sequence.mmd`                                     |
+| Scenario                          | Primary diagram(s)                                                          |
+|-----------------------------------|-----------------------------------------------------------------------------|
+| Duplicate API request             | `authorise-sequence.mmd`, `capture-sequence.mmd`, `idempotency-generic.mmd` |
+| Timeout after commit              | `authorise-sequence.mmd`, `capture-sequence.mmd`                            |
+| Publish retry/failure             | `event-publishing-sequence.mmd`, `outbox-backlog-recovery-flow.mmd`         |
+| Duplicate consume                 | `event-consuming.mmd`                                                       |
+| Invalid transition                | `capture-sequence.mmd`, `reverse-sequence.mmd`                              |
+| Fraud decline / account auto-lock | `authorise-sequence.mmd`                                                    |
 
 ---
 
@@ -233,7 +233,7 @@ fraud-service was unreachable/timed out and no fail-open policy applied.
 
 ---
 
-## Known MVP limitations
+## Current scope notes
 
 - Reverse and capture are both fully implemented (not placeholders) — see
   `capture-sequence.mmd`/`reverse-sequence.mmd` for the actual persisted flow.
@@ -241,8 +241,9 @@ fraud-service was unreachable/timed out and no fail-open policy applied.
   operation.
 - No outbox event is emitted for the account-lock side effect of a fraud decline — only the
   `DECLINED` authorisation event is published today.
-- Idempotency is only implemented on the payment-critical path (authorise/capture/reverse/fraud
-  check) — `POST /accounts` and `POST /accounts/{id}/deposits` are not idempotent (see
-  `docs/roadmap.md`).
-- Operational automation may be limited; recovery from a terminally `FAILED` outbox row is a
-  manual SQL update today (see [outbox-backlog-recovery.md](./outbox-backlog-recovery.md)).
+- Idempotency is implemented on the payment-critical path (authorise/capture/reverse/fraud
+  check); extending it to `POST /accounts` and `POST /accounts/{id}/deposits` is tracked in
+  `docs/roadmap.md`.
+- Recovery from a terminally `FAILED` outbox row is a manual SQL update today (see
+  [outbox-backlog-recovery.md](./outbox-backlog-recovery.md)); further operational automation is
+  tracked on the roadmap.

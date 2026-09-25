@@ -52,25 +52,25 @@ Table: `outbox_event` (see
 `auth-service/src/main/resources/db/migration/V1__init.sql`, extended by
 `V3__add_outbox_trace_parent.sql`):
 
-| Column             | Type                     | Purpose                                                                 |
-|--------------------|--------------------------|--------------------------------------------------------------------------|
-| `event_id`         | `uuid` (PK)              | Unique event identifier; also sent as a Kafka header for dedup.          |
-| `version`          | `bigint`                 | Optimistic-lock version column (JPA `@Version`).                        |
-| `aggregate_type`   | `varchar(20)`            | e.g. `AUTHORISATION`.                                                   |
-| `aggregate_id`     | `uuid`                   | The authorisation id — also used as the Kafka **message key**.          |
-| `event_type`       | `varchar(30)`            | e.g. `AUTHORISED`, `CAPTURED`, `REVERSED`.                               |
-| `payload`          | `jsonb`                  | Event body serialized as JSON.                                          |
-| `status`           | `varchar(30)`            | Lifecycle state: `NEW` → `PUBLISHING` → `PUBLISHED` / `FAILED`.          |
-| `retry_count`      | `int`                    | Number of failed publish attempts so far.                                |
-| `last_error`       | `varchar(100)`           | Truncated error message from the most recent failed attempt.            |
-| `created_at`       | `timestamptz`            | Row creation time (start of publish-lag measurement).                   |
-| `published_at`     | `timestamptz`            | Set when the row transitions to `PUBLISHED`.                            |
-| `next_attempt_at`  | `timestamptz`            | Earliest time the row is eligible to be (re-)claimed for publish.       |
-| `idempotency_key`  | `varchar(30)`            | Caller-supplied idempotency key, part of the uniqueness constraint.      |
-| `correlation_id`   | `uuid`                   | Correlates this event with the originating request across services.     |
-| `claimed_at`       | `timestamptz`            | When a publisher instance claimed this row for in-flight publishing.    |
-| `claim_until`      | `timestamptz`            | Claim lease expiry — enables stale-claim recovery.                       |
-| `trace_parent`     | `varchar` (added in V3)  | W3C `traceparent` of the originating request, re-attached at publish.   |
+| Column            | Type                    | Purpose                                                               |
+|-------------------|-------------------------|-----------------------------------------------------------------------|
+| `event_id`        | `uuid` (PK)             | Unique event identifier; also sent as a Kafka header for dedup.       |
+| `version`         | `bigint`                | Optimistic-lock version column (JPA `@Version`).                      |
+| `aggregate_type`  | `varchar(20)`           | e.g. `AUTHORISATION`.                                                 |
+| `aggregate_id`    | `uuid`                  | The authorisation id — also used as the Kafka **message key**.        |
+| `event_type`      | `varchar(30)`           | e.g. `AUTHORISED`, `CAPTURED`, `REVERSED`.                            |
+| `payload`         | `jsonb`                 | Event body serialized as JSON.                                        |
+| `status`          | `varchar(30)`           | Lifecycle state: `NEW` → `PUBLISHING` → `PUBLISHED` / `FAILED`.       |
+| `retry_count`     | `int`                   | Number of failed publish attempts so far.                             |
+| `last_error`      | `varchar(100)`          | Truncated error message from the most recent failed attempt.          |
+| `created_at`      | `timestamptz`           | Row creation time (start of publish-lag measurement).                 |
+| `published_at`    | `timestamptz`           | Set when the row transitions to `PUBLISHED`.                          |
+| `next_attempt_at` | `timestamptz`           | Earliest time the row is eligible to be (re-)claimed for publish.     |
+| `idempotency_key` | `varchar(30)`           | Caller-supplied idempotency key, part of the uniqueness constraint.   |
+| `correlation_id`  | `uuid`                  | Correlates this event with the originating request across services.   |
+| `claimed_at`      | `timestamptz`           | When a publisher instance claimed this row for in-flight publishing.  |
+| `claim_until`     | `timestamptz`           | Claim lease expiry — enables stale-claim recovery.                    |
+| `trace_parent`    | `varchar` (added in V3) | W3C `traceparent` of the originating request, re-attached at publish. |
 
 Constraints/indexes:
 
@@ -154,11 +154,11 @@ Defined in `OutboxBackoffPolicy`:
 
 ## Failure Modes
 
-| Scenario                                     | Behavior today                                                                                     |
-|-----------------------------------------------|-----------------------------------------------------------------------------------------------------|
-| **Broker down / unreachable**                | Publish attempts fail; `retry_count` increments and `next_attempt_at` is pushed out per the backoff schedule. Once the broker recovers, the next scheduler cycle picks the row up again. |
+| Scenario                                                                                      | Behavior today                                                                                                                                                                                                                                                                                                                                                                           |
+|-----------------------------------------------------------------------------------------------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| **Broker down / unreachable**                                                                 | Publish attempts fail; `retry_count` increments and `next_attempt_at` is pushed out per the backoff schedule. Once the broker recovers, the next scheduler cycle picks the row up again.                                                                                                                                                                                                 |
 | **Partial publish** (send succeeds, ack lost, or instance crashes before marking `PUBLISHED`) | The claim lease (`claim_until`) bounds how long a row can sit `PUBLISHING` before being reclaimed to `NEW` and retried. Producer idempotence (`enable.idempotence: true`) means a retried send for the same logical record does not create a duplicate broker-side write; downstream consumer dedup (`processed_event`) is the final safety net against any residual duplicate delivery. |
-| **Stuck / terminally failing rows**          | After 5 failed attempts a row is marked `FAILED` and stops being retried automatically. It remains visible in the table (not silently dropped) for operator triage via `last_error`, `retry_count`, and correlation id. |
+| **Stuck / terminally failing rows**                                                           | After 5 failed attempts a row is marked `FAILED` and stops being retried automatically. It remains visible in the table (not silently dropped) for operator triage via `last_error`, `retry_count`, and correlation id.                                                                                                                                                                  |
 
 ## Operational Metrics
 
@@ -178,9 +178,9 @@ Exposed by `auth-service` via Micrometer/Prometheus (`/actuator/prometheus`):
 - [`outbox-backlog-recovery.md`](../flows/outbox-backlog-recovery.md) — detect/triage/retry/manual-replay
   procedure for a growing backlog or a terminally `FAILED` row, including the direct SQL query to
   find rows the `auth_outbox_backlog` gauge doesn't surface.
-- [`outbox-backlog-recovery-flow.mmd`](../flows/outbox-backlog-recovery-flow.mmd) — decision-logic
+- [`outbox-backlog-recovery-flow.mmd`](../flows/diagrams/outbox-backlog-recovery-flow.mmd) — decision-logic
   flowchart companion to the above.
-- [`event-publishing-sequence.mmd`](../flows/event-publishing-sequence.mmd) — sequence diagram for
+- [`event-publishing-sequence.mmd`](../flows/diagrams/event-publishing-sequence.mmd) — sequence diagram for
   the normal publish/retry/fail path.
 - [`failure-scenarios.md`](../flows/failure-scenarios.md) — scenario 3 covers an outbox publish
   transient failure end-to-end.

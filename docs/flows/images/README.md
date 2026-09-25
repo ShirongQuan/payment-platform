@@ -1,15 +1,18 @@
 # Flow Diagram Images
 
-Screenshot referenced from the root [`README.md`](../../../README.md) "Demo Journey" section.
+Rendered diagram referenced from the root [`README.md`](../../../README.md) "Demo Journey" section.
 
-Expected file:
+Files:
 
-- `payment-lifecycle.png` — a rendered export of the payment lifecycle flow (authorise → capture /
-  reverse → ledger posting → event publish), e.g. a screenshot of
-  [`payment-lifecycle.md`](../payment-lifecycle.md) or one of the sequence diagrams
-  (`authorise-sequence.mmd`, `capture-sequence.mmd`) rendered in an editor/GitHub preview.
+- `payment-lifecycle-happy-path.svg` / `.png` — a rendered export of the simplified happy-path
+  flow (authorise → capture → outbox publish → ledger projection), sourced from
+  [`../diagrams/payment-lifecycle-happy-path.mmd`](../diagrams/payment-lifecycle-happy-path.mmd).
+  This is a condensed, README-friendly view; it intentionally omits idempotency, concurrency, and
+  failure-handling branches — see the per-endpoint sequence diagrams
+  (`authorise-sequence.mmd`, `capture-sequence.mmd`, `reverse-sequence.mmd`, etc.) in
+  [`../diagrams/`](../diagrams/) for the full detail.
 
-The `.mmd` files in this folder are the maintained source of truth for these diagrams — see
-[`docs/flows/README.md`](../README.md) for the full diagram index; this folder only holds a
-rendered snapshot for the root README's preview.
+The `.mmd` files in [`../diagrams/`](../diagrams/) are the maintained source of truth for these
+diagrams — see [`docs/flows/README.md`](../README.md) for the full diagram index; this folder only
+holds a rendered snapshot for the root README's preview.
 

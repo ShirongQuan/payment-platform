@@ -98,7 +98,10 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
     depends_on:
-      - redis
+      otel-collector:
+        condition: service_healthy
+      redis_exporter:
+        condition: service_started
     healthcheck:
       test: [ "CMD-SHELL", "wget -q -O /dev/null http://localhost:9090/-/healthy" ]
       interval: 15s

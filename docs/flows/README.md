@@ -162,6 +162,6 @@ detailed pair of the same two diagrams also lives in
 These flow docs are written for a **demo-focused MVP**:
 
 - core flows are implemented and demonstrable,
-- some production-hardening behavior is intentionally deferred.
+- additional hardening behaviors are planned as roadmap items.
 
-See roadmap/scope docs for production considerations.
+See roadmap/scope docs for what's planned next.

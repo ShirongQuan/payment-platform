@@ -36,7 +36,7 @@ This project simulates a simplified real-world payment platform composed of thre
 and asynchronously (Kafka via the transactional outbox pattern). It demonstrates:
 
 - Payment lifecycle handling (authorise, full capture, full reverse) with a real, guarded state
-  machine — partial capture and refunds are tracked as [next steps](docs/roadmap.md#5-next-steps-prioritized)
+  machine
 - An event-sourced ledger projection with strict invariants (balance conservation, currency
   consistency, idempotent posting)
 - Reliable event delivery via the outbox pattern and Kafka, including dead-letter handling
@@ -49,7 +49,7 @@ and asynchronously (Kafka via the transactional outbox pattern). It demonstrates
 
 ## Architecture at a Glance
 
-![Container diagram placeholder](docs/architecture/images/containers.png)
+![Container diagram](docs/architecture/diagrams/containers.svg)
 *Figure 1: C4 Container diagram — auth-service, fraud-service, ledger-service, Kafka, Postgres,
 Redis, and the observability stack.*
 
@@ -72,7 +72,8 @@ The platform follows a C4 model:
   `AUTHORISED → REVERSED`, terminal `DECLINED`; account `ACTIVE ⇄ LOCKED`)
 - 📄 [accounting-model.md](docs/domain/accounting-model.md) · [state-machine.md](docs/domain/state-machine.md)
 
-![State machine placeholder](docs/domain/images/state-machine.png)
+![State machine](docs/domain/diagrams/payment-state-machine.svg)
+<br/>
 *Figure 2: Payment status transitions.*
 
 ### Eventing & Outbox
@@ -89,9 +90,7 @@ The platform follows a C4 model:
   concurrent same-key retries
 - Circuit breaker + time limiter around the fraud-service call; retry + dead-letter topic around
   Kafka consumption
--
-
-📄 [concurrency-consistency.md](docs/reliability/concurrency-consistency.md) · [resilience-patterns.md](docs/reliability/resilience-patterns.md)
+  📄 [concurrency-consistency.md](docs/reliability/concurrency-consistency.md) · [resilience-patterns.md](docs/reliability/resilience-patterns.md)
 
 ### Observability
 
@@ -102,9 +101,11 @@ The platform follows a C4 model:
   cross-referencing logs, traces, and metrics for the same request
 - 📄 [telemetry.md](docs/observability/telemetry.md) · [runbook.md](docs/observability/runbook.md)
 
+TODO:
 ![Grafana dashboard placeholder](docs/observability/images/grafana-dashboard.png)
 *Figure 3: Grafana dashboard — request latency, outbox lag, DLT rate.*
 
+TODO:
 ![Tempo trace placeholder](docs/observability/images/tempo-trace.png)
 *Figure 4: Distributed trace of an authorize request across services (Tempo).*
 
@@ -112,14 +113,13 @@ The platform follows a C4 model:
 
 - Consistent RFC 7807 error model across services, with a service-specific `errorCode`
 - `idempotencyKey` request-body semantics for safe retries on every payment-critical endpoint
-- 📄 [overview.md](docs/api/overview.md) · [idempotency.md](docs/api/idempotency.md) · [OpenAPI specs](docs/api/openapi/)
+- 📄 [API docs](docs/api/README.md) (overview, idempotency) · [OpenAPI specs](docs/api/openapi/)
 
 ### Security
 
 - Threat model covers the platform's trust boundaries and abuse vectors, clearly separating what's
   implemented today from what's planned next
 - Data-protection posture (PII handling, masking) and audit/compliance intent documented up front
--
 
 📄 [threat-model.md](docs/security/threat-model.md) · [data-protection.md](docs/security/data-protection.md) · [audit-compliance.md](docs/security/audit-compliance.md)
 
@@ -131,7 +131,6 @@ The platform follows a C4 model:
 - Scripted traffic generation (`load-tests/`) reproduces idempotency replay, circuit-breaker
   transitions, DLT routing, and concurrency conflicts on demand, for demos and manual verification
 - Every architecture/consistency decision is recorded as a numbered ADR
--
 
 📄 [development.md](docs/getting-started/development.md) · [testing/strategy.md](docs/testing/strategy.md) · [load-tests/](load-tests/) · [decisions/](docs/decisions/README.md)
 
@@ -164,8 +163,10 @@ trace the request across services:
 
 Preview of what you'll see:
 
-![Sequence diagram placeholder](docs/flows/images/payment-lifecycle.png)
-*Figure 5: Authorize → Capture → Ledger posting → Event publish.*
+![Sequence diagram placeholder](docs/flows/diagrams/payment-lifecycle-happy-path.svg)
+*Figure 5: Authorize → Capture → Ledger posting → Event publish (happy path; see
+[docs/flows/](docs/flows/payment-lifecycle.md) for the full per-endpoint sequence diagrams
+covering idempotency, concurrency, and failure handling).*
 
 ## Status: Implemented vs. Planned
 
@@ -180,13 +181,11 @@ Legend: ✅ Implemented · 🟡 Partial/Basic · 🔵 Planned
 | Observability (traces, metrics, dashboards, correlated logs) | ✅ Implemented          | [observability/telemetry.md](docs/observability/telemetry.md)                         |
 | Automated tests + CI build                                   | ✅ Implemented          | [testing/strategy.md](docs/testing/strategy.md)                                       |
 | Load/traffic-generation scripts                              | 🟡 Demo-scale baseline | [load-tests/](load-tests/)                                                            |
-| Alerting / SLO enforcement                                   | 🔵 Planned             | [observability/alerts-slos.md](docs/observability/alerts-slos.md)                     |
 | AuthN/AuthZ (Spring Security + JWT)                          | 🔵 Planned             | [roadmap next steps #1](docs/roadmap.md#5-next-steps-prioritized)                     |
 | API gateway / infra-level rate limiting                      | 🔵 Planned             | [roadmap next steps #4](docs/roadmap.md#5-next-steps-prioritized)                     |
 | Reconciliation service                                       | 🔵 Planned             | [roadmap next steps #2](docs/roadmap.md#5-next-steps-prioritized)                     |
 | Customer-facing UI                                           | 🔵 Planned             | [roadmap next steps #3](docs/roadmap.md#5-next-steps-prioritized)                     |
 | Partial capture / refunds                                    | 🔵 Planned             | [roadmap production considerations](docs/roadmap.md#6-production-considerations)      |
-| Multi-region / DR                                            | 🔵 Planned             | [roadmap production considerations](docs/roadmap.md#6-production-considerations)      |
 
 Full detail, rationale, and prioritization live in [`docs/roadmap.md`](docs/roadmap.md).
 
@@ -209,7 +208,7 @@ Full detail, rationale, and prioritization live in [`docs/roadmap.md`](docs/road
 | Load tests (how to run)                                     | [load-tests/](load-tests/README.md)                              |
 | Load-testing methodology (why, scenarios, results)          | [docs/testing/load-testing.md](docs/testing/load-testing.md)     |
 | Architecture Decision Records                               | [docs/decisions/](docs/decisions/README.md)                      |
-| Roadmap (status, next steps, production considerations)     | [docs/roadmap.md](docs/roadmap.md)                                |
+| Roadmap (status, next steps, production considerations)     | [docs/roadmap.md](docs/roadmap.md)                               |
 
 ---
 
