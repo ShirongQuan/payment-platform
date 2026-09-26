@@ -25,7 +25,7 @@ services** (orchestrator + idempotency + the transactional executor), **domain**
 **outbox**, **outbound clients**, and **observability** (cross-cutting instrumentation).
 
 <p>
-  <a href="diagrams/components-auth-service.svg?raw=true" target="_blank" rel="noopener noreferrer">
+  <a href="https://raw.githubusercontent.com/ShirongQuan/payment-platform/main/docs/architecture/diagrams/components-auth-service.svg">
     <img src="diagrams/components-auth-service.svg" alt="Components — auth-service (C4 Level 3) diagram" width="100%" />
   </a>
 </p>
@@ -36,7 +36,7 @@ outbox, and outbound clients. Click the diagram to open the full-size SVG.*
 ### Sequence: authorise happy path (mini)
 
 <p>
-  <a href="diagrams/authorise-happy-path.svg?raw=true" target="_blank" rel="noopener noreferrer">
+  <a href="https://raw.githubusercontent.com/ShirongQuan/payment-platform/main/docs/architecture/diagrams/authorise-happy-path.svg">
     <img src="diagrams/authorise-happy-path.svg" alt="Sequence: authorise happy path diagram" width="100%" />
   </a>
 </p>

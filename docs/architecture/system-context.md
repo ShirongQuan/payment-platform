@@ -11,7 +11,7 @@
 ## Diagram
 
 <p>
-  <a href="diagrams/system-context.svg?raw=true" target="_blank" rel="noopener noreferrer">
+  <a href="https://raw.githubusercontent.com/ShirongQuan/payment-platform/main/docs/architecture/diagrams/system-context.svg">
     <img src="diagrams/system-context.svg" alt="System Context (C4 Level 1) diagram" width="100%" />
   </a>
 </p>

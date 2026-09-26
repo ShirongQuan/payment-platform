@@ -18,7 +18,7 @@ Trust boundaries as a simplified data-flow diagram. Dashed boxes mark the applic
 below.
 
 <p>
-  <a href="diagrams/trust-boundaries.svg?raw=true" target="_blank" rel="noopener noreferrer">
+  <a href="https://raw.githubusercontent.com/ShirongQuan/payment-platform/main/docs/architecture/diagrams/trust-boundaries.svg">
     <img src="diagrams/trust-boundaries.svg" alt="Trust boundaries diagram" width="100%" />
   </a>
 </p>
@@ -116,7 +116,6 @@ this document.
   (+ optional lock recommendation), not the raw fraud evidence.
 - **Transport/at-rest encryption:** planned as infrastructure-layer work appropriate to the target deployment
   environment — see the [roadmap's Production Considerations](../roadmap.md#6-production-considerations).
-
 
 ## Related
 

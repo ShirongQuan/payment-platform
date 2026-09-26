@@ -18,7 +18,7 @@
 ## Diagram
 
 <p>
-  <a href="diagrams/containers.svg?raw=true" target="_blank" rel="noopener noreferrer">
+  <a href="https://raw.githubusercontent.com/ShirongQuan/payment-platform/main/docs/architecture/diagrams/containers.svg">
     <img src="diagrams/containers.svg" alt="Containers (C4 Level 2) diagram" width="100%" />
   </a>
 </p>
