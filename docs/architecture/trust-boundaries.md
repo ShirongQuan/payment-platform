@@ -41,8 +41,10 @@ links to the relevant [roadmap Next Steps](../roadmap.md#5-next-steps-prioritize
 
 - **Surface:** `auth-service` (`:9000`) and `ledger-service` (`:9020`) accept inbound HTTP directly from callers.
 - **What's enforced today:** bean validation rejects malformed input (`400`); idempotency and authorisation-state
-  rules reject conflicting/duplicate requests (`409` — see [ADR 0005](../decisions/0005-idempotency-and-concurrency.md)
-  / [ADR 0007](../decisions/0007-idempotency-store-and-key-policy.md)); every authorise request is evaluated for
+  rules reject conflicting/duplicate requests (`409` —
+  see [ADR 0005: Idempotency and Concurrency Rules for Authorisation Flows](../decisions/0005-idempotency-and-concurrency.md)
+  / [ADR 0007: Idempotency store and key policy](../decisions/0007-idempotency-store-and-key-policy.md)); every
+  authorise request is evaluated for
   fraud risk before funds are reserved.
 - **Planned:** request authentication/authorization (Spring Security + JWT, customer vs. admin role separation) —
   see [roadmap Next Steps #1](../roadmap.md#5-next-steps-prioritized). An API gateway for centralized
@@ -53,7 +55,9 @@ links to the relevant [roadmap Next Steps](../roadmap.md#5-next-steps-prioritize
 
 - **Surface:** `auth-service` calls `fraud-service` (`:9010`) over HTTP within the same deployment network.
 - **What's enforced today:** the call is wrapped in a Resilience4j circuit breaker + time limiter for
-  availability (see [ADR 0008](../decisions/0008-resilience4j-circuit-breaker-policy.md)); `fraud-service` is
+  availability (
+  see [ADR 0008: Use Resilience4j for Circuit Breaker / Time Limiter (Fraud Gateway)](../decisions/0008-resilience4j-circuit-breaker-policy.md));
+  `fraud-service` is
   deployed as an internal-only service, not intended to be reachable by external callers.
 - **Planned:** service-to-service authentication (e.g. mTLS or a signed internal-service token) is an
   infrastructure-level hardening step tracked in the
@@ -80,8 +84,10 @@ links to the relevant [roadmap Next Steps](../roadmap.md#5-next-steps-prioritize
 - **Surface:** `auth.events` (+ `auth.events.ledger.dlt`) topic on a 3-broker KRaft cluster.
 - **What's enforced today:** delivery-reliability controls — `acks=all`, idempotent producer,
   `read_committed` consumer isolation, retry + dead-letter routing (see
-  [ADR 0004](../decisions/0004-use-event-and-dlt-topics.md)) — plus consumer-side deduplication via
-  `processed_event` (see [ADR 0003](../decisions/0003-ledger-raw-and-normalized-events.md)).
+  [ADR 0004: Use Separate Main Event and DLT Topics](../decisions/0004-use-event-and-dlt-topics.md)) — plus
+  consumer-side deduplication via
+  `processed_event` (
+  see [ADR 0003: Store Both Raw and Normalized Ledger Events](../decisions/0003-ledger-raw-and-normalized-events.md)).
 - **Planned:** broker authentication/transport encryption (SASL/mTLS) and topic-level ACLs are
   infrastructure-level hardening steps tracked in the
   [roadmap's Production Considerations](../roadmap.md#6-production-considerations).

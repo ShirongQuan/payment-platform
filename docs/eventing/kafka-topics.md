@@ -78,7 +78,7 @@ Producer key type is `UUID` (`UUIDSerializer`); consumer key type is correspondi
 - **Idempotency expectation**: consumers of `auth.events` must tolerate at-least-once delivery.
   `ledger-service` satisfies this today via a `processed_event` table keyed on `event_id`
   (`INSERT ... ON CONFLICT DO NOTHING`), giving effectively-once projection semantics — see
-  [`outbox-pattern.md`](./outbox-pattern.md#deduplication) for the full mechanism.
+  [Outbox Pattern](./outbox-pattern.md#deduplication) for the full mechanism.
 - **Offset commit behavior**: `enable-auto-commit: false` with `ack-mode: record` — the consumer
   only advances its offset after a record has been fully handled (either successfully projected, or
   routed to the DLT after retry exhaustion), so a mid-processing crash results in redelivery rather
@@ -124,7 +124,7 @@ Producer key type is `UUID` (`UUIDSerializer`); consumer key type is correspondi
   DLT record is a manual operational action (e.g. re-publishing the DLT record's payload back onto
   `auth.events`, or a targeted consumer re-run). See [Roadmap](#roadmap--production-considerations)
   for planned improvements, and
-  [`outbox-backlog-recovery.md`](../flows/outbox-backlog-recovery.md) for the analogous
+  [Outbox Backlog Recovery](../flows/outbox-backlog-recovery.md) for the analogous
   producer-side (outbox) manual-replay procedure.
 
 ## Security/Governance
@@ -133,7 +133,7 @@ Producer key type is `UUID` (`UUIDSerializer`); consumer key type is correspondi
   without TLS encryption, and without topic-level ACLs — any client with network access to the
   brokers can produce/consume on either topic. This is an accepted, explicitly-documented scope cut
   for the current single-host `docker-compose` MVP topology, not an oversight — see
-  [`docs/roadmap.md` § Production Considerations](../roadmap.md#6-production-considerations).
+  [Payment Platform MVP Progress § Production Considerations](../roadmap.md#6-production-considerations).
 - **PII**: `auth.events` payloads carry payment/authorisation domain fields (account id,
   authorisation id, amounts, currency, event reason) rather than end-customer PII (name, card
   number, address); no additional field-level encryption or masking is applied today beyond
@@ -147,7 +147,7 @@ Producer key type is `UUID` (`UUIDSerializer`); consumer key type is correspondi
 
 ## Roadmap / Production Considerations
 
-See [`docs/roadmap.md` § Production Considerations](../roadmap.md#6-production-considerations) for
+See [Payment Platform MVP Progress § Production Considerations](../roadmap.md#6-production-considerations) for
 the full list of deliberate MVP scope cuts. Kafka-specific items tracked there and recommended
 before a production deployment:
 
@@ -161,10 +161,15 @@ before a production deployment:
 
 ## Related
 
-- [`outbox-pattern.md`](./outbox-pattern.md) — how events are reliably produced onto `auth.events`
+- [Outbox Pattern](./outbox-pattern.md) — how events are reliably produced onto `auth.events`
   in the first place.
 - [ADR 0004: Use Separate Main Event and DLT Topics](../decisions/0004-use-event-and-dlt-topics.md)
-- [`docs/flows/event-consuming.mmd`](../flows/diagrams/event-consuming.mmd)
+- <p>
+    <a href="https://raw.githubusercontent.com/ShirongQuan/payment-platform/main/docs/flows/diagrams/event-consuming.svg">
+  Event Consuming Diagram
+    </a>
+  </p>
+
 - [API docs — Idempotency](../api/README.md#idempotency) — consumer-side dedup contract in the broader
   idempotency design.
 

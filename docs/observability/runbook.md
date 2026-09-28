@@ -2,13 +2,13 @@
 
 This is a minimal, demo-scope runbook: top failure scenarios, how to detect them, and one immediate mitigation each.
 
-A fuller runbook (detailed commands, trace queries, post-incident template) is a next-phase item: [`docs/roadmap.md`](../roadmap.md).
+A fuller runbook (detailed commands, trace queries, post-incident template) is a next-phase item: [Payment Platform MVP Progress](../roadmap.md).
 
 ## Escalation / Contact
 
 - **Primary pager:** Payments platform on-call engineer.
 - **Secondary:** Service owner (auth/fraud/ledger) if unresolved after ~30 minutes.
-- Full ownership/escalation policy: [`alerts-slos.md`](./alerts-slos.md#ownership-and-escalation).
+- Full ownership/escalation policy: [Alerts and SLOs](./alerts-slos.md#ownership-and-escalation).
 
 ## Top 5 Failure Scenarios
 
@@ -22,6 +22,6 @@ A fuller runbook (detailed commands, trace queries, post-incident template) is a
 
 ## Notes
 
-- Metric/query definitions and dashboard details for each scenario are in [`telemetry.md`](./telemetry.md#critical-panels-golden-signals--business-critical).
-- Draft alert thresholds tied to these scenarios are in [`alerts-slos.md`](./alerts-slos.md).
-- Deeper triage tooling (log commands, trace queries, DB/consumer lag deep-dives) and a formal post-incident template are tracked as next-phase roadmap items: [`docs/roadmap.md`](../roadmap.md).
+- Metric/query definitions and dashboard details for each scenario are in [Telemetry Guidelines](./telemetry.md#critical-panels-golden-signals--business-critical).
+- Draft alert thresholds tied to these scenarios are in [Alerts and SLOs](./alerts-slos.md).
+- Deeper triage tooling (log commands, trace queries, DB/consumer lag deep-dives) and a formal post-incident template are tracked as next-phase roadmap items: [Payment Platform MVP Progress](../roadmap.md).

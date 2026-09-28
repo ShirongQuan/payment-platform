@@ -70,7 +70,7 @@ The platform follows a C4 model:
   tracked as a future step, not assumed today
 - Explicit authorisation/account state machines with guarded transitions (`AUTHORISED → CAPTURED`,
   `AUTHORISED → REVERSED`, terminal `DECLINED`; account `ACTIVE ⇄ LOCKED`)
-- 📄 [accounting-model.md](docs/domain/accounting-model.md) · [state-machine.md](docs/domain/state-machine.md)
+- 📄 [Accounting Model](docs/domain/accounting-model.md) · [Payment State Machine](docs/domain/state-machine.md)
 
 ![State machine](docs/domain/diagrams/payment-state-machine.svg)
 <br/>
@@ -82,7 +82,7 @@ The platform follows a C4 model:
   row commit atomically in one DB transaction
 - Kafka topics keyed by the authorisation id for per-aggregate ordering
 - At-least-once delivery; `ledger-service` deduplicates by `eventId` for effectively-once projection
-- 📄 [outbox-pattern.md](docs/eventing/outbox-pattern.md) · [kafka-topics.md](docs/eventing/kafka-topics.md)
+- 📄 [Outbox Pattern](docs/eventing/outbox-pattern.md) · [Kafka Topics](docs/eventing/kafka-topics.md)
 
 ### Reliability
 
@@ -90,7 +90,7 @@ The platform follows a C4 model:
   concurrent same-key retries
 - Circuit breaker + time limiter around the fraud-service call; retry + dead-letter topic around
   Kafka consumption
-  📄 [concurrency-consistency.md](docs/reliability/concurrency-consistency.md) · [resilience-patterns.md](docs/reliability/resilience-patterns.md)
+  📄 [Concurrency & Consistency](docs/reliability/concurrency-consistency.md) · [Resilience Patterns](docs/reliability/resilience-patterns.md)
 
 ### Observability
 
@@ -99,7 +99,7 @@ The platform follows a C4 model:
 - Prometheus + Grafana dashboards for latency, error rate, outbox lag, DLT rate, and idempotency/
   concurrency-conflict counts; every log line carries `traceId`/`spanId`/`correlationId` for
   cross-referencing logs, traces, and metrics for the same request
-- 📄 [telemetry.md](docs/observability/telemetry.md) · [runbook.md](docs/observability/runbook.md)
+- 📄 [Telemetry Guidelines](docs/observability/telemetry.md) · [Observability Runbook (Lightweight)](docs/observability/runbook.md)
 
 TODO:
 ![Grafana dashboard placeholder](docs/observability/images/grafana-dashboard.png)
@@ -121,7 +121,7 @@ TODO:
   implemented today from what's planned next
 - Data-protection posture (PII handling, masking) and audit/compliance intent documented up front
 
-📄 [threat-model.md](docs/security/threat-model.md) · [data-protection.md](docs/security/data-protection.md) · [audit-compliance.md](docs/security/audit-compliance.md)
+📄 [Threat Model](docs/security/threat-model.md) · [Data Protection](docs/security/data-protection.md) · [Audit & Compliance](docs/security/audit-compliance.md)
 
 ### Engineering Practices
 
@@ -132,7 +132,7 @@ TODO:
   transitions, DLT routing, and concurrency conflicts on demand, for demos and manual verification
 - Every architecture/consistency decision is recorded as a numbered ADR
 
-📄 [development.md](docs/getting-started/development.md) · [testing/strategy.md](docs/testing/strategy.md) · [load-tests/](load-tests/) · [decisions/](docs/decisions/README.md)
+📄 [Development Guide](docs/getting-started/development.md) · [Testing Strategy](docs/testing/strategy.md) · [load-tests/](load-tests/) · [Architecture Decision Records (ADR) Index](docs/decisions/README.md)
 
 ## Quick Start
 
@@ -165,7 +165,7 @@ Preview of what you'll see:
 
 ![Sequence diagram placeholder](docs/flows/diagrams/payment-lifecycle-happy-path.svg)
 *Figure 5: Authorize → Capture → Ledger posting → Event publish (happy path; see
-[docs/flows/](docs/flows/payment-lifecycle.md) for the full per-endpoint sequence diagrams
+[Payment Lifecycle](docs/flows/payment-lifecycle.md) for the full per-endpoint sequence diagrams
 covering idempotency, concurrency, and failure handling).*
 
 ## Status: Implemented vs. Planned
@@ -174,12 +174,12 @@ Legend: ✅ Implemented · 🟡 Partial/Basic · 🔵 Planned
 
 | Area                                                         | Status                 | Details                                                                               |
 |--------------------------------------------------------------|------------------------|---------------------------------------------------------------------------------------|
-| Core payment flow (authorise/capture/reverse)                | ✅ Implemented          | [domain/state-machine.md](docs/domain/state-machine.md)                               |
-| Event-driven ledger (outbox + Kafka + DLT)                   | ✅ Implemented          | [eventing/outbox-pattern.md](docs/eventing/outbox-pattern.md)                         |
-| Idempotency & concurrency control                            | ✅ Implemented          | [reliability/concurrency-consistency.md](docs/reliability/concurrency-consistency.md) |
-| Resilience (circuit breaker, fail-open, retries)             | ✅ Implemented          | [reliability/resilience-patterns.md](docs/reliability/resilience-patterns.md)         |
-| Observability (traces, metrics, dashboards, correlated logs) | ✅ Implemented          | [observability/telemetry.md](docs/observability/telemetry.md)                         |
-| Automated tests + CI build                                   | ✅ Implemented          | [testing/strategy.md](docs/testing/strategy.md)                                       |
+| Core payment flow (authorise/capture/reverse)                | ✅ Implemented          | [Payment State Machine](docs/domain/state-machine.md)                               |
+| Event-driven ledger (outbox + Kafka + DLT)                   | ✅ Implemented          | [Outbox Pattern](docs/eventing/outbox-pattern.md)                         |
+| Idempotency & concurrency control                            | ✅ Implemented          | [Concurrency & Consistency](docs/reliability/concurrency-consistency.md) |
+| Resilience (circuit breaker, fail-open, retries)             | ✅ Implemented          | [Resilience Patterns](docs/reliability/resilience-patterns.md)         |
+| Observability (traces, metrics, dashboards, correlated logs) | ✅ Implemented          | [Telemetry Guidelines](docs/observability/telemetry.md)                         |
+| Automated tests + CI build                                   | ✅ Implemented          | [Testing Strategy](docs/testing/strategy.md)                                       |
 | Load/traffic-generation scripts                              | 🟡 Demo-scale baseline | [load-tests/](load-tests/)                                                            |
 | AuthN/AuthZ (Spring Security + JWT)                          | 🔵 Planned             | [roadmap next steps #1](docs/roadmap.md#5-next-steps-prioritized)                     |
 | API gateway / infra-level rate limiting                      | 🔵 Planned             | [roadmap next steps #4](docs/roadmap.md#5-next-steps-prioritized)                     |
@@ -187,14 +187,14 @@ Legend: ✅ Implemented · 🟡 Partial/Basic · 🔵 Planned
 | Customer-facing UI                                           | 🔵 Planned             | [roadmap next steps #3](docs/roadmap.md#5-next-steps-prioritized)                     |
 | Partial capture / refunds                                    | 🔵 Planned             | [roadmap production considerations](docs/roadmap.md#6-production-considerations)      |
 
-Full detail, rationale, and prioritization live in [`docs/roadmap.md`](docs/roadmap.md).
+Full detail, rationale, and prioritization live in [Payment Platform MVP Progress](docs/roadmap.md).
 
 ## Documentation Map
 
 | Area                                                        | Link                                                             |
 |-------------------------------------------------------------|------------------------------------------------------------------|
 | Getting started, demo, development                          | [docs/getting-started/](docs/getting-started/README.md)          |
-| Infrastructure (Docker Compose, ports, observability stack) | [infra/README.md](infra/README.md)                               |
+| Infrastructure (Docker Compose, ports, observability stack) | [Infrastructure](infra/README.md)                               |
 | Architecture (C4 L1–L3, trust boundaries)                   | [docs/architecture/](docs/architecture/README.md)                |
 | Payment flows & failure scenarios                           | [docs/flows/](docs/flows/README.md)                              |
 | Domain rules (ledger, state machine)                        | [docs/domain/](docs/domain/accounting-model.md)                  |
@@ -206,9 +206,9 @@ Full detail, rationale, and prioritization live in [`docs/roadmap.md`](docs/road
 | Security                                                    | [docs/security/](docs/security/threat-model.md)                  |
 | Testing strategy                                            | [docs/testing/](docs/testing/strategy.md)                        |
 | Load tests (how to run)                                     | [load-tests/](load-tests/README.md)                              |
-| Load-testing methodology (why, scenarios, results)          | [docs/testing/load-testing.md](docs/testing/load-testing.md)     |
+| Load-testing methodology (why, scenarios, results)          | [Load Testing Report](docs/testing/load-testing.md)     |
 | Architecture Decision Records                               | [docs/decisions/](docs/decisions/README.md)                      |
-| Roadmap (status, next steps, production considerations)     | [docs/roadmap.md](docs/roadmap.md)                               |
+| Roadmap (status, next steps, production considerations)     | [Payment Platform MVP Progress](docs/roadmap.md)                               |
 
 ---
 

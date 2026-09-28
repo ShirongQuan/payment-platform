@@ -2,6 +2,9 @@
 
 ## Table of Contents
 
+- [Diagram](#diagram)
+    - [Authorisation state machine](#authorisation-state-machine)
+    - [Account lock state machine](#account-lock-state-machine)
 - [Aggregates](#aggregates)
 - [States](#states)
     - [Authorisation states (implemented)](#authorisation-states-implemented)
@@ -13,8 +16,25 @@
 - [Terminal States](#terminal-states)
 - [Concurrency / Idempotency Behavior](#concurrency--idempotency-behavior)
 - [Error Mapping](#error-mapping)
-- [Diagram](#diagram)
 - [Related](#related)
+
+## Diagram
+
+### Authorisation state machine
+
+<p>
+  <a href="https://raw.githubusercontent.com/ShirongQuan/payment-platform/main/docs/domain/diagrams/payment-state-machine.svg">
+    <img src="diagrams/payment-state-machine.svg" alt="Payment authorisation state machine diagram" width="49%" />
+  </a>
+</p>
+
+### Account lock state machine
+
+<p>
+  <a href="https://raw.githubusercontent.com/ShirongQuan/payment-platform/main/docs/domain/diagrams/account-state-machine.svg">
+    <img src="diagrams/account-state-machine.svg" alt="Account lock state machine diagram" width="49%" />
+  </a>
+</p>
 
 ## Aggregates
 
@@ -55,9 +75,9 @@ tracked as a roadmap gap, not silently missing).
 
 ### Planned states (not implemented)
 
-Per [ADR 0002](../decisions/0002-full-capture-only.md), the following are explicitly out of scope for the MVP and are *
-*not** real states today. They are listed here only so future work has a documented target, and are tracked in [
-`docs/roadmap.md`](../roadmap.md):
+Per [ADR 0002: Support Full Capture and Full Reverse Only (MVP)](../decisions/0002-full-capture-only.md), the
+following are explicitly out of scope for the MVP and are **not** real states today. They are listed here only so
+future work has a documented target, and are tracked in [Payment Platform MVP Progress](../roadmap.md):
 
 - `PARTIALLY_CAPTURED` — would require splitting a reservation across multiple captures
 - `EXPIRED` — would require a time-boxed authorisation hold with an expiry sweep
@@ -117,7 +137,7 @@ machine simple and predictable for this platform's scope.
 
 - **Scope of uniqueness:** idempotency is scoped per operation, not globally —
   `account_id + event_type + idempotency_key` for authorise, and `authorisation_id + event_type + idempotency_key` for
-  capture/reverse (see [ADR 0005](../decisions/0005-idempotency-and-concurrency.md)).
+  capture/reverse (see [ADR 0005: Idempotency and Concurrency Rules for Authorisation Flows](../decisions/0005-idempotency-and-concurrency.md)).
 - **Duplicate request, same payload:** returns the previously computed response; no new side effect (no second
   reservation, capture, or reversal).
 - **Duplicate request, different payload, same key:** rejected with `409 IDEMPOTENCY_CONFLICT`.
@@ -125,7 +145,7 @@ machine simple and predictable for this platform's scope.
   `uq_authorisation_event_account_eventtype_idempotency`) or optimistic-locking version conflict on the account row
   decides the winner; the losing request is recovered by re-reading committed state and either replaying the winner's
   result or returning a conflict — never left in an inconsistent state (
-  see [ADR 0010](../decisions/0010-database-concurrency-approach.md)).
+  see [ADR 0010: Database Concurrency Approach (Optimistic vs Pessimistic Locking)](../decisions/0010-database-concurrency-approach.md)).
 - **Kafka delivery (ledger-service side):** at-least-once delivery is handled by deduplicating on `eventId` via
   `processed_event` (atomic `INSERT ... ON CONFLICT DO NOTHING`); a duplicate event is skipped, not reprocessed.
 
@@ -145,26 +165,18 @@ Note the distinction between a **business decline** (insufficient funds, fraud d
 response describing a business outcome) and a **domain/state error** (invalid transition, idempotency conflict — an
 actual `409`/`400` error response). Declines are not errors; they are a normal terminal state of the authorisation flow.
 
-## Diagram
-
-**Authorisation state machine:** [`payment-state-machine.mmd`](diagrams/payment-state-machine.mmd) — open
-in a Mermaid-compatible viewer (the Mermaid VS Code/IntelliJ plugin, or
-[mermaid.live](https://mermaid.live)) to render it.
-
-**Parallel account-level gate:** [`account-state-machine.mmd`](diagrams/account-state-machine.mmd) — same
-viewing options as above.
-
 ## Related
 
-- [`accounting-model.md`](./accounting-model.md) — how these state transitions map to ledger postings
-- [`../flows/payment-lifecycle.md`](../flows/payment-lifecycle.md) — full request-level walkthrough of each flow
-- [`../decisions/0002-full-capture-only.md`](../decisions/0002-full-capture-only.md) — why partial
-  capture/reverse/refund are out of scope
-- [`../decisions/0005-idempotency-and-concurrency.md`](../decisions/0005-idempotency-and-concurrency.md) — idempotency
-  and concurrency rules
-- [`../decisions/0010-database-concurrency-approach.md`](../decisions/0010-database-concurrency-approach.md) —
-  optimistic locking approach
-- [`../roadmap.md`](../roadmap.md) — planned states (partial capture, expiry, refund) and account unlock flow
+- [Accounting Model](./accounting-model.md) — how these state transitions map to ledger postings
+- [Payment Lifecycle](../flows/payment-lifecycle.md) — full request-level walkthrough of each flow
+- [ADR 0002: Support Full Capture and Full Reverse Only (MVP)](../decisions/0002-full-capture-only.md) — why
+  partial capture/reverse/refund are out of scope
+- [ADR 0005: Idempotency and Concurrency Rules for Authorisation Flows](../decisions/0005-idempotency-and-concurrency.md)
+  — idempotency and concurrency rules
+- [ADR 0010: Database Concurrency Approach (Optimistic vs Pessimistic Locking)](../decisions/0010-database-concurrency-approach.md)
+  — optimistic locking approach
+- [Payment Platform MVP Progress](../roadmap.md) — planned states (partial capture, expiry, refund) and account
+  unlock flow
 
 
 

@@ -45,7 +45,7 @@ This report answers three practical questions for the MVP:
   test/setup conveniences, not payment-critical endpoints (see
   [Idempotency](../api/README.md#idempotency)).
 
-For **how** to actually run these scripts, see **[load-tests/README.md](../../load-tests/README.md)**.
+For **how** to actually run these scripts, see **[Load Tests](../../load-tests/README.md)**.
 
 ## 2) Workload Model
 
@@ -112,13 +112,13 @@ the last 6 digits of `date +%s` at script start), e.g. `ikey-483920-001`, `cap-4
 `REST_BETWEEN_STEPS_SECONDS` (default **2s**) pause so Grafana panels show a clear gap between
 phases instead of one continuous blur:
 
-| Phase | Name                                   | What it drives                                                                 |
-|-------|------------------------------------------|-----------------------------------------------------------------------------------|
-| 1     | Bulk authorisations (80 by default)      | Round-robins across 3 accounts (GBP/USD/EUR), £1/$1/€1 per request. First 50 requests at 1/2s, next 30 at 1/1s (faster, to trip fraud-service velocity rules and produce some `DECLINED`). Every authorise/capture is immediately re-sent with the same idempotency key + payload to hit the replay path. Odd-numbered keys → capture; even-numbered → reversal. |
-| 2     | Circuit breaker open → hold → half-open → closed (+ HTTP 5xx) | Sets fraud-service to `ALWAYS_503`, fires 10 authorisations 1s apart (trips the breaker open + generates real 5xx samples), holds `ALWAYS_503` for 25s so the OPEN state is clearly visible and `waitDurationInOpenState` (15s) fully elapses, resets to `OFF`, then fires 10 more authorisations 2s apart to observe half-open → closed recovery. |
-| 3     | DLT (dead-letter-topic) publishes         | Publishes records with `eventType=UNSUPPORTED_EVENT_TYPE` directly onto `auth.events` via `kcat` (see [Runbook](../development/runbook.md)); `ledger-service` treats this as non-retryable and routes it straight to `auth.events.ledger.dlt`. |
-| 4     | Dedup events                              | Delegates to `generate-dedup-events.sh` (defaults: `ROUNDS=10 DUPLICATES_PER_EVENT=3 INTERVAL_SECONDS=1`) — generates `ledger_event_duplicate_skipped_total` samples across all event types. |
-| 5     | Concurrency conflicts                     | Delegates to `generate-concurrency-conflicts.sh` (defaults: `ROUNDS=5 PARALLEL_REQUESTS=6 INTERVAL_SECONDS=2`), the **last** phase — generates `auth_concurrency_conflict_total{operation,type}` samples via truly concurrent authorise/capture/reverse races, auto-provisioning its own dedicated GBP account per round. |
+| Phase | Name                                                          | What it drives                                                                                                                                                                                                                                                                                                                                                   |
+|-------|---------------------------------------------------------------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| 1     | Bulk authorisations (80 by default)                           | Round-robins across 3 accounts (GBP/USD/EUR), £1/$1/€1 per request. First 50 requests at 1/2s, next 30 at 1/1s (faster, to trip fraud-service velocity rules and produce some `DECLINED`). Every authorise/capture is immediately re-sent with the same idempotency key + payload to hit the replay path. Odd-numbered keys → capture; even-numbered → reversal. |
+| 2     | Circuit breaker open → hold → half-open → closed (+ HTTP 5xx) | Sets fraud-service to `ALWAYS_503`, fires 10 authorisations 1s apart (trips the breaker open + generates real 5xx samples), holds `ALWAYS_503` for 25s so the OPEN state is clearly visible and `waitDurationInOpenState` (15s) fully elapses, resets to `OFF`, then fires 10 more authorisations 2s apart to observe half-open → closed recovery.               |
+| 3     | DLT (dead-letter-topic) publishes                             | Publishes records with `eventType=UNSUPPORTED_EVENT_TYPE` directly onto `auth.events` via `kcat` (see [Runbook](../development/runbook.md)); `ledger-service` treats this as non-retryable and routes it straight to `auth.events.ledger.dlt`.                                                                                                                   |
+| 4     | Dedup events                                                  | Delegates to `generate-dedup-events.sh` (defaults: `ROUNDS=10 DUPLICATES_PER_EVENT=3 INTERVAL_SECONDS=1`) — generates `ledger_event_duplicate_skipped_total` samples across all event types.                                                                                                                                                                     |
+| 5     | Concurrency conflicts                                         | Delegates to `generate-concurrency-conflicts.sh` (defaults: `ROUNDS=5 PARALLEL_REQUESTS=6 INTERVAL_SECONDS=2`), the **last** phase — generates `auth_concurrency_conflict_total{operation,type}` samples via truly concurrent authorise/capture/reverse races, auto-provisioning its own dedicated GBP account per round.                                        |
 
 The script always resets fraud-service's failure-mode to `OFF` at the end (even on error/Ctrl-C),
 via an `EXIT` trap, so it never leaves the environment in a broken state.
@@ -210,7 +210,8 @@ between these two conflict types and why account provisioning matters here.
   every subsequent request on that account short-circuits as "account not active" instead of
   racing at all. Pass `ACCOUNT_ID` to reuse a specific existing account instead (skips
   auto-provisioning, so the known depletion/locking issues above can resurface on repeated runs).
-- **No distributed lock manager.** Consistent with [ADR 0005](../decisions/0005-idempotency-and-concurrency.md),
+- **No distributed lock manager.** Consistent
+  with [ADR 0005: Idempotency and Concurrency Rules for Authorisation Flows](../decisions/0005-idempotency-and-concurrency.md),
   concurrency correctness relies entirely on DB unique constraints + optimistic locking, not an
   external coordination service — so these scripts are also an implicit regression test for that
   design decision.
@@ -246,14 +247,14 @@ them. Formalizing explicit thresholds is tracked as follow-up work (see
 
 ### 9.1 Current MVP evidence (observed signal-level)
 
-| Checkpoint | Current status | Evidence source |
-|---|---|---|
-| Mixed traffic generation completes | Yes | `load-tests/generate-traffic.sh` scripted phases |
-| Idempotent replay path exercised | Yes | duplicate request behavior + `auth_idempotency_cache_total` |
-| Circuit breaker transitions visible | Yes | auth actuator + fraud forced `503` mode |
-| DLT publish path visible | Yes | `ledger_kafka_dlt_published_total` |
-| Ledger duplicate-event skip visible | Yes | `ledger_event_duplicate_skipped_total` |
-| Concurrency conflict path visible | Yes | `auth_concurrency_conflict_total{type=...}` |
+| Checkpoint                          | Current status | Evidence source                                             |
+|-------------------------------------|----------------|-------------------------------------------------------------|
+| Mixed traffic generation completes  | Yes            | `load-tests/generate-traffic.sh` scripted phases            |
+| Idempotent replay path exercised    | Yes            | duplicate request behavior + `auth_idempotency_cache_total` |
+| Circuit breaker transitions visible | Yes            | auth actuator + fraud forced `503` mode                     |
+| DLT publish path visible            | Yes            | `ledger_kafka_dlt_published_total`                          |
+| Ledger duplicate-event skip visible | Yes            | `ledger_event_duplicate_skipped_total`                      |
+| Concurrency conflict path visible   | Yes            | `auth_concurrency_conflict_total{type=...}`                 |
 
 ### 9.2 Quantitative baseline table
 
@@ -323,22 +324,22 @@ breaker transitions, DLT routing, consumer dedup, and both concurrency-conflict 
 fully reproducible by another engineer with no manual setup beyond three funded accounts.
 
 Follow-up work, in rough priority order (see also
-[`docs/roadmap.md`](../roadmap.md#5-next-steps-prioritized)):
+[Payment Platform MVP Progress](../roadmap.md#5-next-steps-prioritized)):
 
 1. Tune the outbox scheduler batch size/poll interval for faster publish-lag recovery under load.
 2. Evaluate optimistic vs. pessimistic locking throughput trade-offs under controlled, repeatable
    concurrent load.
 3. Move from bash traffic scripts to sustained load tooling for stable percentile reporting and a
    committed numeric baseline:
-   - **[k6](https://k6.io/)** — write the same auth → capture → reversal flow as a JS script, run
-     with configurable VUs/duration (`k6 run --vus 10 --duration 5m script.js`), get built-in
-     percentile/error-rate reporting, and export metrics straight to Prometheus for Grafana.
-   - **[vegeta](https://github.com/tsenart/vegeta)** — good for simple constant-rate load against a
-     single endpoint, less good for multi-step flows (auth → capture) since it doesn't chain
-     requests.
-   - **[Gatling](https://gatling.io/)** — Java/Scala based, integrates naturally with this Maven
-     multi-module repo if load tests should be checked into the codebase and run via
-     `mvn gatling:test`.
+    - **[k6](https://k6.io/)** — write the same auth → capture → reversal flow as a JS script, run
+      with configurable VUs/duration (`k6 run --vus 10 --duration 5m script.js`), get built-in
+      percentile/error-rate reporting, and export metrics straight to Prometheus for Grafana.
+    - **[vegeta](https://github.com/tsenart/vegeta)** — good for simple constant-rate load against a
+      single endpoint, less good for multi-step flows (auth → capture) since it doesn't chain
+      requests.
+    - **[Gatling](https://gatling.io/)** — Java/Scala based, integrates naturally with this Maven
+      multi-module repo if load tests should be checked into the codebase and run via
+      `mvn gatling:test`.
 4. Define and enforce endpoint-level latency/error-rate SLO thresholds for regression detection
    (see [Alerts and SLOs](../observability/alerts-slos.md)).
 5. Capture and commit a fixed-hardware-profile numeric baseline (CPU/memory specs, Postgres tuning,
@@ -347,11 +348,11 @@ Follow-up work, in rough priority order (see also
 For now, `generate-traffic.sh` is sufficient to produce visible, labeled traffic (auth/capture/
 reversal counts, idempotency cache hits, fraud declines, circuit-breaker transitions, 5xx errors,
 and DLT publishes) on the existing Grafana dashboards — see
-[load-tests/README.md](../../load-tests/README.md) for exact commands.
+[Load Tests](../../load-tests/README.md) for exact commands.
 
 ## 14) Reproducibility Steps
 
-Run the same baseline traffic locally (see [load-tests/README.md](../../load-tests/README.md) for
+Run the same baseline traffic locally (see [Load Tests](../../load-tests/README.md) for
 the full command reference):
 
 ```bash

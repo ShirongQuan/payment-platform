@@ -17,7 +17,7 @@ Dashboard links (dashboard-level, not per panel) are documented in `../telemetry
 ## Log/Trace/Metric Correlation Screenshot
 
 For `../telemetry.md` section `6) Correlating Logs, Metrics, and Traces` and
-[`docs/getting-started/demo-guide.md`](../../getting-started/demo-guide.md#correlate-a-log-line-to-a-trace):
+[Payment Platform Demo Guide](../../getting-started/demo-guide.md#correlate-a-log-line-to-a-trace):
 
 - `log-trace-metric-correlation.png` — a single composite screenshot (or a short set) showing, side
   by side:
@@ -29,7 +29,7 @@ For `../telemetry.md` section `6) Correlating Logs, Metrics, and Traces` and
      the same timestamp, to show the log/trace pair sits inside a visible metric data point.
 
   Capture steps are in
-  [`docs/getting-started/demo-guide.md` § Correlate a Log Line to a Trace](../../getting-started/demo-guide.md#correlate-a-log-line-to-a-trace).
+  [Payment Platform Demo Guide § Correlate a Log Line to a Trace](../../getting-started/demo-guide.md#correlate-a-log-line-to-a-trace).
 
 
 

@@ -37,7 +37,7 @@ transition in the `authorisation_event` table (`AuthorisationEventEntity`):
 - **Admin actions**: there are currently no admin-only endpoints (no account-unlock endpoint, no
   replay-trigger endpoint) — all "admin" recovery actions (outbox replay, DLT reprocessing) are
   manual SQL/operator actions today (see
-  [`outbox-backlog-recovery.md`](../flows/outbox-backlog-recovery.md)) and are therefore **not**
+  [Outbox Backlog Recovery](../flows/outbox-backlog-recovery.md)) and are therefore **not**
   captured in any structured audit event — they rely on database change history / operator
   discipline only.
 - **Config changes**: no runtime-configurable settings exist that are changed via an API (all
@@ -50,7 +50,7 @@ transition in the `authorisation_event` table (`AuthorisationEventEntity`):
 
 - Emit a structured audit event for the account-lock side effect (currently only visible via the
   `account.status` column, not a first-class event) — see
-  [`failure-scenarios.md` § 7](../flows/failure-scenarios.md#7-fraud-decline-and-account-auto-lock).
+  [Failure Scenarios § 7](../flows/failure-scenarios.md#7-fraud-decline-and-account-auto-lock).
 - Once authentication (Spring Security + JWT) lands
   ([roadmap Next Steps #1](../roadmap.md#5-next-steps-prioritized)), introduce auth-attempt and
   admin-action audit events (login success/failure, role-gated action performed), and a config-
@@ -109,7 +109,7 @@ Every `authorisation_event` row captures:
   signing of audit log entries or the `authorisation_event` table. A privileged database user could
   still directly `UPDATE`/`DELETE` rows outside the application code path (e.g. via a manual SQL
   operation, which is in fact the *documented* recovery mechanism for outbox/DLT issues today — see
-  [`outbox-backlog-recovery.md`](../flows/outbox-backlog-recovery.md)).
+  [Outbox Backlog Recovery](../flows/outbox-backlog-recovery.md)).
 - **No centralized/immutable log aggregation**: logs are emitted to each service's stdout console
   only; there is no shipped, write-once log aggregation platform (e.g. a SIEM) in this stack today.
 - **No database-level audit logging** (e.g. Postgres `pgaudit`) capturing raw DDL/DML independent of
@@ -160,13 +160,13 @@ SOC 2, ISO 27001). This statement is intentionally explicit rather than left amb
 | No TLS / transport encryption (HTTP, Kafka, Redis) | [Production Considerations](../roadmap.md#6-production-considerations) | Infrastructure hardening phase (deployment-environment-dependent) |
 | No secrets vault/rotation | [Production Considerations](../roadmap.md#6-production-considerations) | Infrastructure hardening phase |
 | No encryption at rest | [Production Considerations](../roadmap.md#6-production-considerations) | Infrastructure hardening phase |
-| No formal retention/deletion policy | [`data-protection.md` § Retention](./data-protection.md#retentiondeletion-policy) (marked TBD) | To be defined alongside compliance posture work |
+| No formal retention/deletion policy | [Data Protection § Retention](./data-protection.md#retentiondeletion-policy) (marked TBD) | To be defined alongside compliance posture work |
 | No cryptographic log tamper-evidence / DB-level audit logging | This doc, [Log Integrity](#log-integritytamper-considerations) | Compliance-hardening phase |
 | No formal compliance certification | This doc, [Compliance Posture Statement](#compliance-posture-statement) | Not scheduled — would follow the above controls landing first |
 
 ## Roadmap
 
-See [`docs/roadmap.md`](../roadmap.md) for full detail and current sequencing, particularly:
+See [Payment Platform MVP Progress](../roadmap.md) for full detail and current sequencing, particularly:
 
 - [§5 Next Steps](../roadmap.md#5-next-steps-prioritized) — authentication/authorization (item 1)
   and API gateway (item 4), the two highest-leverage items for closing the audit/compliance gaps
@@ -175,7 +175,7 @@ See [`docs/roadmap.md`](../roadmap.md) for full detail and current sequencing, p
   secrets management, and the broader compliance posture (audit logging, PCI-relevant controls)
   appropriate to a real payments system.
 
-See also [`threat-model.md`](./threat-model.md) for the risk context motivating these controls, and
-[`data-protection.md`](./data-protection.md) for the data-classification and retention detail this
+See also [Threat Model](./threat-model.md) for the risk context motivating these controls, and
+[Data Protection](./data-protection.md) for the data-classification and retention detail this
 audit trail is scoped against.
 

@@ -2,7 +2,7 @@
 
 This section contains operating guidance for telemetry, alerting targets, and incident handling.
 
-For capabilities that are still planned, capture follow-up work in [`docs/roadmap.md`](../roadmap.md).
+For capabilities that are still planned, capture follow-up work in [Payment Platform MVP Progress](../roadmap.md).
 
 ## Documents
 

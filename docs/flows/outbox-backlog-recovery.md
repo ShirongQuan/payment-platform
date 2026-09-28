@@ -30,14 +30,14 @@ action.
   lease expires before the publish attempt completes (e.g. the instance holding the claim
   crashed/stalled), the next `OutboxScheduler` cycle automatically reclaims it back to `NEW` via
   `reclaimStalePublishing()` — no operator action needed for this case.
-- `auth_outbox_backlog` (gauge) only counts `NEW` + `PUBLISHING` rows. A `FAILED` row drops out of
-  this gauge but is **not** recovered — it becomes invisible in the backlog metric unless you also
-  watch `auth_outbox_publish_attempts_total{result="failed"}` or query the outbox table directly.
-- There is **no dedicated dead-letter queue/topic for producer-side (outbox) failures** in this
-  project today. "DLQ" in this context means the `FAILED` row sitting in the outbox table, and
-  "manual replay" means an operator resets it back to `NEW`. This is a different concept from
-  ledger-service's *consumer-side* Kafka DLT topic (`auth.events.ledger.dlt`), which handles
-  Kafka-consumption failures, not publish failures — see `event-consuming.mmd`.
+- `auth_outbox_backlog` (gauge) counts `NEW` + `PUBLISHING` rows. A `FAILED` row drops out of
+  this gauge, so also watch `auth_outbox_publish_attempts_total{result="failed"}` or query the
+  outbox table directly to see terminal rows.
+- There is a distinct concept here from ledger-service's *consumer-side* Kafka DLT topic
+  (`auth.events.ledger.dlt`), which handles Kafka-consumption failures, not publish failures — see
+  [Event Consuming Sequence](./README.md#event-consuming-sequence). Producer-side (outbox) recovery today
+  means resetting a terminal `FAILED` row back to `NEW` (the "DLQ / manual replay" section below);
+  a dedicated dead-letter table/topic for outbox failures is tracked on the roadmap.
 
 ## Detect
 
@@ -45,7 +45,8 @@ action.
   draining), or `auth_outbox_publish_attempts_total{result="failed"}` incrementing, or
   `auth_outbox_publish_lag_seconds` (creation → successful publish) growing past its normal range
   (see the outbox panels in `infra/grafana/dashboards/payment-platform-overview.json`).
-- **Direct query** (source of truth, since `FAILED` rows are invisible to the backlog gauge):
+- **Direct query** (source of truth for terminal rows, since `FAILED` drops out of the backlog
+  gauge):
   ```sql
   select status, count(*), min(created_at), max(retry_count)
   from outbox_event
@@ -100,7 +101,7 @@ is a **manual operation**:
    for audit/investigation rather than requeuing it blindly.
 
 See the decision flow in
-[`outbox-backlog-recovery-flow.mmd`](diagrams/outbox-backlog-recovery-flow.mmd) for the full
+[Outbox Backlog Recovery Flow](./README.md#outbox-backlog-recovery-flow) for the full
 detect → triage → retry → manual-replay path.
 
 ## Metrics & dashboards
@@ -113,20 +114,20 @@ detect → triage → retry → manual-replay path.
 
 ## Current scope & suggested improvement
 
-- No admin endpoint or scheduled job exists to auto-requeue `FAILED` rows — recovery today is a
-  manual SQL update, as described above.
+- Recovery today is an operator-driven manual SQL update, as described above — there is no admin
+  endpoint or scheduled job that auto-requeues `FAILED` rows yet.
 - Suggested future improvement: an ops endpoint (or a scheduled "cool-down retry" job) to requeue
-  `FAILED` rows after an operator decision, and/or a genuine dead-letter table/topic that preserves
-  full context (payload, error history, all retry attempts) for audit instead of overwriting
-  `retry_count`/`status` in place.
+  `FAILED` rows after an operator decision, and/or a dedicated dead-letter table/topic that
+  preserves full context (payload, error history, all retry attempts) for audit instead of
+  overwriting `retry_count`/`status` in place. See [Payment Platform MVP Progress](../roadmap.md).
 
 ## Related
 
-- [`outbox-backlog-recovery-flow.mmd`](diagrams/outbox-backlog-recovery-flow.mmd) — decision-logic
+- [Outbox Backlog Recovery Flow](./README.md#outbox-backlog-recovery-flow) — decision-logic
   flowchart for this doc.
-- [`event-publishing-sequence.mmd`](diagrams/event-publishing-sequence.mmd) — sequence diagram for the normal
+- [Event Publishing Sequence](./README.md#event-publishing-sequence) — sequence diagram for the normal
   publish/retry/fail path.
-- [`failure-scenarios.md`](./failure-scenarios.md) — scenario 3 (outbox publish transient
+- [Failure Scenarios](./failure-scenarios.md) — scenario 3 (outbox publish transient
   failure).
-- `docs/roadmap.md` — Reliability patterns (outbox lag/backlog metrics).
+- [Payment Platform MVP Progress](../roadmap.md) — Reliability patterns (outbox lag/backlog metrics).
 

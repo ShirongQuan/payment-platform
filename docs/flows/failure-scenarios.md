@@ -89,7 +89,7 @@ Kafka temporarily unavailable or publish attempt fails.
 
 ### Where to inspect
 
-- `event-publishing-sequence.mmd`
+- [Event Publishing Sequence](./README.md#event-publishing-sequence)
 - Outbox table status transitions
 - Publisher retry/failure metrics and logs
 
@@ -100,10 +100,10 @@ Kafka temporarily unavailable or publish attempt fails.
 3. Confirm retry loop is active.
 4. Reprocess stuck records if manual command/tooling exists.
 
-See [outbox-backlog-recovery.md](./outbox-backlog-recovery.md) and its companion flowchart
-[outbox-backlog-recovery-flow.mmd](diagrams/outbox-backlog-recovery-flow.mmd) for the full
+See [Outbox Backlog Recovery](./outbox-backlog-recovery.md) and its companion flowchart
+[Outbox Backlog Recovery Flow](./README.md#outbox-backlog-recovery-flow) for the full
 detect → triage → retry → DLQ/manual-replay decision logic, including exactly how to manually
-requeue a terminally `FAILED` outbox row (no automated dead-letter/replay path exists today).
+requeue a terminally `FAILED` outbox row.
 
 ---
 
@@ -120,7 +120,7 @@ At-least-once delivery causes re-delivery of same message.
 
 ### Where to inspect
 
-- `event-consuming.mmd`
+- [Event Consuming Sequence](./README.md#event-consuming-sequence)
 - Dedup store/table entries
 - Consumer logs for duplicate detection path
 
@@ -141,7 +141,7 @@ requested on a `CAPTURED` or `DECLINED` authorisation).
 - No balance/ledger side effects.
 - No outbox event emitted.
 - Note: if the *same* idempotency key that completed the original capture/reverse is retried, this
-  is **not** an invalid-state error — it's a safe replay (see scenario 1/`idempotency-generic.mmd`).
+  is **not** an invalid-state error — it's a safe replay (see scenario 1/[Idempotency Generic Sequence](./README.md#idempotency-generic-sequence)).
   Only a *different* key against an already-terminal authorisation hits this path.
 
 ### What to verify
@@ -152,7 +152,7 @@ requested on a `CAPTURED` or `DECLINED` authorisation).
 
 ### Where to inspect
 
-- `capture-sequence.mmd`, `reverse-sequence.mmd`
+- [Capture Sequence](./README.md#capture-sequence), [Reverse Sequence](./README.md#reverse-sequence)
 - `AuthorisationIllegalStateException` in logs/traces
 
 ---
@@ -168,9 +168,10 @@ One component succeeds but follow-on action fails (e.g., event publish deferred)
 - Atomic boundary respected for core DB changes (authorisation/account/event rows commit together
   in one transaction; the outbox row is written in that same transaction).
 - Deferred side effects (the actual Kafka publish) recovered via outbox retry — see
-  `event-publishing-sequence.mmd` and [outbox-backlog-recovery.md](./outbox-backlog-recovery.md).
-- System converges without manual data patching in common (transient) cases; a terminally `FAILED`
-  outbox row requires the manual replay procedure documented there.
+  [Event Publishing Sequence](./README.md#event-publishing-sequence) and
+  [Outbox Backlog Recovery](./outbox-backlog-recovery.md).
+- System converges automatically in the common (transient) case; a terminally `FAILED` outbox row
+  follows the manual replay procedure documented there.
 
 ---
 
@@ -191,22 +192,23 @@ fraud-service was unreachable/timed out and no fail-open policy applied.
   repeated-decline pattern within the trailing window) **and** the account is currently `ACTIVE`,
   auth-service flips the account to `LOCKED` in the *same* transaction as the decline.
 - Once `LOCKED`, subsequent authorise attempts short-circuit with `reasonCode=ACCOUNT_LOCKED`
-  before any fraud-service call is made (see `authorise-sequence.mmd`'s account-active gate).
-- A `LOCKED` account is not automatically unlocked by this platform — there is no unlock
-  endpoint/flow implemented today.
+  before any fraud-service call is made (see the account-active gate in
+  [Authorise Sequence](./README.md#authorise-sequence)).
+- Unlocking a `LOCKED` account back to `ACTIVE` is a manual, operator-driven action today; an
+  automated/API-driven unlock flow is tracked on the roadmap.
 
 ### What to verify
 
 - `auth_authorisations_total{status="DECLINED",reason="FRAUD_DECLINED"}` incremented.
 - Account row's `status` column flips to `LOCKED` when the lock-recommendation conditions are met.
-- No outbox event is currently emitted for the lock transition itself (only the `DECLINED`
-  authorisation event) — this is a known gap, not a bug.
+- The `DECLINED` authorisation event captures the decline; a dedicated event for the lock
+  transition itself is a future enhancement.
 
 ### Where to inspect
 
-- `authorise-sequence.mmd`
+- [Authorise Sequence](./README.md#authorise-sequence)
 - fraud-service's `fraud_decisions_total{outcome}` / `fraud_check_duration_seconds{outcome}`
-- [`../api/fraud-api.md`](../api/fraud-api.md)
+- [Fraud Service API](../api/fraud-api.md)
 
 ---
 
@@ -214,12 +216,12 @@ fraud-service was unreachable/timed out and no fail-open policy applied.
 
 | Scenario                          | Primary diagram(s)                                                          |
 |-----------------------------------|-----------------------------------------------------------------------------|
-| Duplicate API request             | `authorise-sequence.mmd`, `capture-sequence.mmd`, `idempotency-generic.mmd` |
-| Timeout after commit              | `authorise-sequence.mmd`, `capture-sequence.mmd`                            |
-| Publish retry/failure             | `event-publishing-sequence.mmd`, `outbox-backlog-recovery-flow.mmd`         |
-| Duplicate consume                 | `event-consuming.mmd`                                                       |
-| Invalid transition                | `capture-sequence.mmd`, `reverse-sequence.mmd`                              |
-| Fraud decline / account auto-lock | `authorise-sequence.mmd`                                                    |
+| Duplicate API request             | [Authorise Sequence](./README.md#authorise-sequence), [Capture Sequence](./README.md#capture-sequence), [Idempotency Generic Sequence](./README.md#idempotency-generic-sequence) |
+| Timeout after commit              | [Authorise Sequence](./README.md#authorise-sequence), [Capture Sequence](./README.md#capture-sequence) |
+| Publish retry/failure             | [Event Publishing Sequence](./README.md#event-publishing-sequence), [Outbox Backlog Recovery Flow](./README.md#outbox-backlog-recovery-flow) |
+| Duplicate consume                 | [Event Consuming Sequence](./README.md#event-consuming-sequence)                    |
+| Invalid transition                | [Capture Sequence](./README.md#capture-sequence), [Reverse Sequence](./README.md#reverse-sequence) |
+| Fraud decline / account auto-lock | [Authorise Sequence](./README.md#authorise-sequence)              |
 
 ---
 
@@ -236,14 +238,8 @@ fraud-service was unreachable/timed out and no fail-open policy applied.
 ## Current scope notes
 
 - Reverse and capture are both fully implemented (not placeholders) — see
-  `capture-sequence.mmd`/`reverse-sequence.mmd` for the actual persisted flow.
-- No unlock flow/endpoint exists for a `LOCKED` account; unlocking is currently a manual DB
-  operation.
-- No outbox event is emitted for the account-lock side effect of a fraud decline — only the
-  `DECLINED` authorisation event is published today.
+  [Capture Sequence](./README.md#capture-sequence) / [Reverse Sequence](./README.md#reverse-sequence)
+  for the actual persisted flow.
 - Idempotency is implemented on the payment-critical path (authorise/capture/reverse/fraud
-  check); extending it to `POST /accounts` and `POST /accounts/{id}/deposits` is tracked in
-  `docs/roadmap.md`.
-- Recovery from a terminally `FAILED` outbox row is a manual SQL update today (see
-  [outbox-backlog-recovery.md](./outbox-backlog-recovery.md)); further operational automation is
-  tracked on the roadmap.
+  check). See [Payment Platform MVP Progress](../roadmap.md) for planned enhancements beyond this MVP scope
+  (account unlock automation, `POST /accounts` idempotency, automated outbox DLQ replay).

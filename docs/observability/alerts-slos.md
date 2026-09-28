@@ -12,11 +12,7 @@
 
 This document is the initial operating draft for service-level objectives and alerting.
 
-For gaps we have today, add concrete follow-up tasks in next phase planning: [`docs/roadmap.md`](../roadmap.md).
-
 ## Current Status
-
-> No formal SLOs yet.
 
 We currently collect core telemetry and have partial dashboards, but we have not ratified production SLO contracts.
 
@@ -24,16 +20,16 @@ We currently collect core telemetry and have partial dashboards, but we have not
 
 These are draft targets to be reviewed with product and platform owners.
 
-| Area | Candidate SLI | Candidate SLO (30-day window) |
-|---|---|---|
-| API availability | Successful auth responses / total auth requests | >= 99.9% |
-| API latency | p95 latency for `POST /authorisations` | <= 300 ms |
-| API latency | p99 latency for `POST /authorisations` | <= 800 ms |
-| Error budget | 5xx ratio for auth API | <= 0.2% |
-| Fraud dependency | p95 fraud call latency | <= 200 ms |
-| Outbox durability | Max outbox publish lag | <= 120 s |
-| Kafka reliability | Publish failure ratio | <= 0.1% |
-| Idempotency safety | Duplicate processing escapes | 0 known escapes |
+| Area               | Candidate SLI                                   | Candidate SLO (30-day window) |
+|--------------------|-------------------------------------------------|-------------------------------|
+| API availability   | Successful auth responses / total auth requests | >= 99.9%                      |
+| API latency        | p95 latency for `POST /authorisations`          | <= 300 ms                     |
+| API latency        | p99 latency for `POST /authorisations`          | <= 800 ms                     |
+| Error budget       | 5xx ratio for auth API                          | <= 0.2%                       |
+| Fraud dependency   | p95 fraud call latency                          | <= 200 ms                     |
+| Outbox durability  | Max outbox publish lag                          | <= 120 s                      |
+| Kafka reliability  | Publish failure ratio                           | <= 0.1%                       |
+| Idempotency safety | Duplicate processing escapes                    | 0 known escapes               |
 
 ## Proposed Initial Alerts (Draft Thresholds)
 

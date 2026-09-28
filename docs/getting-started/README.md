@@ -227,10 +227,10 @@ Also useful:
   `Payment Platform Overview` dashboard is provisioned and scraping data.
 
 Want to see what "working" looks like before you dig in yourself? See
-[`docs/observability/telemetry.md` § Dashboards](../observability/telemetry.md#5-dashboards) and
+[Telemetry Guidelines § Dashboards](../observability/telemetry.md#5-dashboards) and
 [`docs/observability/dashboard-screenshots/`](../observability/dashboard-screenshots/) for sample
 dashboard panels, and
-[`docs/observability/telemetry.md` § Correlating Logs, Metrics, and Traces](../observability/telemetry.md#6-correlating-logs-metrics-and-traces)
+[Telemetry Guidelines § Correlating Logs, Metrics, and Traces](../observability/telemetry.md#6-correlating-logs-metrics-and-traces)
 for a worked example matching a log line to its trace and metric data point — also demonstrated live
 in the [Demo Guide § Correlate a Log Line to a Trace](./demo-guide.md#correlate-a-log-line-to-a-trace).
 
@@ -298,6 +298,6 @@ starting.
 
 **Need more targeted diagnostics?**
 
-See [`docs/development/runbook.md`](../development/runbook.md) for deeper Postgres/Redis/Kafka/Tempo
-inspection commands, and [`docs/observability/runbook.md`](../observability/runbook.md) for
+See [Operational Runbook](../development/runbook.md) for deeper Postgres/Redis/Kafka/Tempo
+inspection commands, and [Observability Runbook (Lightweight)](../observability/runbook.md) for
 signal-driven failure triage.

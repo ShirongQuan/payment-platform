@@ -130,7 +130,7 @@ Defined in `OutboxBackoffPolicy`:
   failed for audit. See [Runbook links](#runbook-links).
 - This is a different concept from the ledger-service *consumer-side* Kafka DLT topic
   (`auth.events.ledger.dlt`), which handles Kafka-consumption failures, not publish failures — see
-  [`kafka-topics.md`](./kafka-topics.md).
+  [Kafka Topics](./kafka-topics.md).
 
 ## Deduplication
 
@@ -175,21 +175,31 @@ Exposed by `auth-service` via Micrometer/Prometheus (`/actuator/prometheus`):
 
 ## Runbook Links
 
-- [`outbox-backlog-recovery.md`](../flows/outbox-backlog-recovery.md) — detect/triage/retry/manual-replay
+- [Outbox Backlog Recovery](../flows/outbox-backlog-recovery.md) — detect/triage/retry/manual-replay
   procedure for a growing backlog or a terminally `FAILED` row, including the direct SQL query to
   find rows the `auth_outbox_backlog` gauge doesn't surface.
-- [`outbox-backlog-recovery-flow.mmd`](../flows/diagrams/outbox-backlog-recovery-flow.mmd) — decision-logic
-  flowchart companion to the above.
-- [`event-publishing-sequence.mmd`](../flows/diagrams/event-publishing-sequence.mmd) — sequence diagram for
-  the normal publish/retry/fail path.
-- [`failure-scenarios.md`](../flows/failure-scenarios.md) — scenario 3 covers an outbox publish
+- <p>
+    <a href="https://raw.githubusercontent.com/ShirongQuan/payment-platform/main/docs/flows/diagrams/outbox-backlog-recovery-flow.svg">
+  Outbox Backlog Recovery Flow Diagram
+    </a>
+  </p>
+
+  — decision-logic flowchart companion to the above.
+- <p>
+    <a href="https://raw.githubusercontent.com/ShirongQuan/payment-platform/main/docs/flows/diagrams/event-publishing-sequence.svg">
+  Event Publishing Sequence Diagram
+    </a>
+  </p>
+
+  — sequence diagram for the normal publish/retry/fail path.
+- [Failure Scenarios](../flows/failure-scenarios.md) — scenario 3 covers an outbox publish
   transient failure end-to-end.
 - [ADR 0001: Use Kafka + Transactional Outbox](../decisions/0001-use-kafka-outbox.md)
 
 ## Roadmap / Production Considerations
 
 The current implementation is deliberately scoped for an MVP demo. Recommended production
-improvements are tracked in [`docs/roadmap.md`](../roadmap.md) (Production Considerations and Next
+improvements are tracked in [Payment Platform MVP Progress](../roadmap.md) (Production Considerations and Next
 Steps sections), including:
 
 - An admin endpoint or scheduled "cool-down retry" job to auto-requeue `FAILED` rows instead of a
@@ -198,7 +208,5 @@ Steps sections), including:
   (payload, complete error/attempt history) rather than overwriting `retry_count`/`status` in
   place.
 - Authenticated/encrypted transport for Kafka (SASL/mTLS) and topic-level ACLs — see the Security
-  section of [`kafka-topics.md`](./kafka-topics.md#securitygovernance) and
-  [`docs/roadmap.md`](../roadmap.md#6-production-considerations).
 
 

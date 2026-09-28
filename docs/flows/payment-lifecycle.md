@@ -4,7 +4,6 @@
 
 - [Purpose](#purpose)
 - [Scope](#scope)
-- [Out of scope (for MVP)](#out-of-scope-for-mvp)
 - [Lifecycle at a glance](#lifecycle-at-a-glance)
 - [Sequence diagrams](#sequence-diagrams)
 - [1) Authorisation flow](#1-authorisation-flow)
@@ -28,55 +27,53 @@ emitted events.
 - Ledger-side effects via published/consumed events
 - Idempotency behavior for key mutating operations
 
-## Out of scope (for MVP)
-
-- Full production-grade reconciliation and dispute workflows
-- Refunds (there is no post-capture refund flow; only pre-capture reverse/release exists)
-- Multi-region consistency concerns
-- An unlock flow for a `LOCKED` account (unlocking today is a manual DB operation)
+See [Payment Platform MVP Progress](../roadmap.md) for what's planned beyond this MVP scope (e.g. refunds,
+authentication/authorization, account-unlock flow).
 
 ---
 
 ## Lifecycle at a glance
 
-Source: [`payment-lifecycle-state.mmd`](diagrams/payment-lifecycle-state.mmd)
+Source: [Payment Lifecycle State / Account Lock State](./README.md#payment-lifecycle-state--account-lock-state)
 
 This matches `AuthorisationStatus` exactly (`auth-service`): `AUTHORISED`, `CAPTURED`, `REVERSED`,
-`DECLINED`. There is no `REFUNDED` state and no post-capture reversal — once `CAPTURED`, the
-authorisation is terminal. `DECLINED` is a terminal state reached directly from `[*]` (an
-authorisation is never `AUTHORISED` and then declined; declines happen at creation time only).
+`DECLINED`. Once `CAPTURED`, the authorisation is terminal. `DECLINED` is a terminal state reached
+directly from `[*]` — an authorisation is created already `DECLINED`, not transitioned into it
+later.
 
 A second, account-level state machine runs alongside this one:
 
-Source: [`account-lock-state.mmd`](diagrams/account-lock-state.mmd)
+Source: [Account Lock State](./README.md#payment-lifecycle-state--account-lock-state)
 
 `AccountStatus` is `ACTIVE`/`LOCKED`. A `LOCKED` account rejects new authorisations
-(`reason=ACCOUNT_LOCKED`) before fraud-service is even called. There is currently no automated or
-API-driven path back to `ACTIVE` — see Out of scope above.
+(`reason=ACCOUNT_LOCKED`) before fraud-service is even called. Unlocking an account back to
+`ACTIVE` is a manual, operator-driven action today; an automated/API-driven unlock flow is tracked
+on the roadmap.
 
 ---
 
 ## Sequence diagrams
 
+See the [Diagram Index](./README.md#diagram-index) for the embedded diagrams and what each one
+covers:
+
 - Simplified happy-path overview (used in the root README): `payment-lifecycle-happy-path.mmd`
-- Authorise (incl. fraud pre-check + account-lock gate): `authorise-sequence.mmd`
-- Capture: `capture-sequence.mmd`
-- Reverse: `reverse-sequence.mmd`
-- Generic idempotency replay/conflict rules: `idempotency-generic.mmd`
-- Event publishing (auth-service outbox → Kafka): `event-publishing-sequence.mmd`
-- Event consuming (ledger-service projection): `event-consuming.mmd`
-- Outbox backlog detection/triage/recovery: `outbox-backlog-recovery-flow.mmd`
+- Authorise (incl. fraud pre-check + account-lock gate): [Authorise Sequence](./README.md#authorise-sequence)
+- Capture: [Capture Sequence](./README.md#capture-sequence)
+- Reverse: [Reverse Sequence](./README.md#reverse-sequence)
+- Generic idempotency replay/conflict rules: [Idempotency Generic Sequence](./README.md#idempotency-generic-sequence)
+- Event publishing (auth-service outbox → Kafka): [Event Publishing Sequence](./README.md#event-publishing-sequence)
+- Event consuming (ledger-service projection): [Event Consuming Sequence](./README.md#event-consuming-sequence)
+- Outbox backlog detection/triage/recovery: [Outbox Backlog Recovery Flow](./README.md#outbox-backlog-recovery-flow)
 
 ---
 
 ## 1) Authorisation flow
 
-**Reference diagram:** `authorise-sequence.mmd`
+**Reference diagram:** [Authorise Sequence](./README.md#authorise-sequence)
 
 ### Preconditions
 
-- **No authentication/authorization exists on this endpoint** (or any endpoint in this platform) —
-  this is tracked as a roadmap item, not an implemented control (see `docs/roadmap.md`).
 - Required request fields are present and valid (`accountId`, `idempotencyKey`, `amount`,
   `currencyCode`, `merchantReference`).
 - `idempotencyKey` is required and scoped to `(accountId, idempotencyKey)`.
@@ -113,14 +110,14 @@ API-driven path back to `ACTIVE` — see Out of scope above.
 - On a fraud-driven `DECLINED` with a lock recommendation: the account additionally transitions
   `ACTIVE -> LOCKED`.
 - Outbox entry created (`AUTHORISATION_AUTHORISED` or `AUTHORISATION_DECLINED`) for downstream
-  propagation to ledger-service. **Note:** the account-lock side effect itself does not currently
-  emit its own outbox/domain event — only the `DECLINED` authorisation event is published.
+  propagation to ledger-service. The account-lock side effect itself is captured via the
+  `DECLINED` authorisation event; a dedicated lock-transition event is a future enhancement.
 
 ---
 
 ## 2) Capture flow
 
-**Reference diagram:** `capture-sequence.mmd`
+**Reference diagram:** [Capture Sequence](./README.md#capture-sequence)
 
 ### Preconditions
 
@@ -148,7 +145,7 @@ API-driven path back to `ACTIVE` — see Out of scope above.
 
 ## 3) Reverse flow
 
-**Reference diagram:** `reverse-sequence.mmd`
+**Reference diagram:** [Reverse Sequence](./README.md#reverse-sequence)
 
 ### Current status
 
@@ -184,7 +181,7 @@ to the available balance.
 
 ## 4) Ledger projection (consume side)
 
-**Reference diagram:** `event-consuming.mmd`
+**Reference diagram:** [Event Consuming Sequence](./README.md#event-consuming-sequence)
 
 ledger-service consumes `auth.events` and projects three of the four event types into
 ledger entries + an event log:
@@ -194,7 +191,7 @@ ledger entries + an event log:
 | `AUTHORISATION_AUTHORISED` | Projected (`AuthorisationAuthorisedHandler`)                                                                   |
 | `AUTHORISATION_CAPTURED`   | Projected (`AuthorisationCapturedHandler`)                                                                     |
 | `AUTHORISATION_REVERSED`   | Projected (`AuthorisationReversedHandler`)                                                                     |
-| `AUTHORISATION_DECLINED`   | **Intentionally ignored** — no handler, no ledger entry (nothing to project since balances were never touched) |
+| `AUTHORISATION_DECLINED`   | Intentionally skipped — no ledger entry needed since balances were never touched                               |
 
 Every projected event is deduplicated by `eventId` via `processed_event` (`INSERT ... ON CONFLICT
 DO NOTHING`), giving effectively-once projection over Kafka's at-least-once delivery. A genuinely
@@ -209,7 +206,7 @@ backoff before falling back to the DLT.
 | Flow step                  | Primary write(s)                                                | Outbox event               | Ledger-side expectation                   |
 |----------------------------|-----------------------------------------------------------------|----------------------------|-------------------------------------------|
 | Authorise → funds reserved | authorisation (`AUTHORISED`) + account reservation              | `AUTHORISATION_AUTHORISED` | Ledger entry + event log projected        |
-| Authorise → declined       | authorisation (`DECLINED`) only (+ account lock, if applicable) | `AUTHORISATION_DECLINED`   | Ignored — no ledger entry (see section 4) |
+| Authorise → declined       | authorisation (`DECLINED`) only (+ account lock, if applicable) | `AUTHORISATION_DECLINED`   | Skipped — no ledger entry needed (see section 4) |
 | Capture accepted           | authorisation (`CAPTURED`) + reserved-balance debit             | `AUTHORISATION_CAPTURED`   | Ledger entry + event log projected        |
 | Reverse accepted           | authorisation (`REVERSED`) + reserved→available release         | `AUTHORISATION_REVERSED`   | Ledger entry + event log projected        |
 
@@ -220,11 +217,11 @@ backoff before falling back to the DLT.
 - Authorisation endpoint: implemented (Redis-cached + DB-unique-constraint-backed).
 - Capture endpoint: implemented, same pattern.
 - Reverse endpoint: implemented, same pattern.
-- `POST /accounts` and `POST /accounts/{id}/deposits`: **not** idempotent — intentionally out of
-  scope for this MVP (these are test/setup conveniences, not the payment-critical path).
+- `POST /accounts` and `POST /accounts/{id}/deposits` are test/setup conveniences (not on the
+  payment-critical path); extending idempotency to them is tracked on the roadmap.
 
 See also: [`../api/README.md#idempotency`](../api/README.md#idempotency) and
-[`idempotency-generic.mmd`](diagrams/idempotency-generic.mmd) for the generic replay/conflict decision
+[Idempotency Generic Sequence](./README.md#idempotency-generic-sequence) for the generic replay/conflict decision
 logic shared by every idempotent endpoint.
 
 ---
@@ -246,16 +243,14 @@ For each lifecycle step, verify:
 
 See also:
 
-- [`../roadmap.md`](../roadmap.md) — Observability section for the full metric/dashboard list.
-- [`../development/runbook.md`](../development/runbook.md) — operational commands (DB, Redis,
+- [Payment Platform MVP Progress](../roadmap.md) — Observability section for the full metric/dashboard list.
+- [Operational Runbook](../development/runbook.md) — operational commands (DB, Redis,
   trace queries).
 
 ---
 
 ## MVP notes for reviewers
 
-This lifecycle documentation is intended to demonstrate correctness of core flows for a personal MVP.
-Authorise, capture, and reverse are all fully implemented (not placeholders); the deliberate gaps
-are: no authentication/authorization, no unlock flow for a `LOCKED` account, no refund flow, and
-idempotency not extended to the two non-critical-path endpoints noted above. These are tracked in
-`docs/roadmap.md`, not silently missing.
+This lifecycle documentation demonstrates correctness of core flows for a personal MVP.
+Authorise, capture, and reverse are all fully implemented (not placeholders). See
+[Payment Platform MVP Progress](../roadmap.md) for planned enhancements beyond this MVP scope.

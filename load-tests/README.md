@@ -11,7 +11,7 @@ dashboards, for demos and manual verification.
 
 For **why** these scenarios exist, the workload model, concurrency assumptions, success criteria,
 and baseline results, see the detailed methodology doc:
-**[docs/testing/load-testing.md](../docs/testing/load-testing.md)**.
+**[Load Testing Report](../docs/testing/load-testing.md)**.
 
 ## Table of Contents
 
@@ -56,7 +56,7 @@ kcat -V
 | `generate-concurrency-conflicts.sh`  | Fires truly concurrent authorise/capture/reverse requests to exercise idempotency-race and optimistic-lock conflict paths | seconds (rounds-dependent) |
 
 For the phase-by-phase design, the mechanics of each script, and why they're structured this way,
-see [docs/testing/load-testing.md](../docs/testing/load-testing.md).
+see [Load Testing Report](../docs/testing/load-testing.md).
 
 ## Environment Variables
 
@@ -160,7 +160,7 @@ curl -s http://localhost:9020/actuator/prometheus \
 With each result, record: commit/image version, date, environment, script parameters (rounds,
 counts, intervals), and any relevant Grafana/Tempo screenshots or trace ids — see the baseline
 table format in
-[docs/testing/load-testing.md § Baseline Results](../docs/testing/load-testing.md#9-baseline-results).
+[Load Testing Report § Baseline Results](../docs/testing/load-testing.md#9-baseline-results).
 
 `results/` is a local, gitignored scratch directory — do not commit generated result files.
 

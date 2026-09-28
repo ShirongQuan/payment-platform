@@ -1,6 +1,6 @@
 # Observability Images
 
-Screenshots referenced from the root [`README.md`](../../../README.md) "Observability" highlight
+Screenshots referenced from the root [Payment Platform](../../../README.md) "Observability" highlight
 section.
 
 Expected files:
@@ -11,11 +11,11 @@ Expected files:
 - `tempo-trace.png` — a screenshot of a single distributed trace in Grafana Explore → Tempo (e.g.
   a `POST /authorisations` trace showing the `auth-service → fraud-service` span pair and the DB
   transaction span), per
-  [`docs/getting-started/demo-guide.md` § Inspect Distributed Traces](../../getting-started/demo-guide.md#inspect-distributed-traces).
+  [Payment Platform Demo Guide § Inspect Distributed Traces](../../getting-started/demo-guide.md#inspect-distributed-traces).
 
 These are single "quick preview" images for the root README. Per-panel screenshots used inside the
 detailed telemetry reference (one per critical panel, e.g. outbox lag, DLT rate) live separately in
 [`../dashboard-screenshots/`](../dashboard-screenshots/) and are wired into
-[`../telemetry.md`](../telemetry.md) — see that folder's README for the full list.
+[Telemetry Guidelines](../telemetry.md) — see that folder's README for the full list.
 
 

@@ -2,7 +2,6 @@
 
 ## Table of Contents
 
-- [ER Diagrams](#er-diagrams)
 - [Auth DB (auth-service)](#auth-db-auth-service)
 - [Ledger DB (ledger-service)](#ledger-db-ledger-service)
 - [Fraud DB (fraud-service)](#fraud-db-fraud-service)
@@ -10,13 +9,17 @@
 
 This document summarizes the core tables used by `auth-service`, `fraud-service`, and `ledger-service`.
 
-## ER Diagrams
-
-- Auth DB: [`auth-er-diagram.mmd`](auth-er-diagram.mmd)
-- Fraud DB: [`fraud-er-diagram.mmd`](fraud-er-diagram.mmd)
-- Ledger DB: [`ledger-er-diagram.mmd`](ledger-er-diagram.mmd)
-
 ## Auth DB (auth-service)
+
+### Auth ER Diagram
+
+<p>
+  <a href="https://raw.githubusercontent.com/ShirongQuan/payment-platform/main/docs/data/diagrams/auth-er-diagram.svg">
+    <img src="diagrams/auth-er-diagram.svg" alt="Auth DB ER diagram" width="100%" />
+  </a>
+</p>
+
+*Fig 1. Auth ER Diagram*
 
 ### Main tables
 
@@ -51,6 +54,16 @@ This document summarizes the core tables used by `auth-service`, `fraud-service`
 
 ## Ledger DB (ledger-service)
 
+### Ledger ER Diagram
+
+<p>
+  <a href="https://raw.githubusercontent.com/ShirongQuan/payment-platform/main/docs/data/diagrams/ledger-er-diagram.svg">
+    <img src="diagrams/ledger-er-diagram.svg" alt="Ledger DB ER diagram" width="100%" />
+  </a>
+</p>
+
+*Fig 2. Ledger ER Diagram*
+
 ### Main tables
 
 - `ledger_entry`
@@ -73,18 +86,31 @@ This document summarizes the core tables used by `auth-service`, `fraud-service`
 
 ## Fraud DB (fraud-service)
 
+### Fraud ER Diagram
+
+<p>
+  <a href="https://raw.githubusercontent.com/ShirongQuan/payment-platform/main/docs/data/diagrams/fraud-er-diagram.svg">
+    <img src="diagrams/fraud-er-diagram.svg" alt="Fraud DB ER diagram" width="100%" />
+  </a>
+</p>
+
+*Fig 3. Fraud ER Diagram*
+
 ### Main tables
 
 - `fraud_evaluation`
     - Durable record for one fraud evaluation per `(account_id, idempotency_key)` request.
-    - Stores request fingerprint (`request_hash`), risk outcome (`risk_score`, `decision`), and detailed rule output (`rule_result`).
+    - Stores request fingerprint (`request_hash`), risk outcome (`risk_score`, `decision`), and detailed rule output (
+      `rule_result`).
     - Persists account-lock recommendation signals via `lock_recommended` and `lock_reason_code`.
 
 ### Idempotency strategy
 
 - `fraud_evaluation`
-    - Unique index `uq_authorisation_event_account_idempotency` on `(account_id, idempotency_key)` ensures deduplication per account.
-    - The service first claims a request with a `PENDING` row, then finalizes the same row with score/decision to handle concurrent duplicates safely.
+    - Unique index `uq_authorisation_event_account_idempotency` on `(account_id, idempotency_key)` ensures deduplication
+      per account.
+    - The service first claims a request with a `PENDING` row, then finalizes the same row with score/decision to handle
+      concurrent duplicates safely.
 
 ## End-to-end event reliability
 

@@ -146,8 +146,8 @@ docker compose -f infra/docker/docker-compose.yml up -d
 
 This section covers *how to run* the test suite. For test design — the pyramid, what each level is
 responsible for, mock/stub strategy, and the required-coverage scenario catalog — see
-[`docs/testing/strategy.md`](../testing/strategy.md) and
-[`docs/testing/scenarios.md`](../testing/scenarios.md).
+[Testing Strategy](../testing/strategy.md) and
+[Test Scenarios Catalog](../testing/scenarios.md).
 
 Run all unit + integration tests across every module:
 
@@ -184,7 +184,7 @@ Docker Engine) first if those tests fail to start containers.
 
 End-to-end journeys and reliability signals (idempotency replay, circuit breaker transitions, DLT
 routing, concurrency conflicts) are exercised against a fully running stack using the scripts in
-`load-tests/`, documented in [`docs/testing/load-testing.md`](../testing/load-testing.md) and used
+`load-tests/`, documented in [Load Testing Report](../testing/load-testing.md) and used
 directly in the [Demo Guide](./demo-guide.md).
 
 ```bash
@@ -201,7 +201,7 @@ Checkstyle/Spotless/PMD plugin is configured in any `pom.xml` today). Until one 
   Java/Spring conventions with 4-space indentation).
 - Rely on your IDE's default Java formatter and its built-in inspections for quick feedback.
 - Adding a shared formatter (e.g. Spotless with Google Java Format) and a Checkstyle/PMD ruleset
-  enforced in CI is tracked as a future improvement — see [`docs/roadmap.md`](../roadmap.md).
+  enforced in CI is tracked as a future improvement — see [Payment Platform MVP Progress](../roadmap.md).
 
 ## Build Docker Images
 
@@ -231,7 +231,7 @@ A typical inner loop for a code change:
    debugging).
 3. Run focused unit/integration tests for the module you're touching (`mvn -pl <service> test`).
 4. Exercise the change manually with `curl`/Postman/Bruno, or the sample requests in
-   [`docs/development/local-setup.md`](../development/local-setup.md).
+   [Local Development Guide](../development/local-setup.md).
 5. Before pushing, run the full verification build (`mvn -B -ntp clean verify`) to mirror CI.
 6. If the change affects a service that others run as a container (demo/E2E), rebuild its Docker
    image and re-validate with the containerized run mode before opening a PR.
@@ -273,5 +273,5 @@ haven't set container-network environment variables (e.g. `SPRING_DATASOURCE_URL
 
 **More operational/debugging commands**
 
-See [`docs/development/runbook.md`](../development/runbook.md) for Postgres/Redis CLI inspection,
+See [Operational Runbook](../development/runbook.md) for Postgres/Redis CLI inspection,
 Tempo TraceQL queries, and Kafka DLT-generation commands used during development.

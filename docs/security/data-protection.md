@@ -12,7 +12,7 @@
 
 > **Reading this document:** every section is broken into **Current** (what's implemented today),
 > **Gap** (what's deliberately not yet in place), and **Next step** (planned control + roadmap
-> reference). See [`docs/roadmap.md`](../roadmap.md) for full sequencing.
+> reference). See [Payment Platform MVP Progress](../roadmap.md) for full sequencing.
 
 ## Data Classification
 
@@ -50,7 +50,7 @@ masking review performed before storage — see [Roadmap](#roadmap).
 
 Each service only ever queries its own database — there is no cross-schema access
 (`auth-service` never reads `fraud_db`/`ledger_db` directly, etc.); see
-[`trust-boundaries.md` § Data boundary](../architecture/trust-boundaries.md#3-data-boundary-financial--behavioral-data-at-rest).
+[Trust Boundaries § Data boundary](../architecture/trust-boundaries.md#3-data-boundary-financial--behavioral-data-at-rest).
 
 ## Encryption Status
 
@@ -102,7 +102,7 @@ Each service only ever queries its own database — there is no cross-schema acc
   in plaintext by default unless explicit redaction is added first.
 - **Next step**: introduce a redaction rule set (e.g. mask IP address octets, mask any future
   customer-identifying fields) as part of the compliance-hardening work — see
-  [`audit-compliance.md` § Log Integrity](./audit-compliance.md#log-integritytamper-considerations)
+  [Audit & Compliance § Log Integrity](./audit-compliance.md#log-integritytamper-considerations)
   and [Roadmap](#roadmap).
 
 ## Retention/Deletion Policy
@@ -118,7 +118,7 @@ Each service only ever queries its own database — there is no cross-schema acc
   the append-only `authorisation_event`/`ledger_event_log` audit tables.
 - **Next step**: define a retention policy (how long financial/audit records must be kept vs. when
   they can be archived or purged) as part of the compliance posture work — see
-  [`audit-compliance.md` § Compliance Posture Statement](./audit-compliance.md#compliance-posture-statement)
+  [Audit & Compliance § Compliance Posture Statement](./audit-compliance.md#compliance-posture-statement)
   and [Roadmap](#roadmap). Marked explicitly as **TBD** rather than silently omitted.
 
 ## Access Controls
@@ -148,7 +148,7 @@ Each service only ever queries its own database — there is no cross-schema acc
 ## Roadmap
 
 Full sequencing and target milestones for the gaps above are tracked in
-[`docs/roadmap.md`](../roadmap.md), specifically:
+[Payment Platform MVP Progress](../roadmap.md), specifically:
 
 - [§5 Next Steps](../roadmap.md#5-next-steps-prioritized) — items 1 (auth + role separation) and 4
   (API gateway, centralized authn/authz).
@@ -156,7 +156,7 @@ Full sequencing and target milestones for the gaps above are tracked in
   and network hardening (TLS, Kafka SASL/mTLS, Redis ACLs), secrets management/rotation, and
   compliance posture (audit logging, PCI-relevant controls).
 
-See also [`threat-model.md`](./threat-model.md) for the risk assessment these controls are meant to
-close, and [`audit-compliance.md`](./audit-compliance.md) for the audit-trail and compliance-posture
+See also [Threat Model](./threat-model.md) for the risk assessment these controls are meant to
+close, and [Audit & Compliance](./audit-compliance.md) for the audit-trail and compliance-posture
 detail.
 

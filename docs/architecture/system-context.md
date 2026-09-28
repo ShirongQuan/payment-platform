@@ -48,14 +48,15 @@ As one system, the platform is responsible for:
 
 - exposing the account/authorisation/capture/reverse HTTP API
 - enforcing idempotency and concurrency-safety on every mutating request (see
-  [ADR 0005](../decisions/0005-idempotency-and-concurrency.md) /
-  [ADR 0007](../decisions/0007-idempotency-store-and-key-policy.md))
+  [ADR 0005: Idempotency and Concurrency Rules for Authorisation Flows](../decisions/0005-idempotency-and-concurrency.md) /
+  [ADR 0007: Idempotency store and key policy](../decisions/0007-idempotency-store-and-key-policy.md))
 - evaluating fraud risk before committing a reservation, with resilience (circuit breaker/timeout, see
-  [ADR 0008](../decisions/0008-resilience4j-circuit-breaker-policy.md))
+  [ADR 0008: Use Resilience4j for Circuit Breaker / Time Limiter (Fraud Gateway)](../decisions/0008-resilience4j-circuit-breaker-policy.md))
 - durably publishing domain events (transactional outbox, see
-  [ADR 0001](../decisions/0001-use-kafka-outbox.md)) and projecting them into an auditable ledger that exposes
+  [ADR 0001: Use Kafka + Transactional Outbox](../decisions/0001-use-kafka-outbox.md)) and projecting them into an
+  auditable ledger that exposes
   read-only authorisation/account-event history via its own query API
-  ([ADR 0003](../decisions/0003-ledger-raw-and-normalized-events.md))
+  ([ADR 0003: Store Both Raw and Normalized Ledger Events](../decisions/0003-ledger-raw-and-normalized-events.md))
 
 Everything needed to do the above — the three application services, messaging/data infrastructure, and the
 observability stack — is part of one deployable platform today (single repo, single docker-compose environment,
@@ -67,7 +68,7 @@ no separate team/release boundary between them).
    operational/administrative endpoints (e.g. manual outbox replay, future reconciliation triggers) require an
    admin role while ordinary payment operations (`authorise`/`capture`/`reverse`) require an authenticated
    customer/client identity. This closes the biggest known gap called out in
-   [trust-boundaries.md](./trust-boundaries.md) — today every endpoint is open with no authentication or
+   [Trust Boundaries](./trust-boundaries.md) — today every endpoint is open with no authentication or
    authorization at all.
 2. **Add reconciliation.** Introduce a scheduled reconciliation job/service that cross-checks
    `auth-service`'s authorisations, the outbox event log, and `ledger-service`'s projected entries, detects

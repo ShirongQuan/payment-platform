@@ -143,7 +143,7 @@ Save the returned `id` as `AUTH_ID`. Behind the scenes: `auth-service` synchrono
 `fraud-service`'s `POST /fraud/check`, reserves funds (`availableBalance` decreases,
 `reservedBalance` increases), persists an `AUTHORISATION_AUTHORISED` domain event, and writes a
 matching `outbox_event` row in the same database transaction — see
-[`docs/eventing/outbox-pattern.md`](../eventing/outbox-pattern.md) for the full mechanism.
+[Outbox Pattern](../eventing/outbox-pattern.md) for the full mechanism.
 
 **Nice thing to point out:** re-sending the exact same request (same `idempotencyKey`, same
 payload) is completely safe — it returns the same stored result instead of creating a second
@@ -230,7 +230,7 @@ curl -s "http://localhost:9020/accounts/${ACCOUNT_ID}/events" | jq
 
 The second call returns the account's full event timeline as projected by `ledger-service` — a
 nice moment to highlight that `ledger-service` never talks to `auth-service` directly; it only
-consumes Kafka events, per [`docs/eventing/kafka-topics.md`](../eventing/kafka-topics.md).
+consumes Kafka events, per [Kafka Topics](../eventing/kafka-topics.md).
 
 <!-- TODO: take screenshot — Kafka UI (`http://localhost:9091`) browsing the `auth.events` topic,
      showing the `AUTHORISATION_AUTHORISED`/`AUTHORISATION_CAPTURED`/`AUTHORISATION_REVERSED`
@@ -259,7 +259,7 @@ sum(rate(auth_authorisations_total{status="AUTHORISED"}[5m]))
 histogram_quantile(0.95, sum by (le) (rate(auth_outbox_publish_lag_seconds_bucket[5m])))
 ```
 
-See [`docs/observability/telemetry.md`](../observability/telemetry.md) for the full panel/metric
+See [Telemetry Guidelines](../observability/telemetry.md) for the full panel/metric
 reference.
 
 <!-- TODO: take screenshot — Grafana "Payment Platform Overview" dashboard
@@ -288,7 +288,7 @@ request via a span **Link**, since it runs on a later `@Scheduled` publisher tic
 
 Open one of those spans and look at its **Links** panel to jump back to the original authorise
 request's trace — a good example of how tracing bridges a transactional-outbox handoff. See
-[`docs/development/runbook.md`](../development/runbook.md) for more TraceQL examples.
+[Operational Runbook](../development/runbook.md) for more TraceQL examples.
 
 <!-- TODO: take screenshot — Tempo trace waterfall (via Grafana Explore) for a
      `POST /authorisations` trace, showing the `auth-service → fraud-service` client/server span
@@ -410,7 +410,7 @@ cd load-tests
 ./generate-traffic.sh
 ```
 
-See [`docs/testing/load-testing.md`](../testing/load-testing.md) for what each phase of that
+See [Load Testing Report](../testing/load-testing.md) for what each phase of that
 script produces.
 
 ## Reset the Demo

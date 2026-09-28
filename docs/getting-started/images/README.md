@@ -1,7 +1,7 @@
 # Getting Started Images
 
-Screenshots referenced from the root [`README.md`](../../../README.md) "See It In Action" section
-and [`demo-guide.md`](../demo-guide.md).
+Screenshots referenced from the root [Payment Platform](../../../README.md) "See It In Action" section
+and [Payment Platform Demo Guide](../demo-guide.md).
 
 Expected files:
 
