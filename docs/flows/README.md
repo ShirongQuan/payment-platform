@@ -7,6 +7,7 @@
     - [Failure Scenarios](./failure-scenarios.md)
     - [Outbox Backlog Recovery](./outbox-backlog-recovery.md)
 - [Diagram Index](#diagram-index)
+    - [Payment Lifecycle Happy Path](#payment-lifecycle-happy-path)
     - [Authorise Sequence](#authorise-sequence)
     - [Capture Sequence](#capture-sequence)
     - [Reverse Sequence](#reverse-sequence)
@@ -39,6 +40,23 @@ This folder contains sequence diagrams and companion documentation for key runti
 
 This is the canonical place to view each diagram and see what it covers. Other docs in this folder
 link back here instead of restating the same summary.
+
+### Payment Lifecycle Happy Path
+
+<p>
+  <a href="https://raw.githubusercontent.com/ShirongQuan/payment-platform/main/docs/flows/diagrams/payment-lifecycle-happy-path.svg">
+    <img src="diagrams/payment-lifecycle-happy-path.svg" alt="Payment lifecycle happy path diagram" width="100%" />
+  </a>
+</p>
+
+Simplified, end-to-end happy-path overview (also used in the root `README`). Use for a quick,
+high-level mental model before diving into the more detailed per-step sequence diagrams below.
+
+Covers:
+
+- authorise -> reserve funds
+- capture -> settle reserved funds
+- ledger projection of the resulting events
 
 ### Authorise Sequence
 

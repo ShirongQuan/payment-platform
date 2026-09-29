@@ -134,10 +134,11 @@ Expected response (`200 OK`):
 }
 ```
 
-<!-- TODO: take screenshot — Swagger UI mid-`POST /authorisations` call (or terminal curl
-     request/response) showing the `200 OK` / `status: AUTHORISED` response above, then save it as
-     `docs/getting-started/images/demo-authorise-flow.png`. -->
-![Authorize a payment flow](./images/demo-authorise-flow.png)
+<p>
+  <a href="https://raw.githubusercontent.com/ShirongQuan/payment-platform/main/docs/observability/screenshots/trace/auth-request-e567d636-51fe-414a-938e-93d675f23094.png">
+    <img src="../observability/screenshots/trace/auth-request-e567d636-51fe-414a-938e-93d675f23094.png" alt="The authorise request sent to auth-service" width="100%" />
+  </a>
+</p>
 
 Save the returned `id` as `AUTH_ID`. Behind the scenes: `auth-service` synchronously calls
 `fraud-service`'s `POST /fraud/check`, reserves funds (`availableBalance` decreases,
@@ -232,11 +233,21 @@ The second call returns the account's full event timeline as projected by `ledge
 nice moment to highlight that `ledger-service` never talks to `auth-service` directly; it only
 consumes Kafka events, per [Kafka Topics](../eventing/kafka-topics.md).
 
-<!-- TODO: take screenshot — Kafka UI (`http://localhost:9091`) browsing the `auth.events` topic,
-     showing the `AUTHORISATION_AUTHORISED`/`AUTHORISATION_CAPTURED`/`AUTHORISATION_REVERSED`
-     records and their headers, then save it as
-     `docs/getting-started/images/demo-kafka-events.png`. -->
-![Kafka UI showing auth.events topic](./images/demo-kafka-events.png)
+<p>
+  <a href="https://raw.githubusercontent.com/ShirongQuan/payment-platform/main/docs/observability/screenshots/others/kafka-ui-0dd2e945-9609-4701-a1f4-1faf43f1e1d4-key.png">
+    <img src="../observability/screenshots/others/kafka-ui-0dd2e945-9609-4701-a1f4-1faf43f1e1d4-key.png" alt="Kafka UI showing an auth.events record's key" width="100%" />
+  </a>
+</p>
+<p>
+  <a href="https://raw.githubusercontent.com/ShirongQuan/payment-platform/main/docs/observability/screenshots/others/kafka-ui-0dd2e945-9609-4701-a1f4-1faf43f1e1d4-headers.png">
+    <img src="../observability/screenshots/others/kafka-ui-0dd2e945-9609-4701-a1f4-1faf43f1e1d4-headers.png" alt="Kafka UI showing an auth.events record's headers (eventId, eventType, correlationId)" width="100%" />
+  </a>
+</p>
+<p>
+  <a href="https://raw.githubusercontent.com/ShirongQuan/payment-platform/main/docs/observability/screenshots/others/kafka-ui-0dd2e945-9609-4701-a1f4-1faf43f1e1d4-value.png">
+    <img src="../observability/screenshots/others/kafka-ui-0dd2e945-9609-4701-a1f4-1faf43f1e1d4-value.png" alt="Kafka UI showing an auth.events record's value" width="100%" />
+  </a>
+</p>
 
 ## View Metrics and Dashboards
 
@@ -262,11 +273,46 @@ histogram_quantile(0.95, sum by (le) (rate(auth_outbox_publish_lag_seconds_bucke
 See [Telemetry Guidelines](../observability/telemetry.md) for the full panel/metric
 reference.
 
-<!-- TODO: take screenshot — Grafana "Payment Platform Overview" dashboard
-     (`http://localhost:3000`) showing the panel grid described above (HTTP p95 latency, outbox
-     lag/backlog, consumer throughput, idempotency outcomes), then save it as
-     `docs/getting-started/images/demo-grafana-overview.png`. -->
-![Grafana Payment Platform Overview dashboard](./images/demo-grafana-overview.png)
+<p>
+  <a href="https://raw.githubusercontent.com/ShirongQuan/payment-platform/main/docs/observability/screenshots/dashboard/payment-platform-dashboard-1.png">
+    <img src="../observability/screenshots/dashboard/payment-platform-dashboard-1.png" alt="Payment Platform Overview dashboard panel 1" width="100%" />
+  </a>
+</p>
+<p>
+  <a href="https://raw.githubusercontent.com/ShirongQuan/payment-platform/main/docs/observability/screenshots/dashboard/payment-platform-dashboard-2.png">
+    <img src="../observability/screenshots/dashboard/payment-platform-dashboard-2.png" alt="Payment Platform Overview dashboard panel 2" width="100%" />
+  </a>
+</p>
+<p>
+  <a href="https://raw.githubusercontent.com/ShirongQuan/payment-platform/main/docs/observability/screenshots/dashboard/payment-platform-dashboard-3.png">
+    <img src="../observability/screenshots/dashboard/payment-platform-dashboard-3.png" alt="Payment Platform Overview dashboard panel 3" width="100%" />
+  </a>
+</p>
+<p>
+  <a href="https://raw.githubusercontent.com/ShirongQuan/payment-platform/main/docs/observability/screenshots/dashboard/payment-platform-dashboard-4.png">
+    <img src="../observability/screenshots/dashboard/payment-platform-dashboard-4.png" alt="Payment Platform Overview dashboard panel 4" width="100%" />
+  </a>
+</p>
+<p>
+  <a href="https://raw.githubusercontent.com/ShirongQuan/payment-platform/main/docs/observability/screenshots/dashboard/payment-platform-dashboard-5.png">
+    <img src="../observability/screenshots/dashboard/payment-platform-dashboard-5.png" alt="Payment Platform Overview dashboard panel 5" width="100%" />
+  </a>
+</p>
+<p>
+  <a href="https://raw.githubusercontent.com/ShirongQuan/payment-platform/main/docs/observability/screenshots/dashboard/payment-platform-dashboard-6.png">
+    <img src="../observability/screenshots/dashboard/payment-platform-dashboard-6.png" alt="Payment Platform Overview dashboard panel 6" width="100%" />
+  </a>
+</p>
+<p>
+  <a href="https://raw.githubusercontent.com/ShirongQuan/payment-platform/main/docs/observability/screenshots/dashboard/payment-platform-dashboard-7.png">
+    <img src="../observability/screenshots/dashboard/payment-platform-dashboard-7.png" alt="Payment Platform Overview dashboard panel 7" width="100%" />
+  </a>
+</p>
+<p>
+  <a href="https://raw.githubusercontent.com/ShirongQuan/payment-platform/main/docs/observability/screenshots/dashboard/payment-platform-dashboard-8.png">
+    <img src="../observability/screenshots/dashboard/payment-platform-dashboard-8.png" alt="Payment Platform Overview dashboard panel 8" width="100%" />
+  </a>
+</p>
 
 ## Inspect Distributed Traces
 
@@ -290,11 +336,16 @@ Open one of those spans and look at its **Links** panel to jump back to the orig
 request's trace — a good example of how tracing bridges a transactional-outbox handoff. See
 [Operational Runbook](../development/runbook.md) for more TraceQL examples.
 
-<!-- TODO: take screenshot — Tempo trace waterfall (via Grafana Explore) for a
-     `POST /authorisations` trace, showing the `auth-service → fraud-service` client/server span
-     pair and the DB transaction span, then save it as
-     `docs/getting-started/images/demo-tempo-trace.png`. -->
-![Tempo trace waterfall for an authorise request](./images/demo-tempo-trace.png)
+<p>
+  <a href="https://raw.githubusercontent.com/ShirongQuan/payment-platform/main/docs/observability/screenshots/trace/auth-trace-e567d636-51fe-414a-938e-93d675f23094.png">
+    <img src="../observability/screenshots/trace/auth-trace-e567d636-51fe-414a-938e-93d675f23094.png" alt="Tempo span waterfall for the authorise request (auth-service to fraud-service, plus the DB transaction span)" width="100%" />
+  </a>
+</p>
+<p>
+  <a href="https://raw.githubusercontent.com/ShirongQuan/payment-platform/main/docs/observability/screenshots/trace/outbox-trace-e567d636-51fe-414a-938e-93d675f23094.png">
+    <img src="../observability/screenshots/trace/outbox-trace-e567d636-51fe-414a-938e-93d675f23094.png" alt="The linked outbox-to-Kafka publish trace, reached via the span Link on the original trace" width="100%" />
+  </a>
+</p>
 
 ## Correlate a Log Line to a Trace
 
@@ -331,11 +382,44 @@ describe the exact same request.
    `Auth request outcomes (last 5m)` — one log, one trace, one metric point, all describing the same
    authorise call.
 
-A captured example of this three-way view lives at
-`docs/observability/dashboard-screenshots/log-trace-metric-correlation.png` (see
+A captured example of this walkthrough — the request, its per-service log lines, its Tempo traces,
+and its dashboard panel — lives in `docs/observability/screenshots/trace/` as the linked series of
+screenshots below, all sharing the same `correlationId` (see
 [
 `docs/observability/telemetry.md` § 6) Correlating Logs, Metrics, and Traces](../observability/telemetry.md#6-correlating-logs-metrics-and-traces)
-for the full write-up and the note on today's plain-text log format).
+for the full write-up and the note on today's plain-text log format):
+
+**1. Auth request**
+
+<p><a href="https://raw.githubusercontent.com/ShirongQuan/payment-platform/main/docs/observability/screenshots/trace/auth-request-e567d636-51fe-414a-938e-93d675f23094.png"><img src="../observability/screenshots/trace/auth-request-e567d636-51fe-414a-938e-93d675f23094.png" alt="The authorise request sent to auth-service" width="100%" /></a></p>
+
+**2. Auth log**
+
+<p><a href="https://raw.githubusercontent.com/ShirongQuan/payment-platform/main/docs/observability/screenshots/trace/auth-log-e567d636-51fe-414a-938e-93d675f23094.png"><img src="../observability/screenshots/trace/auth-log-e567d636-51fe-414a-938e-93d675f23094.png" alt="auth-service log line with traceId, spanId, and correlationId highlighted" width="100%" /></a></p>
+
+**3. Fraud log**
+
+<p><a href="https://raw.githubusercontent.com/ShirongQuan/payment-platform/main/docs/observability/screenshots/trace/fraud-log-e567d636-51fe-414a-938e-93d675f23094.png"><img src="../observability/screenshots/trace/fraud-log-e567d636-51fe-414a-938e-93d675f23094.png" alt="fraud-service log line for the same trace" width="100%" /></a></p>
+
+**4. Ledger log**
+
+<p><a href="https://raw.githubusercontent.com/ShirongQuan/payment-platform/main/docs/observability/screenshots/trace/leger-log-e567d636-51fe-414a-938e-93d675f23094.png"><img src="../observability/screenshots/trace/leger-log-e567d636-51fe-414a-938e-93d675f23094.png" alt="ledger-service log line for the same trace, after the outbox hop" width="100%" /></a></p>
+
+**5. Auth trace**
+
+<p><a href="https://raw.githubusercontent.com/ShirongQuan/payment-platform/main/docs/observability/screenshots/trace/auth-trace-e567d636-51fe-414a-938e-93d675f23094.png"><img src="../observability/screenshots/trace/auth-trace-e567d636-51fe-414a-938e-93d675f23094.png" alt="Tempo span waterfall for the authorise request (auth-service to fraud-service, plus the DB transaction span)" width="100%" /></a></p>
+
+**6. Node graph**
+
+<p><a href="https://raw.githubusercontent.com/ShirongQuan/payment-platform/main/docs/observability/screenshots/trace/node-graph-e567d636-51fe-414a-938e-93d675f23094.png"><img src="../observability/screenshots/trace/node-graph-e567d636-51fe-414a-938e-93d675f23094.png" alt="Tempo node graph for the same authorise-request trace" width="100%" /></a></p>
+
+**7. Outbox trace**
+
+<p><a href="https://raw.githubusercontent.com/ShirongQuan/payment-platform/main/docs/observability/screenshots/trace/outbox-trace-e567d636-51fe-414a-938e-93d675f23094.png"><img src="../observability/screenshots/trace/outbox-trace-e567d636-51fe-414a-938e-93d675f23094.png" alt="The linked outbox-to-Kafka publish trace, reached via the span Link on the original trace" width="100%" /></a></p>
+
+**8. Dashboard**
+
+<p><a href="https://raw.githubusercontent.com/ShirongQuan/payment-platform/main/docs/observability/screenshots/trace/dashboard-e567d636-51fe-414a-938e-93d675f23094.png"><img src="../observability/screenshots/trace/dashboard-e567d636-51fe-414a-938e-93d675f23094.png" alt="Payment Platform Overview dashboard panel showing the same request's metric data point" width="100%" /></a></p>
 
 ## Demonstrate a Failure Scenario
 
@@ -361,10 +445,11 @@ curl -sS -X POST "http://localhost:9010/internal/test/failure-mode" \
 
 Send a few more authorise requests to show the breaker recovering `HALF_OPEN → CLOSED`.
 
-<!-- TODO: take screenshot — Grafana `Circuit breaker call outcomes (fraudService)` panel
-     (`http://localhost:3000`) showing the `OPEN` state during the fraud-service outage, then save
-     it as `docs/getting-started/images/demo-circuit-breaker.png`. -->
-![Grafana panel showing the fraudService circuit breaker OPEN](./images/demo-circuit-breaker.png)
+<p>
+  <a href="https://raw.githubusercontent.com/ShirongQuan/payment-platform/main/docs/observability/screenshots/dashboard/fraud-check.png">
+    <img src="../observability/screenshots/dashboard/fraud-check.png" alt="Grafana panel showing the fraudService circuit breaker OPEN" width="100%" />
+  </a>
+</p>
 
 ### Outbox lag and dead-letter-topic (DLT) routing
 
@@ -397,10 +482,11 @@ exception` Grafana panel light up:
 curl -s http://localhost:9020/actuator/prometheus | grep ledger_kafka_dlt_published_total
 ```
 
-<!-- TODO: take screenshot — Grafana `DLT publishes/min by topic and exception` panel
-     (`http://localhost:3000`) spiking after the malformed event lands on the dead-letter topic,
-     then save it as `docs/getting-started/images/demo-dlt-panel.png`. -->
-![Grafana panel showing a DLT publish spike](./images/demo-dlt-panel.png)
+<p>
+  <a href="https://raw.githubusercontent.com/ShirongQuan/payment-platform/main/docs/observability/screenshots/dashboard/dlt-increase-rate.png">
+    <img src="../observability/screenshots/dashboard/dlt-increase-rate.png" alt="Grafana panel showing a DLT publish spike" width="100%" />
+  </a>
+</p>
 
 Prefer a fully scripted version of this entire demo (bulk traffic, circuit breaker, DLT, dedup, and
 concurrency-conflict phases in one run)? Use:

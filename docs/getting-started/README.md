@@ -31,23 +31,23 @@ Required for every run mode:
 
 Additional tools, depending on run mode:
 
-| Tool | Needed for |
-|---|---|
-| Java 21 | Locally built images, IDE development |
-| Maven 3.9+ | Locally built images, IDE development (the Docker build stage brings its own Maven, so host Maven is only required when building/running outside Docker) |
-| An IDE with Spring Boot support (IntelliJ IDEA, VS Code, etc.) | IDE development |
+| Tool                                                           | Needed for                                                                                                                                               |
+|----------------------------------------------------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------|
+| Java 21                                                        | Locally built images, IDE development                                                                                                                    |
+| Maven 3.9+                                                     | Locally built images, IDE development (the Docker build stage brings its own Maven, so host Maven is only required when building/running outside Docker) |
+| An IDE with Spring Boot support (IntelliJ IDEA, VS Code, etc.) | IDE development                                                                                                                                          |
 
 Included at no extra setup cost — these web UIs are started automatically as part of the infra
 Docker Compose stack, so there is nothing to install; just open the URL once the stack is up:
 
-| UI | URL | Purpose |
-|---|---|---|
-| pgAdmin | `http://localhost:5050` (login `admin@example.com` / `admin`) | Browse Postgres schemas/tables without a CLI |
-| Kafka UI | `http://localhost:9091` | Browse topics, partitions, and messages |
-| RedisInsight | `http://localhost:5540` | Browse Redis keys (idempotency cache, fraud velocity counters) |
-| Grafana | `http://localhost:3000` (login `admin` / `password` unless overridden) | Dashboards for metrics and traces |
-| Prometheus | `http://localhost:9090` | Raw metrics/queries |
-| Tempo (via Grafana Explore) | `http://localhost:3000` → Explore → Tempo datasource | Distributed traces |
+| UI                          | URL                                                                    | Purpose                                                        |
+|-----------------------------|------------------------------------------------------------------------|----------------------------------------------------------------|
+| pgAdmin                     | `http://localhost:5050` (login `admin@example.com` / `admin`)          | Browse Postgres schemas/tables without a CLI                   |
+| Kafka UI                    | `http://localhost:9091`                                                | Browse topics, partitions, and messages                        |
+| RedisInsight                | `http://localhost:5540`                                                | Browse Redis keys (idempotency cache, fraud velocity counters) |
+| Grafana                     | `http://localhost:3000` (login `admin` / `password` unless overridden) | Dashboards for metrics and traces                              |
+| Prometheus                  | `http://localhost:9090`                                                | Raw metrics/queries                                            |
+| Tempo (via Grafana Explore) | `http://localhost:3000` → Explore → Tempo datasource                   | Distributed traces                                             |
 
 Optional local tools you may want to install yourself:
 
@@ -56,11 +56,11 @@ Optional local tools you may want to install yourself:
 
 ## Choose a Run Mode
 
-| Mode | Best for | Application services | Infrastructure |
-|---|---|---|---|
-| [Pre-published images](#quick-start-with-pre-published-images) | Fastest demo | Docker Hub images | Docker Compose |
-| [Locally built images](#run-with-locally-built-images) | Validating code changes | Local Docker builds | Docker Compose |
-| [IDE development](#run-services-from-an-ide) | Debugging and development | IDE/local processes | Docker Compose |
+| Mode                                                           | Best for                  | Application services | Infrastructure |
+|----------------------------------------------------------------|---------------------------|----------------------|----------------|
+| [Pre-published images](#quick-start-with-pre-published-images) | Fastest demo              | Docker Hub images    | Docker Compose |
+| [Locally built images](#run-with-locally-built-images)         | Validating code changes   | Local Docker builds  | Docker Compose |
+| [IDE development](#run-services-from-an-ide)                   | Debugging and development | IDE/local processes  | Docker Compose |
 
 All three modes share the same infrastructure stack
 (`infra/docker/docker-compose.yml`: Postgres, Redis, Kafka, Prometheus, Grafana, Tempo, the OTel
@@ -169,18 +169,18 @@ overrides with container-network hostnames via environment variables.
 
 Key environment variables (all optional — shown with their defaults):
 
-| Variable | Default | Purpose |
-|---|---|---|
-| `AUTH_SERVICE_IMAGE` / `FRAUD_SERVICE_IMAGE` / `LEDGER_SERVICE_IMAGE` | `shirongquan/<service>:1.0.0` | Which image to run for each service (Compose modes only) |
-| `AUTH_SERVICE_PORT` / `FRAUD_SERVICE_PORT` / `LEDGER_SERVICE_PORT` | `9000` / `9010` / `9020` | Host+container port and `SERVER_PORT` for each service |
-| `FRAUD_SERVICE_PROFILE` | `dev` | Set to an empty/prod-like value to disable the dev-only `/internal/test/failure-mode` chaos endpoint on fraud-service |
-| `SPRING_DATASOURCE_URL` / `_USERNAME` / `_PASSWORD` | `jdbc:postgresql://localhost:5432/<db>` / `postgres` / `postgres` | Postgres connection (per-service database: `auth_db`, `fraud_db`, `ledger_db`) |
-| `SPRING_DATA_REDIS_HOST` / `_PORT` / `_DATABASE` | `localhost` / `6379` / `0` | Redis connection (auth-service and fraud-service only) |
-| `SPRING_KAFKA_BOOTSTRAP_SERVERS` | `localhost:9092` | Kafka bootstrap servers (auth-service and ledger-service) |
-| `FRAUD_BASE_URL` | `http://localhost:9010` | Where auth-service calls fraud-service's synchronous `/fraud/check` |
-| `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT` | `http://localhost:4318/v1/traces` | OTLP HTTP endpoint for the OTel Collector |
-| `TRACING_SAMPLING_PROBABILITY` | `1.0` | Fraction of root traces sampled (keep `1.0` locally for full visibility) |
-| `GRAFANA_ADMIN_USER` / `GRAFANA_ADMIN_PASSWORD` | `admin` / `password` | Grafana login (infra stack) |
+| Variable                                                              | Default                                                           | Purpose                                                                                                               |
+|-----------------------------------------------------------------------|-------------------------------------------------------------------|-----------------------------------------------------------------------------------------------------------------------|
+| `AUTH_SERVICE_IMAGE` / `FRAUD_SERVICE_IMAGE` / `LEDGER_SERVICE_IMAGE` | `shirongquan/<service>:1.0.0`                                     | Which image to run for each service (Compose modes only)                                                              |
+| `AUTH_SERVICE_PORT` / `FRAUD_SERVICE_PORT` / `LEDGER_SERVICE_PORT`    | `9000` / `9010` / `9020`                                          | Host+container port and `SERVER_PORT` for each service                                                                |
+| `FRAUD_SERVICE_PROFILE`                                               | `dev`                                                             | Set to an empty/prod-like value to disable the dev-only `/internal/test/failure-mode` chaos endpoint on fraud-service |
+| `SPRING_DATASOURCE_URL` / `_USERNAME` / `_PASSWORD`                   | `jdbc:postgresql://localhost:5432/<db>` / `postgres` / `postgres` | Postgres connection (per-service database: `auth_db`, `fraud_db`, `ledger_db`)                                        |
+| `SPRING_DATA_REDIS_HOST` / `_PORT` / `_DATABASE`                      | `localhost` / `6379` / `0`                                        | Redis connection (auth-service and fraud-service only)                                                                |
+| `SPRING_KAFKA_BOOTSTRAP_SERVERS`                                      | `localhost:9092`                                                  | Kafka bootstrap servers (auth-service and ledger-service)                                                             |
+| `FRAUD_BASE_URL`                                                      | `http://localhost:9010`                                           | Where auth-service calls fraud-service's synchronous `/fraud/check`                                                   |
+| `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT`                                  | `http://localhost:4318/v1/traces`                                 | OTLP HTTP endpoint for the OTel Collector                                                                             |
+| `TRACING_SAMPLING_PROBABILITY`                                        | `1.0`                                                             | Fraction of root traces sampled (keep `1.0` locally for full visibility)                                              |
+| `GRAFANA_ADMIN_USER` / `GRAFANA_ADMIN_PASSWORD`                       | `admin` / `password`                                              | Grafana login (infra stack)                                                                                           |
 
 For IDE development, no overrides are needed — the `localhost` defaults already line up with the
 ports the infra Compose file publishes to the host. For the two container-based modes, the app
@@ -228,7 +228,7 @@ Also useful:
 
 Want to see what "working" looks like before you dig in yourself? See
 [Telemetry Guidelines § Dashboards](../observability/telemetry.md#5-dashboards) and
-[`docs/observability/dashboard-screenshots/`](../observability/dashboard-screenshots/) for sample
+[`docs/observability/screenshots/dashboard/`](../observability/screenshots/) for sample
 dashboard panels, and
 [Telemetry Guidelines § Correlating Logs, Metrics, and Traces](../observability/telemetry.md#6-correlating-logs-metrics-and-traces)
 for a worked example matching a log line to its trace and metric data point — also demonstrated live

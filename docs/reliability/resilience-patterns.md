@@ -213,8 +213,8 @@ Recommended production improvements are tracked in
   [Next Steps item 4](../roadmap.md#5-next-steps-prioritized)).
 - A fuller operational runbook (detailed commands, trace queries, post-incident template) beyond
   today's lightweight top-5-scenarios runbook.
-- Formal SLOs/alerting rules (Prometheus Alertmanager) — dashboards and metrics exist today, but
-  paging policy and error budgets are not yet defined.
+- Formal SLOs/alerting rules (Prometheus Alertmanager) — dashboards and metrics exist today, and
+  paging policy and error budgets are planned as a future iteration.
 - Automated outbox dead-letter replay and DLT replay tooling, rather than today's manual SQL/replay
   procedures.
 

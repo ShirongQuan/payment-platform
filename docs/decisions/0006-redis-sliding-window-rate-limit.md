@@ -51,8 +51,8 @@ Trade-offs:
 
 ## Related
 
-- `docs/decisions/0007-idempotency-store-and-key-policy.md`
-- `docs/decisions/0008-resilience4j-circuit-breaker-policy.md`
+- [ADR 0007: Idempotency Store Strategy and Key Policy (Auth/Fraud)](./0007-idempotency-store-and-key-policy.md)
+- [ADR 0008: Use Resilience4j for Circuit Breaker / Time Limiter (Fraud Gateway)](./0008-resilience4j-circuit-breaker-policy.md)
 - `fraud-service/src/main/java/org/example/fraud/application/VelocityServiceRedisImpl.java`
 - `fraud-service/src/main/java/org/example/fraud/RedisLuaConfig.java`
 - `fraud-service/src/main/resources/scripts/sliding_window_rate_limit.lua`

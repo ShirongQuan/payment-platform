@@ -49,21 +49,23 @@ Trade-offs:
 - circuit breaker state is per `auth-service` instance (no shared state across instances), so different instances
   can independently be open/closed for the same downstream
 - no `@Retry` is currently configured for the fraud call — a transient blip is treated the same as a timeout/failure
-  rather than retried once before failing
+  rather than retried once before failing (see
+  [roadmap: Production Considerations](../roadmap.md#6-production-considerations))
 
 ## Alternatives Considered
 
 - add `@Retry` on top of `@CircuitBreaker`/`@TimeLimiter` (deferred, not rejected outright — see
   `AccountConcurrencyConflictException` docs, which note a `@Retry` decorator mirroring `ResilientFraudGateway`
   could resolve some race-loss retries; not yet adopted for the fraud gateway to avoid amplifying load on an
-  already-slow downstream during partial outages)
+  already-slow downstream during partial outages — tracked under
+  [roadmap: Production Considerations](../roadmap.md#6-production-considerations))
 - plain HTTP client timeout only, no circuit breaker (rejected: does not prevent repeated calls to a downstream
   that is already failing, no fail-fast behavior once failure is sustained)
 - hand-rolled circuit breaker/timeout logic (rejected: reinvents a well-tested library, worse observability)
 
 ## Related
 
-- `docs/decisions/0007-idempotency-store-and-key-policy.md`
+- [ADR 0007: Idempotency Store Strategy and Key Policy (Auth/Fraud)](./0007-idempotency-store-and-key-policy.md)
 - `auth-service/src/main/java/org/example/auth/fraud/ResilientFraudGateway.java`
 - `auth-service/src/main/java/org/example/auth/common/exception/AccountConcurrencyConflictException.java`
 - `auth-service/src/main/resources/application.yml` (resilience4j config block)

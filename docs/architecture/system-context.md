@@ -67,9 +67,7 @@ no separate team/release boundary between them).
 1. **Add security.** Introduce Spring Security + JWT on the customer-facing API, with role separation so that
    operational/administrative endpoints (e.g. manual outbox replay, future reconciliation triggers) require an
    admin role while ordinary payment operations (`authorise`/`capture`/`reverse`) require an authenticated
-   customer/client identity. This closes the biggest known gap called out in
-   [Trust Boundaries](./trust-boundaries.md) — today every endpoint is open with no authentication or
-   authorization at all.
+   customer/client identity.
 2. **Add reconciliation.** Introduce a scheduled reconciliation job/service that cross-checks
    `auth-service`'s authorisations, the outbox event log, and `ledger-service`'s projected entries, detects
    mismatches (e.g. an authorisation with no corresponding published event, or a ledger entry with no matching

@@ -99,15 +99,36 @@ The platform follows a C4 model:
 - Prometheus + Grafana dashboards for latency, error rate, outbox lag, DLT rate, and idempotency/
   concurrency-conflict counts; every log line carries `traceId`/`spanId`/`correlationId` for
   cross-referencing logs, traces, and metrics for the same request
-- 📄 [Telemetry Guidelines](docs/observability/telemetry.md) · [Observability Runbook (Lightweight)](docs/observability/runbook.md)
 
-TODO:
-![Grafana dashboard placeholder](docs/observability/images/grafana-dashboard.png)
-*Figure 3: Grafana dashboard — request latency, outbox lag, DLT rate.*
+📄 [Telemetry Guidelines](docs/observability/telemetry.md) · [Observability Runbook (Lightweight)](docs/observability/runbook.md)
 
-TODO:
-![Tempo trace placeholder](docs/observability/images/tempo-trace.png)
-*Figure 4: Distributed trace of an authorize request across services (Tempo).*
+**Grafana dashboard — platform health, authorisation flow**
+
+![Grafana dashboard placeholder](docs/observability/screenshots/dashboard/platform-health.png)
+<br/>
+![Grafana dashboard placeholder](docs/observability/screenshots/dashboard/authorisation-flow.png)
+*Figure 3: Grafana dashboard — platform health, authorisation flow.*
+
+**Auth trace**
+
+<p>
+  <a href="https://raw.githubusercontent.com/ShirongQuan/payment-platform/main/docs/observability/screenshots/trace/auth-trace-e567d636-51fe-414a-938e-93d675f23094.png">
+    <img src="docs/observability/screenshots/trace/auth-trace-e567d636-51fe-414a-938e-93d675f23094.png" alt="Tempo trace waterfall for an authorise request" width="100%" />
+  </a>
+</p>
+
+**Node graph**
+
+<p>
+  <a href="https://raw.githubusercontent.com/ShirongQuan/payment-platform/main/docs/observability/screenshots/trace/node-graph-e567d636-51fe-414a-938e-93d675f23094.png">
+    <img src="docs/observability/screenshots/trace/node-graph-e567d636-51fe-414a-938e-93d675f23094.png" alt="Tempo node graph for the same authorise-request trace" width="100%" />
+  </a>
+</p>
+
+*Figure 4: Distributed trace of an authorize request across services (Tempo) — span waterfall and
+node graph, both for the same `correlationId`. The full request → log → trace → metric walkthrough,
+including the linked outbox trace, is in
+[Telemetry Guidelines § Correlating Logs, Metrics, and Traces](docs/observability/telemetry.md#6-correlating-logs-metrics-and-traces).*
 
 ### API
 
@@ -163,7 +184,7 @@ trace the request across services:
 
 Preview of what you'll see:
 
-![Sequence diagram placeholder](docs/flows/diagrams/payment-lifecycle-happy-path.svg)
+![Payment Lifecycle Happy Path](docs/flows/diagrams/payment-lifecycle-happy-path.svg)
 *Figure 5: Authorize → Capture → Ledger posting → Event publish (happy path; see
 [Payment Lifecycle](docs/flows/payment-lifecycle.md) for the full per-endpoint sequence diagrams
 covering idempotency, concurrency, and failure handling).*
@@ -172,20 +193,20 @@ covering idempotency, concurrency, and failure handling).*
 
 Legend: ✅ Implemented · 🟡 Partial/Basic · 🔵 Planned
 
-| Area                                                         | Status                 | Details                                                                               |
-|--------------------------------------------------------------|------------------------|---------------------------------------------------------------------------------------|
-| Core payment flow (authorise/capture/reverse)                | ✅ Implemented          | [Payment State Machine](docs/domain/state-machine.md)                               |
-| Event-driven ledger (outbox + Kafka + DLT)                   | ✅ Implemented          | [Outbox Pattern](docs/eventing/outbox-pattern.md)                         |
-| Idempotency & concurrency control                            | ✅ Implemented          | [Concurrency & Consistency](docs/reliability/concurrency-consistency.md) |
-| Resilience (circuit breaker, fail-open, retries)             | ✅ Implemented          | [Resilience Patterns](docs/reliability/resilience-patterns.md)         |
-| Observability (traces, metrics, dashboards, correlated logs) | ✅ Implemented          | [Telemetry Guidelines](docs/observability/telemetry.md)                         |
-| Automated tests + CI build                                   | ✅ Implemented          | [Testing Strategy](docs/testing/strategy.md)                                       |
-| Load/traffic-generation scripts                              | 🟡 Demo-scale baseline | [load-tests/](load-tests/)                                                            |
-| AuthN/AuthZ (Spring Security + JWT)                          | 🔵 Planned             | [roadmap next steps #1](docs/roadmap.md#5-next-steps-prioritized)                     |
-| API gateway / infra-level rate limiting                      | 🔵 Planned             | [roadmap next steps #4](docs/roadmap.md#5-next-steps-prioritized)                     |
-| Reconciliation service                                       | 🔵 Planned             | [roadmap next steps #2](docs/roadmap.md#5-next-steps-prioritized)                     |
-| Customer-facing UI                                           | 🔵 Planned             | [roadmap next steps #3](docs/roadmap.md#5-next-steps-prioritized)                     |
-| Partial capture / refunds                                    | 🔵 Planned             | [roadmap production considerations](docs/roadmap.md#6-production-considerations)      |
+| Area                                                         | Status                 | Details                                                                          |
+|--------------------------------------------------------------|------------------------|----------------------------------------------------------------------------------|
+| Core payment flow (authorise/capture/reverse)                | ✅ Implemented          | [Payment State Machine](docs/domain/state-machine.md)                            |
+| Event-driven ledger (outbox + Kafka + DLT)                   | ✅ Implemented          | [Outbox Pattern](docs/eventing/outbox-pattern.md)                                |
+| Idempotency & concurrency control                            | ✅ Implemented          | [Concurrency & Consistency](docs/reliability/concurrency-consistency.md)         |
+| Resilience (circuit breaker, fail-open, retries)             | ✅ Implemented          | [Resilience Patterns](docs/reliability/resilience-patterns.md)                   |
+| Observability (traces, metrics, dashboards, correlated logs) | ✅ Implemented          | [Telemetry Guidelines](docs/observability/telemetry.md)                          |
+| Automated tests + CI build                                   | ✅ Implemented          | [Testing Strategy](docs/testing/strategy.md)                                     |
+| Load/traffic-generation scripts                              | 🟡 Demo-scale baseline | [load-tests/](load-tests/)                                                       |
+| AuthN/AuthZ (Spring Security + JWT)                          | 🔵 Planned             | [roadmap next steps #1](docs/roadmap.md#5-next-steps-prioritized)                |
+| API gateway / infra-level rate limiting                      | 🔵 Planned             | [roadmap next steps #4](docs/roadmap.md#5-next-steps-prioritized)                |
+| Reconciliation service                                       | 🔵 Planned             | [roadmap next steps #2](docs/roadmap.md#5-next-steps-prioritized)                |
+| Customer-facing UI                                           | 🔵 Planned             | [roadmap next steps #3](docs/roadmap.md#5-next-steps-prioritized)                |
+| Partial capture / refunds                                    | 🔵 Planned             | [roadmap production considerations](docs/roadmap.md#6-production-considerations) |
 
 Full detail, rationale, and prioritization live in [Payment Platform MVP Progress](docs/roadmap.md).
 
@@ -194,7 +215,7 @@ Full detail, rationale, and prioritization live in [Payment Platform MVP Progres
 | Area                                                        | Link                                                             |
 |-------------------------------------------------------------|------------------------------------------------------------------|
 | Getting started, demo, development                          | [docs/getting-started/](docs/getting-started/README.md)          |
-| Infrastructure (Docker Compose, ports, observability stack) | [Infrastructure](infra/README.md)                               |
+| Infrastructure (Docker Compose, ports, observability stack) | [Infrastructure](infra/README.md)                                |
 | Architecture (C4 L1–L3, trust boundaries)                   | [docs/architecture/](docs/architecture/README.md)                |
 | Payment flows & failure scenarios                           | [docs/flows/](docs/flows/README.md)                              |
 | Domain rules (ledger, state machine)                        | [docs/domain/](docs/domain/accounting-model.md)                  |
@@ -206,9 +227,9 @@ Full detail, rationale, and prioritization live in [Payment Platform MVP Progres
 | Security                                                    | [docs/security/](docs/security/threat-model.md)                  |
 | Testing strategy                                            | [docs/testing/](docs/testing/strategy.md)                        |
 | Load tests (how to run)                                     | [load-tests/](load-tests/README.md)                              |
-| Load-testing methodology (why, scenarios, results)          | [Load Testing Report](docs/testing/load-testing.md)     |
+| Load-testing methodology (why, scenarios, results)          | [Load Testing Report](docs/testing/load-testing.md)              |
 | Architecture Decision Records                               | [docs/decisions/](docs/decisions/README.md)                      |
-| Roadmap (status, next steps, production considerations)     | [Payment Platform MVP Progress](docs/roadmap.md)                               |
+| Roadmap (status, next steps, production considerations)     | [Payment Platform MVP Progress](docs/roadmap.md)                 |
 
 ---
 

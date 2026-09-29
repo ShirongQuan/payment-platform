@@ -36,7 +36,7 @@ Trade-offs:
 
 ## Related
 
-- `docs/data/data-model.md`
-- `docs/flows/event-consuming.mmd`
-- `docs/api/ledger-api.md`
+- [Data Model Overview](../data/data-model.md)
+- [Ledger Service API](../api/ledger-api.md)
+- <a href="https://raw.githubusercontent.com/ShirongQuan/payment-platform/main/docs/flows/diagrams/event-consuming.svg">Event Consuming Sequence</a> (sequence diagram)
 

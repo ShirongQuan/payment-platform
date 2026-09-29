@@ -794,7 +794,7 @@
           "refId": "A"
         }
       ],
-      "title": "Auth request outcomes (last 5m)",
+      "title": "Authorisation request outcomes (last 5m)",
       "type": "timeseries"
     },
     {

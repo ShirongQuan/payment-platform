@@ -182,7 +182,7 @@ table format in
 
 - **[Load-Testing Methodology](../docs/testing/load-testing.md)** — objectives, workload model,
   scenario definitions, concurrency assumptions, success criteria, baseline results, and
-  limitations
+  current scope
 - [Testing Strategy](../docs/testing/strategy.md)
 - [Business-Critical Scenarios](../docs/testing/scenarios.md)
 - [Operational Runbook](../docs/development/runbook.md) — manual `kcat` DLT/dedup reproduction steps

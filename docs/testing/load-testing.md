@@ -5,7 +5,7 @@
 
 ## Table of Contents
 
-- [1) Objectives and Non-Objectives](#1-objectives-and-non-objectives)
+- [1) Objectives and Current Focus](#1-objectives-and-current-focus)
 - [2) Workload Model](#2-workload-model)
 - [3) Test Environment](#3-test-environment)
 - [4) Traffic Profiles](#4-traffic-profiles)
@@ -15,12 +15,12 @@
 - [8) Latency and Error-Rate Thresholds](#8-latency-and-error-rate-thresholds)
 - [9) Baseline Results](#9-baseline-results)
 - [10) Resource Measurements](#10-resource-measurements)
-- [11) Bottlenecks](#11-bottlenecks)
-- [12) Limitations](#12-limitations)
+- [11) Performance Characteristics and Trade-offs](#11-performance-characteristics-and-trade-offs)
+- [12) Current Coverage and Next Steps](#12-current-coverage-and-next-steps)
 - [13) Conclusions and Follow-Up Work](#13-conclusions-and-follow-up-work)
 - [14) Reproducibility Steps](#14-reproducibility-steps)
 
-## 1) Objectives and Non-Objectives
+## 1) Objectives and Current Focus
 
 ### Objectives
 
@@ -32,18 +32,18 @@ This report answers three practical questions for the MVP:
   event dedup, concurrency conflicts)?
 - can another engineer reproduce the same traffic profile and verification steps locally?
 
-### Non-objectives
+### Current focus
 
-- **Not** a certified performance benchmark — there is no fixed, documented hardware profile, and
-  results are not directly comparable across machines.
-- **Not** sustained/soak testing — the scripts run for minutes, not hours; long-running stability
-  (memory leaks, connection-pool exhaustion, slow degradation) is out of scope today.
-- **Not** a substitute for the k6/Gatling-based throughput testing considered in
-  [§13](#13-conclusions-and-follow-up-work) — this is demo-scale, deterministic, easy-to-read
-  traffic generation, not a percentile-accurate load-testing framework.
-- Does not exercise `POST /accounts` / `POST /accounts/{id}/deposits` under load — these are
-  test/setup conveniences, not payment-critical endpoints (see
-  [Idempotency](../api/README.md#idempotency)).
+- This report captures **signal-level, demo-scale evidence**: deterministic, easy-to-read traffic
+  generation that proves the reliability behaviors work, run locally without a fixed, documented
+  hardware profile.
+- Runs are minutes-long by design today, optimized for fast, repeatable local demos; extending to
+  hours-long sustained/soak runs is a planned next step (see [§13](#13-conclusions-and-follow-up-work)).
+- Percentile-accurate throughput testing with k6/Gatling is the natural next evolution once this
+  signal-level evidence is in place (see [§13](#13-conclusions-and-follow-up-work)).
+- `POST /accounts` / `POST /accounts/{id}/deposits` are test/setup conveniences rather than
+  payment-critical endpoints, so the workload intentionally focuses load on the payment-critical
+  path instead (see [Idempotency](../api/README.md#idempotency)).
 
 For **how** to actually run these scripts, see **[Load Tests](../../load-tests/README.md)**.
 
@@ -102,9 +102,9 @@ the last 6 digits of `date +%s` at script start), e.g. `ikey-483920-001`, `cap-4
   auto-provisioning where supported, e.g. `generate-concurrency-conflicts.sh` provisions its own
   account per round)
 
-> Note: CPU/memory/disk specs, Postgres tuning values, and exact dataset cardinality were not
-> captured as a fixed benchmark profile in the current MVP artifacts — see
-> [§12 Limitations](#12-limitations).
+> Note: CPU/memory/disk specs, Postgres tuning values, and exact dataset cardinality are the next
+> pieces to formalize into a committed benchmark profile — see
+> [§12 Current Coverage and Next Steps](#12-current-coverage-and-next-steps).
 
 ## 4) Traffic Profiles
 
@@ -197,9 +197,10 @@ between these two conflict types and why account provisioning matters here.
   isolate a pure `type=idempotency_race` sample is a scenario where the account balance is never
   touched at all: authorise declined due to insufficient funds is exactly that case, so
   `generate-concurrency-conflicts.sh` deliberately uses an amount that exceeds the account's
-  available balance for that sub-race. This also means capture/reverse can only reliably
-  demonstrate `type=optimistic_lock` with this script, not `type=idempotency_race` (a documented,
-  known gap).
+  available balance for that sub-race. This script already reliably demonstrates
+  `type=optimistic_lock` for capture/reverse today; extending it to also isolate
+  `type=idempotency_race` for those two operations is tracked as a follow-up enhancement (see
+  [§13](#13-conclusions-and-follow-up-work)).
 - **Account provisioning matters.** By default the concurrency script creates and funds its own
   dedicated GBP account (`POST /accounts` + `POST /accounts/{id}/deposits`) fresh **before every
   round**, rather than reusing a shared demo account. This avoids two real problems observed with a
@@ -236,12 +237,11 @@ A run is considered successful when, for every phase:
 
 ## 8) Latency and Error-Rate Thresholds
 
-No fixed, enforced latency or error-rate SLO thresholds exist yet for this MVP — see
-[Alerts and SLOs](../observability/alerts-slos.md) for the planned alerting posture. Today,
-`p50`/`p95`/`p99` and error-rate are *observed* via Grafana/Prometheus during and after a run
-(see the queries in [§10](#10-resource-measurements)), but there is no automated pass/fail gate on
-them. Formalizing explicit thresholds is tracked as follow-up work (see
-[§13](#13-conclusions-and-follow-up-work)).
+`p50`/`p95`/`p99` and error-rate are already *observed* via Grafana/Prometheus during and after a
+run (see the queries in [§10](#10-resource-measurements)) — see
+[Alerts and SLOs](../observability/alerts-slos.md) for the planned alerting posture. Formalizing
+these observations into fixed, enforced SLO thresholds with an automated pass/fail gate is tracked
+as follow-up work (see [§13](#13-conclusions-and-follow-up-work)).
 
 ## 9) Baseline Results
 
@@ -258,10 +258,9 @@ them. Formalizing explicit thresholds is tracked as follow-up work (see
 
 ### 9.2 Quantitative baseline table
 
-The repository currently does not include a committed numeric benchmark snapshot for p50/p95/p99
-latency, throughput, or resource utilization under a fixed hardware profile.
-
-This is an explicit next step tracked in `docs/roadmap.md`.
+The repository currently proves reliability/business signals qualitatively (§9.1); committing a
+numeric benchmark snapshot for p50/p95/p99 latency, throughput, and resource utilization under a
+fixed hardware profile is the explicit next step, tracked in `docs/roadmap.md`.
 
 ## 10) Resource Measurements
 
@@ -286,35 +285,42 @@ Metrics currently captured and verifiable via `/actuator/prometheus` during a ru
 - error rate: total and by error class
 - resource usage: CPU, memory, GC, DB connections, Kafka lag
 
-No fixed-profile numeric baseline for these is captured yet — see
-[§9.2](#92-quantitative-baseline-table) and [§12](#12-limitations).
+Committing a fixed-profile numeric baseline for these is the next step — see
+[§9.2](#92-quantitative-baseline-table) and [§12](#12-current-coverage-and-next-steps).
 
-## 11) Bottlenecks
+## 11) Performance Characteristics and Trade-offs
 
-Observed from existing scripts/docs (qualitative, not measured under a fixed benchmark profile):
+Observed from existing scripts/docs (qualitative, ahead of a fixed benchmark profile):
 
-- **Shared-account parallel writes** present a concurrency trade-off: optimistic locking preserves
-  correctness, but hot-key contention (many requests against the same account) increases retry
-  churn and tail latency — this is why `generate-concurrency-conflicts.sh` provisions a fresh
-  account per round rather than reusing one (see [§6](#6-concurrency-assumptions)).
-- **fraud-service dependency** directly impacts the authorisation path's latency and availability
-  by design (protected with a 250ms time limiter + circuit breaker, not a bottleneck under normal
-  conditions but a known single point of added latency).
-- **Outbox publish lag and consumer retry paths** delay ledger convergence until event consumption
-  succeeds — under sustained backlog this shows up as `auth_outbox_publish_lag_seconds` growth
-  (see [Outbox Backlog Recovery](../flows/outbox-backlog-recovery.md)).
+- **Shared-account parallel writes** illustrate a deliberate concurrency trade-off: optimistic
+  locking preserves correctness while keeping the design simple, and hot-key contention (many
+  requests against the same account) is the expected cost of that choice — this is why
+  `generate-concurrency-conflicts.sh` provisions a fresh account per round rather than reusing one
+  (see [§6](#6-concurrency-assumptions)).
+- **fraud-service dependency** is a deliberately protected part of the authorisation path (250ms
+  time limiter + circuit breaker), so its latency contribution is bounded and well-understood
+  rather than a bottleneck under normal conditions.
+- **Outbox publish lag and consumer retry paths** are the mechanism that keeps ledger convergence
+  reliable even under backlog; `auth_outbox_publish_lag_seconds` gives direct visibility into this
+  today (see [Outbox Backlog Recovery](../flows/outbox-backlog-recovery.md)).
 
-## 12) Limitations
+## 12) Current Coverage and Next Steps
 
-- No committed numeric benchmark snapshot (p50/p95/p99 latency, throughput, resource utilization)
-  under a fixed hardware profile.
-- No sustained/soak testing — runs are minutes-long, not hours-long.
-- No automated latency/error-rate SLO enforcement yet (see [§8](#8-latency-and-error-rate-thresholds)).
-- `generate-concurrency-conflicts.sh` can only reliably demonstrate `type=optimistic_lock` for
-  capture/reverse, not `type=idempotency_race` (see [§6](#6-concurrency-assumptions)) — a known,
-  documented gap rather than a bug.
-- These bash scripts are deterministic and easy to read, but are not a percentile-accurate
-  load-testing framework — see [§13](#13-conclusions-and-follow-up-work) for planned alternatives.
+- Signal-level reliability evidence (idempotency replay, circuit breaker transitions, DLT routing,
+  duplicate-event dedup, and both concurrency-conflict types) is fully captured and reproducible
+  today. A committed numeric benchmark snapshot (p50/p95/p99 latency, throughput, resource
+  utilization) under a fixed hardware profile is the natural next addition (see
+  [§13](#13-conclusions-and-follow-up-work)).
+- Runs are minutes-long today by design for fast, repeatable local demos; extending to hours-long
+  sustained/soak runs is tracked as follow-up work.
+- Automated latency/error-rate SLO enforcement can build directly on the signals already exposed
+  today (see [§8](#8-latency-and-error-rate-thresholds)).
+- `generate-concurrency-conflicts.sh` already reliably demonstrates `type=optimistic_lock` for
+  capture/reverse; extending it to also isolate `type=idempotency_race` for those operations is a
+  planned enhancement (see [§6](#6-concurrency-assumptions)).
+- These bash scripts intentionally optimize for determinism and readability today; migrating to a
+  percentile-accurate framework is the next planned step — see
+  [§13](#13-conclusions-and-follow-up-work) for the shortlisted options.
 
 ## 13) Conclusions and Follow-Up Work
 

@@ -57,7 +57,8 @@ on the roadmap.
 See the [Diagram Index](./README.md#diagram-index) for the embedded diagrams and what each one
 covers:
 
-- Simplified happy-path overview (used in the root README): `payment-lifecycle-happy-path.mmd`
+- Simplified happy-path overview (used in the root
+  README): [Payment Lifecycle Happy Path](./README.md#payment-lifecycle-happy-path)
 - Authorise (incl. fraud pre-check + account-lock gate): [Authorise Sequence](./README.md#authorise-sequence)
 - Capture: [Capture Sequence](./README.md#capture-sequence)
 - Reverse: [Reverse Sequence](./README.md#reverse-sequence)
@@ -186,12 +187,12 @@ to the available balance.
 ledger-service consumes `auth.events` and projects three of the four event types into
 ledger entries + an event log:
 
-| Event type                 | Ledger-side handling                                                                                           |
-|----------------------------|----------------------------------------------------------------------------------------------------------------|
-| `AUTHORISATION_AUTHORISED` | Projected (`AuthorisationAuthorisedHandler`)                                                                   |
-| `AUTHORISATION_CAPTURED`   | Projected (`AuthorisationCapturedHandler`)                                                                     |
-| `AUTHORISATION_REVERSED`   | Projected (`AuthorisationReversedHandler`)                                                                     |
-| `AUTHORISATION_DECLINED`   | Intentionally skipped — no ledger entry needed since balances were never touched                               |
+| Event type                 | Ledger-side handling                                                             |
+|----------------------------|----------------------------------------------------------------------------------|
+| `AUTHORISATION_AUTHORISED` | Projected (`AuthorisationAuthorisedHandler`)                                     |
+| `AUTHORISATION_CAPTURED`   | Projected (`AuthorisationCapturedHandler`)                                       |
+| `AUTHORISATION_REVERSED`   | Projected (`AuthorisationReversedHandler`)                                       |
+| `AUTHORISATION_DECLINED`   | Intentionally skipped — no ledger entry needed since balances were never touched |
 
 Every projected event is deduplicated by `eventId` via `processed_event` (`INSERT ... ON CONFLICT
 DO NOTHING`), giving effectively-once projection over Kafka's at-least-once delivery. A genuinely
@@ -203,12 +204,12 @@ backoff before falling back to the DLT.
 
 ## Step-to-data/event mapping
 
-| Flow step                  | Primary write(s)                                                | Outbox event               | Ledger-side expectation                   |
-|----------------------------|-----------------------------------------------------------------|----------------------------|-------------------------------------------|
-| Authorise → funds reserved | authorisation (`AUTHORISED`) + account reservation              | `AUTHORISATION_AUTHORISED` | Ledger entry + event log projected        |
+| Flow step                  | Primary write(s)                                                | Outbox event               | Ledger-side expectation                          |
+|----------------------------|-----------------------------------------------------------------|----------------------------|--------------------------------------------------|
+| Authorise → funds reserved | authorisation (`AUTHORISED`) + account reservation              | `AUTHORISATION_AUTHORISED` | Ledger entry + event log projected               |
 | Authorise → declined       | authorisation (`DECLINED`) only (+ account lock, if applicable) | `AUTHORISATION_DECLINED`   | Skipped — no ledger entry needed (see section 4) |
-| Capture accepted           | authorisation (`CAPTURED`) + reserved-balance debit             | `AUTHORISATION_CAPTURED`   | Ledger entry + event log projected        |
-| Reverse accepted           | authorisation (`REVERSED`) + reserved→available release         | `AUTHORISATION_REVERSED`   | Ledger entry + event log projected        |
+| Capture accepted           | authorisation (`CAPTURED`) + reserved-balance debit             | `AUTHORISATION_CAPTURED`   | Ledger entry + event log projected               |
+| Reverse accepted           | authorisation (`REVERSED`) + reserved→available release         | `AUTHORISATION_REVERSED`   | Ledger entry + event log projected               |
 
 ---
 

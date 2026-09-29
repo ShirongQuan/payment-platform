@@ -29,6 +29,6 @@ Trade-offs:
 ## Related
 
 - `infra/kafka/create-topics.sh`
-- `docs/flows/event-consuming.mmd`
-- `docs/development/runbook.md`
+- [Operational Runbook](../development/runbook.md)
+- <a href="https://raw.githubusercontent.com/ShirongQuan/payment-platform/main/docs/flows/diagrams/event-consuming.svg">Event Consuming Sequence</a> (sequence diagram)
 

@@ -122,7 +122,8 @@ Intentional non-goals in the current design:
 
 - no distributed locking between service instances
 - no exactly-once guarantee end-to-end across HTTP, DB, Kafka, and consumers
-- no partial capture / partial reverse support yet (full operation only)
+- no partial capture / partial reverse support yet (full operation only) — see
+  [roadmap: Production Considerations](../roadmap.md#6-production-considerations)
 - no generic cross-endpoint idempotency framework yet; rules are implemented per operation flow
 
 ## 9) Alternatives Considered
@@ -150,14 +151,14 @@ Costs:
 
 ## Related
 
-See also `docs/decisions/0007-idempotency-store-and-key-policy.md` for storage/policy (Redis vs DB, TTL, key
-scope, replay/conflict implementation details).
+See also [ADR 0007: Idempotency Store Strategy and Key Policy (Auth/Fraud)](./0007-idempotency-store-and-key-policy.md)
+for storage/policy (Redis vs DB, TTL, key scope, replay/conflict implementation details).
 
-- `docs/decisions/0001-use-kafka-outbox.md`
-- `docs/decisions/0002-full-capture-only.md`
-- `docs/decisions/0003-ledger-raw-and-normalized-events.md`
-- `docs/decisions/0004-use-event-and-dlt-topics.md`
-- `docs/decisions/0007-idempotency-store-and-key-policy.md`
-- `docs/decisions/0010-database-concurrency-approach.md`
+- [ADR 0001: Use Kafka + Transactional Outbox](./0001-use-kafka-outbox.md)
+- [ADR 0002: Support Full Capture and Full Reverse Only (MVP)](./0002-full-capture-only.md)
+- [ADR 0003: Store Both Raw and Normalized Ledger Events](./0003-ledger-raw-and-normalized-events.md)
+- [ADR 0004: Use Separate Main Event and DLT Topics](./0004-use-event-and-dlt-topics.md)
+- [ADR 0007: Idempotency Store Strategy and Key Policy (Auth/Fraud)](./0007-idempotency-store-and-key-policy.md)
+- [ADR 0010: Database Concurrency Approach (Optimistic vs Pessimistic Locking)](./0010-database-concurrency-approach.md)
 
 

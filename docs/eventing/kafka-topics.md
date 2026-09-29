@@ -138,7 +138,7 @@ Producer key type is `UUID` (`UUIDSerializer`); consumer key type is correspondi
   authorisation id, amounts, currency, event reason) rather than end-customer PII (name, card
   number, address); no additional field-level encryption or masking is applied today beyond
   standard transport within the trusted docker-compose network.
-- **Recommended production posture** (tracked in the roadmap, not yet implemented):
+- **Recommended production posture** (tracked in the roadmap as planned future work):
     - SASL/mTLS authentication and encrypted transport for all broker connections.
     - Topic-level Kafka ACLs so only `auth-service` can produce to `auth.events` and only
       `ledger-service` (and its DLT recoverer) can produce/consume the DLT topic.

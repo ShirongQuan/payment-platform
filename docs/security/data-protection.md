@@ -10,9 +10,9 @@
 - [Access Controls](#access-controls)
 - [Roadmap](#roadmap)
 
-> **Reading this document:** every section is broken into **Current** (what's implemented today),
-> **Gap** (what's deliberately not yet in place), and **Next step** (planned control + roadmap
-> reference). See [Payment Platform MVP Progress](../roadmap.md) for full sequencing.
+> **Reading this document:** every section describes **what's implemented today** and the
+> **next steps** planned to extend it further. See [Payment Platform MVP Progress](../roadmap.md)
+> for full sequencing.
 
 ## Data Classification
 
@@ -26,13 +26,12 @@ current schema:
 | **Behavioral / PII-adjacent** | `ip_address`, `risk_score`, `decision` (`fraud_evaluation`) | `fraud_db` only |
 | **Operational / correlation** | `correlation_id`, `event_id`, `idempotency_key`, `traceparent`, timestamps | `auth_db`, `fraud_db`, `ledger_db`, Kafka headers, logs, traces |
 
-**Gap**: no customer-identifying fields (name, email, physical address, card/account-holder
+**Next step**: no customer-identifying fields (name, email, physical address, card/account-holder
 number) exist in the schema today, so there is currently no dedicated "PII" data class requiring
-field-level masking/encryption beyond the IP address noted above.
-
-**Next step**: if customer-identifying fields are introduced (e.g. alongside the planned
-authentication work), this classification table must be revisited and a field-level encryption/
-masking review performed before storage — see [Roadmap](#roadmap).
+field-level masking/encryption beyond the IP address noted above. If customer-identifying fields
+are introduced (e.g. alongside the planned authentication work), this classification table will be
+revisited and a field-level encryption/masking review performed before storage — see
+[Roadmap](#roadmap).
 
 ## Where Data Lives
 
@@ -56,23 +55,22 @@ Each service only ever queries its own database — there is no cross-schema acc
 
 ### At rest
 
-- **Current**: **not implemented**. PostgreSQL and Redis run without any at-rest encryption
-  configuration in `infra/docker`/`infra/postgres` — data is stored in plain form on the container
-  volumes.
-- **Gap**: no transparent data encryption (TDE), volume-level encryption, or field-level encryption
-  exists today.
-- **Next step**: tracked as infrastructure-layer hardening appropriate to the target deployment
-  environment (e.g. cloud-managed encrypted volumes/KMS) — see
+- **Current scope**: at-rest encryption is planned for a future iteration. PostgreSQL and Redis run
+  without any at-rest encryption configuration in `infra/docker`/`infra/postgres` — data is stored
+  in plain form on the container volumes.
+- **Next step**: add transparent data encryption (TDE), volume-level encryption, or field-level
+  encryption as infrastructure-layer hardening appropriate to the target deployment environment
+  (e.g. cloud-managed encrypted volumes/KMS) — see
   [roadmap Production Considerations](../roadmap.md#6-production-considerations).
 
 ### In transit
 
-- **Current**: **not implemented**. All inter-service HTTP calls (`client → auth-service`,
-  `auth-service → fraud-service`, `client → ledger-service`) run over plain HTTP; Kafka brokers are
-  configured with `PLAINTEXT` listeners (no SASL/TLS); Redis has no `requirepass`/TLS configured.
-- **Gap**: no TLS termination, no mTLS between services, no encrypted Kafka/Redis transport.
-- **Next step**: TLS termination (public API and internal service-to-service calls), authenticated/
-  encrypted Kafka transport (SASL/mTLS), and Redis `requirepass`/ACLs are explicitly tracked in
+- **Current scope**: encryption in transit is planned for a future iteration. All inter-service HTTP
+  calls (`client → auth-service`, `auth-service → fraud-service`, `client → ledger-service`) run
+  over plain HTTP; Kafka brokers are configured with `PLAINTEXT` listeners (no SASL/TLS); Redis has
+  no `requirepass`/TLS configured.
+- **Next step**: add TLS termination (public API and internal service-to-service calls), authenticated/
+  encrypted Kafka transport (SASL/mTLS), and Redis `requirepass`/ACLs — explicitly tracked in
   [roadmap Production Considerations](../roadmap.md#6-production-considerations).
 
 ### Secrets handling
@@ -89,7 +87,8 @@ Each service only ever queries its own database — there is no cross-schema acc
 
 ## Logging Redaction/Masking Rules
 
-- **Current**: **no redaction/masking is applied**. Structured logs (pattern:
+- **Current scope**: redaction/masking is planned as part of future compliance-hardening work and is
+  not yet applied. Structured logs (pattern:
   `[traceId,spanId] [correlationId] ... message`, shared across all three services) can include
   account ids and amounts at `DEBUG` level (e.g. `org.example.auth.authorisation: DEBUG` in
   `auth-service`'s `application.yml`); `fraud_evaluation`-related IP addresses are not specifically
@@ -97,27 +96,26 @@ Each service only ever queries its own database — there is no cross-schema acc
 - **Rationale for current state**: none of the fields currently logged are classified as regulated
   PII (see [Data Classification](#data-classification)) — they are financial/operational
   identifiers (account id, amount, currency) rather than customer-identifying data.
-- **Gap**: there is no masking framework (e.g. Logback pattern converters that redact specific
-  fields) in place, so if customer-identifying fields are added in the future, they would be logged
-  in plaintext by default unless explicit redaction is added first.
-- **Next step**: introduce a redaction rule set (e.g. mask IP address octets, mask any future
-  customer-identifying fields) as part of the compliance-hardening work — see
+- **Next step**: introduce a masking framework (e.g. Logback pattern converters that redact
+  specific fields) and a redaction rule set (e.g. mask IP address octets, mask any future
+  customer-identifying fields) as part of the compliance-hardening work, so that if
+  customer-identifying fields are added in future they are redacted by default — see
   [Audit & Compliance § Log Integrity](./audit-compliance.md#log-integritytamper-considerations)
   and [Roadmap](#roadmap).
 
 ## Retention/Deletion Policy
 
-- **Current**: **TBD** — no automated data retention or deletion policy exists for any of the three
-  Postgres databases today. Data (accounts, authorisation events, fraud evaluations, ledger entries)
-  accumulates indefinitely.
+- **Current scope**: a retention/deletion policy is planned. Today, data (accounts, authorisation
+  events, fraud evaluations, ledger entries) accumulates indefinitely for the three Postgres
+  databases, which is acceptable for the current MVP demo scope.
 - **Partial exception**: Redis-held data is TTL-bounded by design — the idempotency response cache
   expires after `idempotency.ttl-hours` (default 24h), and velocity-rule sliding-window counters
   expire after `window + 5s`. This is an operational/performance TTL, not a compliance-driven
   retention policy.
-- **Gap**: no data-retention schedule, no right-to-erasure/deletion workflow, no archival policy for
-  the append-only `authorisation_event`/`ledger_event_log` audit tables.
 - **Next step**: define a retention policy (how long financial/audit records must be kept vs. when
-  they can be archived or purged) as part of the compliance posture work — see
+  they can be archived or purged), a right-to-erasure/deletion workflow, and an archival policy for
+  the append-only `authorisation_event`/`ledger_event_log` audit tables, as part of the compliance
+  posture work — see
   [Audit & Compliance § Compliance Posture Statement](./audit-compliance.md#compliance-posture-statement)
   and [Roadmap](#roadmap). Marked explicitly as **TBD** rather than silently omitted.
 
@@ -147,7 +145,7 @@ Each service only ever queries its own database — there is no cross-schema acc
 
 ## Roadmap
 
-Full sequencing and target milestones for the gaps above are tracked in
+Full sequencing and target milestones for the next steps above are tracked in
 [Payment Platform MVP Progress](../roadmap.md), specifically:
 
 - [§5 Next Steps](../roadmap.md#5-next-steps-prioritized) — items 1 (auth + role separation) and 4

@@ -66,12 +66,13 @@ Trade-offs:
 
 If load testing (see `load-tests/generate-concurrency-conflicts.sh`) shows unacceptable client-visible conflict
 rates on hot accounts, consider pessimistic locking scoped narrowly to that specific write path rather than
-switching the whole system's concurrency model.
+switching the whole system's concurrency model. A side-by-side pessimistic-locking comparison is already tracked
+on the [roadmap: Next Steps](../roadmap.md#5-next-steps-prioritized) (item 5).
 
 ## Related
 
-- `docs/decisions/0005-idempotency-and-concurrency.md`
-- `docs/decisions/0007-idempotency-store-and-key-policy.md`
+- [ADR 0005: Idempotency and Concurrency Rules for Authorisation Flows](./0005-idempotency-and-concurrency.md)
+- [ADR 0007: Idempotency Store Strategy and Key Policy (Auth/Fraud)](./0007-idempotency-store-and-key-policy.md)
 - `auth-service/src/main/java/org/example/auth/account/infrastructure/AccountEntity.java`
 - `auth-service/src/main/java/org/example/auth/authorisation/infrastructure/AuthorisationEntity.java`
 - `auth-service/src/main/java/org/example/auth/outbox/infrastructure/OutboxEventEntity.java`

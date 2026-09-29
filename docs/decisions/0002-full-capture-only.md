@@ -13,7 +13,7 @@ For MVP scope, support only:
 - full capture of an authorised amount
 - full reverse of an authorised amount
 
-Out of scope for now:
+Out of scope for now (see [roadmap: Production Considerations](../roadmap.md#6-production-considerations)):
 - partial capture
 - partial reverse
 - refunds/settlement flows
@@ -31,7 +31,7 @@ Trade-offs:
 
 ## Related
 
-- `docs/architecture/system-overview.md`
-- `docs/flows/capture-sequence.mmd`
-- `docs/flows/reverse-sequence.mmd`
+- [System Context](../architecture/system-context.md)
+- <a href="https://raw.githubusercontent.com/ShirongQuan/payment-platform/main/docs/flows/diagrams/capture-sequence.svg">Capture Sequence</a> (sequence diagram)
+- <a href="https://raw.githubusercontent.com/ShirongQuan/payment-platform/main/docs/flows/diagrams/reverse-sequence.svg">Reverse Sequence</a> (sequence diagram)
 

@@ -36,7 +36,7 @@ A feature is MVP-done if it:
 
 1. works in demo scenarios,
 2. has basic tests or evidence,
-3. is documented clearly with known limitations.
+3. is documented clearly with its current scope.
 
 ---
 
@@ -247,6 +247,16 @@ explicitly as forward-looking infrastructure/platform work, not oversights:
   traffic before it reaches business logic/DB/Redis, and can be tuned without redeploying any
   service. (The velocity-based anti-abuse signal that *does* exist today is a different,
   application/business-layer concern — see Reliability patterns above.)
+- **Partial capture / partial reverse / refunds**: MVP scope (see
+  [ADR 0002](./decisions/0002-full-capture-only.md)) supports only full capture and full reverse of an
+  authorised amount; partial capture, partial reverse, and refund/settlement flows are out of scope for now
+  and would require new domain rules, state transitions, API shape, and projection logic to support.
+- **Retry policy for the fraud-service call**: the auth-service → fraud-service call is currently protected
+  by a circuit breaker + time limiter only (see
+  [ADR 0008](./decisions/0008-resilience4j-circuit-breaker-policy.md)); no `@Retry` decorator is layered on
+  top, so a single transient blip is treated the same as a sustained timeout/failure rather than retried
+  once before failing. A bounded retry-once policy is a possible future refinement, deferred to avoid
+  amplifying load on an already-slow downstream during partial outages.
 
 ---
 

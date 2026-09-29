@@ -41,7 +41,7 @@ filter/interceptor beans without per-service boilerplate.
 
 Positive:
 - one correlation id header/MDC convention across all services, so traces/logs can be joined end-to-end
-  (see `docs/architecture/system-overview.md`, `docs/architecture/service-interaction.mmd`)
+  (see [System Context](../architecture/system-context.md), [Containers](../architecture/containers.md))
 - consistent error response shape simplifies client-side and gateway-side error handling
 - shared hashing logic avoids subtly different idempotency-conflict detection per service
 - changes to cross-cutting behavior (e.g. adding a new MDC field) are made once and consumed everywhere
@@ -58,7 +58,8 @@ Trade-offs:
 - duplicate the correlation filter/error model per service (rejected: drift risk already observed as a motivation;
   higher long-term maintenance cost)
 - push cross-cutting concerns into infrastructure (e.g. API gateway/service mesh header injection) instead of a
-  library (deferred: no gateway/mesh currently in the stack; library approach is simpler for the current
+  library (deferred: no gateway/mesh currently in the stack — see
+  [roadmap: Next Steps](../roadmap.md#5-next-steps-prioritized) item 4; library approach is simpler for the current
   three-service scope)
 - separate libraries per concern (error model, correlation, idempotency) instead of one shared module (rejected for
   now: adds packaging/versioning overhead disproportionate to current size; package-level separation inside one
@@ -66,8 +67,8 @@ Trade-offs:
 
 ## Related
 
-- `docs/decisions/0007-idempotency-store-and-key-policy.md`
-- `docs/architecture/service-interaction.mmd`
+- [ADR 0007: Idempotency Store Strategy and Key Policy (Auth/Fraud)](./0007-idempotency-store-and-key-policy.md)
+- [Containers](../architecture/containers.md)
 - `shared-spring-lib/src/main/java/org/example/shared/error/ProblemDetails.java`
 - `shared-spring-lib/src/main/java/org/example/shared/correlation/`
 - `shared-spring-lib/src/main/java/org/example/shared/idempotency/RequestHashing.java`

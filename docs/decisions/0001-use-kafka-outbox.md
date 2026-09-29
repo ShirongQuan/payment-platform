@@ -27,7 +27,7 @@ Trade-offs:
 
 ## Related
 
-- `docs/architecture/system-overview.md`
-- `docs/flows/event-publishing-sequence.mmd`
-- `docs/data/data-model.md`
+- [System Context](../architecture/system-context.md)
+- [Data Model Overview](../data/data-model.md)
+- <a href="https://raw.githubusercontent.com/ShirongQuan/payment-platform/main/docs/flows/diagrams/event-publishing-sequence.svg">Event Publishing Sequence</a> (sequence diagram)
 

@@ -97,8 +97,8 @@ Trade-offs:
 
 ## Related
 
-- `docs/decisions/0005-idempotency-and-concurrency.md` — see also 0005 for correctness rules this policy implements
-- `docs/decisions/0006-redis-sliding-window-rate-limit.md`
+- [ADR 0005: Idempotency and Concurrency Rules for Authorisation Flows](./0005-idempotency-and-concurrency.md) — see also 0005 for correctness rules this policy implements
+- [ADR 0006: Use Redis for Sliding-Window Rate Limiting (Fraud Service)](./0006-redis-sliding-window-rate-limit.md)
 - `auth-service/src/main/java/org/example/auth/idempotency/IdempotencyService.java`
 - `fraud-service/src/main/java/org/example/fraud/infrastructure/FraudEvaluationEntity.java`
 - `shared-spring-lib/src/main/java/org/example/shared/idempotency/RequestHashing.java`

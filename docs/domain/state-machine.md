@@ -9,7 +9,7 @@
 - [States](#states)
     - [Authorisation states (implemented)](#authorisation-states-implemented)
     - [Account states (implemented)](#account-states-implemented)
-    - [Planned states (not implemented)](#planned-states-not-implemented)
+    - [Planned states (future scope)](#planned-states-future-scope)
 - [Allowed Transitions](#allowed-transitions)
     - [Account-level transition (parallel state machine)](#account-level-transition-parallel-state-machine)
 - [Guards / Preconditions](#guards--preconditions)
@@ -70,10 +70,10 @@ as its own state machine.
 | `ACTIVE` | Normal operation; deposits, reservations, captures, reversals permitted                                     |
 | `LOCKED` | Fraud-triggered lock; new authorisations rejected with `ACCOUNT_LOCKED` before fraud-service is even called |
 
-There is currently no automated or API-driven path back from `LOCKED` to `ACTIVE` — unlocking is a manual DB operation (
-tracked as a roadmap gap, not silently missing).
+An automated or API-driven path back from `LOCKED` to `ACTIVE` is planned; unlocking is a manual DB
+operation today (tracked on the roadmap, not silently omitted).
 
-### Planned states (not implemented)
+### Planned states (future scope)
 
 Per [ADR 0002: Support Full Capture and Full Reverse Only (MVP)](../decisions/0002-full-capture-only.md), the
 following are explicitly out of scope for the MVP and are **not** real states today. They are listed here only so
@@ -105,7 +105,6 @@ Concurrency/Idempotency Behavior below).
 | From     | Event/Command                                                                                                  | To       | Notes                                                                       |
 |----------|----------------------------------------------------------------------------------------------------------------|----------|-----------------------------------------------------------------------------|
 | `ACTIVE` | Fraud-service recommends a lock (very high risk score, or a repeated-decline pattern within a trailing window) | `LOCKED` | Applied in the same transaction as the triggering `DECLINED` authorisation  |
-| `LOCKED` | *(no implemented path)*                                                                                        | `ACTIVE` | Manual DB operation today (tracked on the roadmap for an API-driven unlock) |
 
 ## Guards / Preconditions
 
