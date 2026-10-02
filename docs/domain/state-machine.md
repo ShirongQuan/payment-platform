@@ -28,6 +28,8 @@
   </a>
 </p>
 
+*Figure 1: Payment authorisation state machine.*
+
 ### Account lock state machine
 
 <p>
@@ -35,6 +37,8 @@
     <img src="diagrams/account-state-machine.svg" alt="Account lock state machine diagram" width="49%" />
   </a>
 </p>
+
+*Figure 2: Account lock state machine — `ACTIVE` ↔ `LOCKED` transitions triggered by fraud-service signals.*
 
 ## Aggregates
 

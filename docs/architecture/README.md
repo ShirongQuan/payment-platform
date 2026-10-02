@@ -15,7 +15,7 @@ C4-style architecture documentation for the Payment Platform, from broadest zoom
   </a>
 </p>
 
-*Figure 6: System Context (C4 Level 1) — external actors/systems and the Payment Platform system boundary.
+*Figure 1: System Context (C4 Level 1) — external actors/systems and the Payment Platform system boundary.
 Click the diagram to open the full-size SVG.*
 
 ### Containers (L2)
@@ -31,7 +31,7 @@ interactions.
   </a>
 </p>
 
-*Figure 7: Containers (C4 Level 2) — auth-service, fraud-service, ledger-service, platform infrastructure
+*Figure 2: Containers (C4 Level 2) — auth-service, fraud-service, ledger-service, platform infrastructure
 (Postgres, Redis, Kafka), and the observability stack. Click the diagram to open the full-size SVG.*
 
 ### Components — auth-service (L3)
@@ -47,7 +47,7 @@ points, external calls).
   </a>
 </p>
 
-*Figure 8: Components — auth-service (C4 Level 3) — controllers, application services, domain, repositories,
+*Figure 3: Components — auth-service (C4 Level 3) — controllers, application services, domain, repositories,
 outbox, and outbound clients. Click the diagram to open the full-size SVG.*
 
 <p>
@@ -56,7 +56,7 @@ outbox, and outbound clients. Click the diagram to open the full-size SVG.*
   </a>
 </p>
 
-*Figure 9: Sequence — authorise happy path (mini) across `auth-service` components. Click the diagram to open
+*Figure 4: Sequence — authorise happy path (mini) across `auth-service` components. Click the diagram to open
 the full-size SVG.*
 
 ## Security
@@ -74,7 +74,7 @@ auth, etc.) and planned application-level controls (e.g. authentication) are lin
   </a>
 </p>
 
-*Figure 10: Trust boundaries — public API, internal service, data, and messaging boundaries. Click the diagram
+*Figure 5: Trust boundaries — public API, internal service, data, and messaging boundaries. Click the diagram
 to open the full-size SVG.*
 
 ## Related

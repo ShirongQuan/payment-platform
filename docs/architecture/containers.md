@@ -14,6 +14,7 @@
     - [Asynchronous (Kafka, at-least-once)](#asynchronous-kafka-at-least-once)
     - [Data access](#data-access)
     - [Telemetry (traces vs. metrics)](#telemetry-traces-vs-metrics)
+- [Next Phase (Planned)](#next-phase-planned)
 
 ## Diagram
 
@@ -23,8 +24,7 @@
   </a>
 </p>
 
-*Figure 7: Containers (C4 Level 2) — auth-service, fraud-service, ledger-service, platform infrastructure
-(Postgres, Redis, Kafka), and the observability stack. Click the diagram to open the full-size SVG.*
+*Figure 2: Containers — the platform's deployable services and infrastructure.*
 
 This zooms into the [System Context](./system-context.md) and shows the main deployable/runtime units that make
 up the Payment Platform. All of these — the three application services, Kafka/Redis/PostgreSQL, and the
@@ -120,6 +120,37 @@ These are **two independent paths**, not one — a common point of confusion whe
 - Prometheus therefore has two scrape targets per environment: every service's `/actuator/prometheus`, and the
   OTel Collector's `:8889` span-metrics endpoint. Both are pull-based and independent of each other; losing the
   Collector does not stop app-metric scraping, and vice versa.
+
+## Next Phase (Planned)
+
+<p>
+  <a href="https://raw.githubusercontent.com/ShirongQuan/payment-platform/main/docs/architecture/diagrams/containers-next-phase.svg">
+    <img src="diagrams/containers-next-phase.svg" alt="Next-phase containers diagram" width="100%" />
+  </a>
+</p>
+
+*Figure 3: Planned next-phase containers — dashed/grey elements are not yet implemented.*
+
+Beyond the current MVP boundary, the next phase introduces:
+
+- **API Gateway** — single ingress for routing, scope enforcement, and infra-level rate limiting in front of
+  `auth-service`/`ledger-service` ([roadmap item 4](../roadmap.md#5-next-steps-prioritized))
+- **Identity Provider (OIDC)** — centralized authn/authz (customer vs. admin scopes), validated by the gateway
+  and `auth-service` ([roadmap item 1](../roadmap.md#5-next-steps-prioritized))
+- **Customer Web App / Admin Back-office Web App** — SPA frontends consuming the platform through the gateway,
+  giving the public API its first real external consumer
+  ([roadmap item 3](../roadmap.md#5-next-steps-prioritized))
+- **reconciliation-service** — scheduled cross-check of ledger projections against account state (and
+  eventually an external processor) to detect and flag drift ([roadmap item 2](../roadmap.md#5-next-steps-prioritized))
+- **notification-service** — consumes `auth.events` to deliver email/SMS/webhook notifications on payment
+  lifecycle changes
+- **External Payment Processor / Card Network (simulated)** — settlement target for authorise/capture, and
+  reconciliation's source of truth
+- **Config/Secrets Store** and **Object Storage** — supporting infra for secrets management and
+  receipt/statement/document storage
+
+This diagram is directional, not committed scope — see
+[Roadmap § Next Steps](../roadmap.md#5-next-steps-prioritized) for what's actually prioritized.
 
 
 

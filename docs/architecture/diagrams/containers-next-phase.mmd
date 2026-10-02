@@ -1,0 +1,105 @@
+flowchart TB
+    Client(["Browser / Swagger / Postman / Load Test"])
+    Ops(["Admin / Ops user"])
+    Processor[["External Payment Processor /<br/>Card Network (simulated, planned)"]]
+
+    subgraph Platform["Payment Platform (system boundary)"]
+        direction TB
+
+        subgraph Frontends["Frontend applications (internal, planned)"]
+            direction LR
+            UI["Customer Web App<br/>(React/Angular SPA)<br/>OIDC client: customer scope<br/>(planned)"]
+            Backoffice["Admin / Back-office Web App<br/>(React/Angular SPA)<br/>OIDC client: admin scope<br/>SSO/VPN-restricted<br/>(planned)"]
+        end
+
+        subgraph Edge["Edge / Perimeter (planned)"]
+            direction LR
+            Gateway["API Gateway<br/>(routing, rate limiting,<br/>scope enforcement)"]
+        end
+
+        subgraph Services["Application services (internal)"]
+            direction LR
+            Auth["auth-service :9000<br/>(accounts, authorise,<br/>capture, reverse, outbox)"]
+            Fraud["fraud-service :9010<br/>(risk decisioning)"]
+            Ledger["ledger-service :9020<br/>(event projection,<br/>read-only query API)"]
+            Recon["reconciliation-service<br/>(ledger vs. account/<br/>external drift detection)<br/>(planned)"]
+            Notify["notification-service<br/>(email/SMS/webhook<br/>on lifecycle events)<br/>(planned)"]
+        end
+
+        subgraph Infra["Platform infrastructure (internal)"]
+            direction TB
+
+            subgraph DataInfra["Data infrastructure"]
+                direction LR
+                Postgres[("PostgreSQL<br/>auth_db / fraud_db / ledger_db")]
+                Redis[("Redis<br/>idempotency cache +<br/>velocity counters")]
+                KafkaTopic[("Kafka<br/>auth.events (+ DLT)")]
+                Blob[("Object Storage<br/>(receipts, statements, KYC docs)<br/>(planned)")]
+            end
+
+            subgraph PlatformSecurity["Platform / security services (planned)"]
+                direction LR
+                IdP["Identity Provider<br/>(OAuth2/OIDC, e.g. Keycloak)"]
+                Config[("Config / Secrets Store<br/>(e.g. Vault)")]
+            end
+        end
+
+        subgraph Obs["Observability Stack (internal, separate boundary)"]
+            direction LR
+            OTel["OTel Collector"]
+            Tempo["Tempo"]
+            Prometheus["Prometheus"]
+            Grafana["Grafana"]
+        end
+    end
+
+    Client -->|" HTTP "| Auth
+    Client -->|" HTTP (read-only) "| Ledger
+    Client -.->|" loads app<br/>(planned) "| UI
+    Ops -.->|" loads app<br/>(planned) "| Backoffice
+    UI -.->|" HTTPS API calls<br/>(planned) "| Gateway
+    Backoffice -.->|" HTTPS API calls<br/>(planned) "| Gateway
+    UI -.->|" OIDC login (customer scope)<br/>(planned) "| IdP
+    Backoffice -.->|" OIDC login (admin scope, SSO)<br/>(planned) "| IdP
+    Gateway -->|" route: authorise/capture/reverse "| Auth
+    Gateway -->|" route: read-only queries "| Ledger
+    Gateway -->|" route: manual reversal,<br/>lock/unlock (admin scope only) "| Auth
+    Gateway -.->|" validate token "| IdP
+    Auth -.->|" validate token "| IdP
+    Ops -->|" dashboards / traces "| Grafana
+    Ops -->|" manual recovery<br/>(Kafka UI / pgAdmin) "| Infra
+    Ops -->|" secrets / config "| Config
+    Auth -->|" POST /fraud/check<br/>(circuit breaker + 250ms timeout) "| Fraud
+    Auth -->|" publish outbox events "| KafkaTopic
+    KafkaTopic -->|" consume + dedupe "| Ledger
+    KafkaTopic -.->|" consume<br/>(planned) "| Notify
+    Notify -.->|" webhook / email / SMS<br/>(planned) "| Client
+    Recon -.->|" read + diff<br/>(planned) "| Ledger
+    Recon -.->|" read + diff<br/>(planned) "| Auth
+    Recon -.->|" reconcile against<br/>(planned) "| Processor
+    Auth -.->|" settle authorise/capture<br/>(simulated, planned) "| Processor
+    Auth -->|" JPA "| Postgres
+    Fraud -->|" JPA "| Postgres
+    Ledger -->|" JPA "| Postgres
+    Recon -.->|" JPA<br/>(planned) "| Postgres
+    Notify -.->|" store receipts<br/>(planned) "| Blob
+    Auth -->|" idempotency cache (TTL) "| Redis
+    Fraud -->|" sliding-window<br/>velocity counters "| Redis
+    Gateway -.->|" OTLP traces (push)<br/>(planned) "| OTel
+    Auth -.->|" OTLP traces (push) "| OTel
+    Fraud -.->|" OTLP traces (push) "| OTel
+    Ledger -.->|" OTLP traces (push) "| OTel
+    Recon -.->|" OTLP traces (push)<br/>(planned) "| OTel
+    Notify -.->|" OTLP traces (push)<br/>(planned) "| OTel
+    OTel --> Tempo
+    OTel -->|" span-derived metrics<br/>(scraped from :8889) "| Prometheus
+    Tempo --> Grafana
+    Prometheus --> Grafana
+    Prometheus -.->|" scrape /actuator/prometheus<br/>(app + JVM metrics, pull) "| Auth
+    Prometheus -.->|" scrape /actuator/prometheus<br/>(app + JVM metrics, pull) "| Fraud
+    Prometheus -.->|" scrape /actuator/prometheus<br/>(app + JVM metrics, pull) "| Ledger
+    Prometheus -.->|" scrape (planned) "| Gateway
+    Prometheus -.->|" scrape (planned) "| Recon
+    Prometheus -.->|" scrape (planned) "| Notify
+    classDef planned stroke-dasharray: 5 5, fill: #f5f5f5, stroke: #999
+    class Gateway,IdP,Recon,Notify,Blob,Config,UI,Backoffice,Processor planned

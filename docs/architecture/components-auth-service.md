@@ -30,7 +30,7 @@ services** (orchestrator + idempotency + the transactional executor), **domain**
   </a>
 </p>
 
-*Figure 8: Components — auth-service (C4 Level 3) — controllers, application services, domain, repositories,
+*Figure 3: Components — auth-service (C4 Level 3) — controllers, application services, domain, repositories,
 outbox, and outbound clients. Click the diagram to open the full-size SVG.*
 
 ### Sequence: authorise happy path (mini)
@@ -41,7 +41,7 @@ outbox, and outbound clients. Click the diagram to open the full-size SVG.*
   </a>
 </p>
 
-*Figure 9: Sequence — authorise happy path (mini) across `auth-service` components. Click the diagram to open
+*Figure 4: Sequence — authorise happy path (mini) across `auth-service` components. Click the diagram to open
 the full-size SVG.*
 
 ## Responsibility table

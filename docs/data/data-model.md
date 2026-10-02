@@ -19,7 +19,7 @@ This document summarizes the core tables used by `auth-service`, `fraud-service`
   </a>
 </p>
 
-*Fig 1. Auth ER Diagram*
+*Figure 1: Auth ER Diagram — `auth_db` tables.*
 
 ### Main tables
 
@@ -62,7 +62,8 @@ This document summarizes the core tables used by `auth-service`, `fraud-service`
   </a>
 </p>
 
-*Fig 2. Ledger ER Diagram*
+*Figure 2: Ledger ER Diagram — `ledger_entry`, `ledger_event_log`, and `processed_event` tables and their
+relationships in `ledger_db`.*
 
 ### Main tables
 
@@ -94,7 +95,7 @@ This document summarizes the core tables used by `auth-service`, `fraud-service`
   </a>
 </p>
 
-*Fig 3. Fraud ER Diagram*
+*Figure 3: Fraud ER Diagram — the `fraud_evaluation` table and its fields in `fraud_db`.*
 
 ### Main tables
 

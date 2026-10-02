@@ -16,8 +16,7 @@
   </a>
 </p>
 
-*Figure 6: System Context (C4 Level 1) — external actors/systems and the Payment Platform system boundary.
-Click the diagram to open the full-size SVG.*
+*Figure 1: System Context — external actors and the platform boundary.*
 
 ## What the platform does
 

@@ -49,6 +49,8 @@ link back here instead of restating the same summary.
   </a>
 </p>
 
+*Figure 1: Payment lifecycle happy path.*
+
 Simplified, end-to-end happy-path overview (also used in the root `README`). Use for a quick,
 high-level mental model before diving into the more detailed per-step sequence diagrams below.
 
@@ -65,6 +67,8 @@ Covers:
     <img src="diagrams/authorise-sequence.svg" alt="Authorise sequence diagram" width="100%" />
   </a>
 </p>
+
+*Figure 2: Authorise sequence.*
 
 Use when working on **initial authorisation** behavior.
 
@@ -84,6 +88,8 @@ Covers:
   </a>
 </p>
 
+*Figure 3: Capture sequence.*
+
 Use when working on **capture** behavior.
 
 Covers:
@@ -101,6 +107,8 @@ Covers:
   </a>
 </p>
 
+*Figure 4: Reverse sequence.*
+
 Use when working on **reverse** behavior.
 
 Covers:
@@ -117,6 +125,8 @@ Covers:
     <img src="diagrams/idempotency-generic.svg" alt="Generic idempotency sequence diagram" width="100%" />
   </a>
 </p>
+
+*Figure 5: Idempotency generic sequence.*
 
 Use when explaining or designing **idempotency behavior generically**, independent of any single
 endpoint. Applies to every idempotency-keyed mutating endpoint across the platform (auth-service's
@@ -137,6 +147,8 @@ Covers:
     <img src="diagrams/event-publishing-sequence.svg" alt="Event publishing sequence diagram" width="100%" />
   </a>
 </p>
+
+*Figure 6: Event publishing sequence.*
 
 Use for **auth-service outbox publishing** concerns.
 
@@ -191,11 +203,16 @@ Covers:
     <img src="diagrams/payment-lifecycle-state.svg" alt="Payment lifecycle state diagram" width="49%" />
   </a>
 </p>
+
+*Figure 9: Payment Lifecycle State — authorisation state transitions (`AUTHORISED`/`CAPTURED`/`REVERSED`/`DECLINED`).*
+
 <p>
   <a href="https://raw.githubusercontent.com/ShirongQuan/payment-platform/main/docs/flows/diagrams/account-lock-state.svg">
     <img src="diagrams/account-lock-state.svg" alt="Account lock state diagram" width="49%" />
   </a>
 </p>
+
+*Figure 10: Account Lock State — account-level `ACTIVE`/`LOCKED` transitions.*
 
 Use alongside [Payment Lifecycle](./payment-lifecycle.md#lifecycle-at-a-glance) for the
 authorisation and account-level state diagrams at a glance (a closely related, slightly more

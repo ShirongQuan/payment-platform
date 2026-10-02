@@ -23,8 +23,7 @@ below.
   </a>
 </p>
 
-*Figure 10: Trust boundaries — public API, internal service, data, and messaging boundaries. Click the diagram
-to open the full-size SVG.*
+*Figure 5: Trust boundaries — the platform's security zones.*
 
 This document describes the trust zones the Payment Platform's *application layer* crosses today — the
 boundaries between the public API, internal service calls, data stores, and messaging — and what each boundary

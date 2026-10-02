@@ -49,7 +49,12 @@ and asynchronously (Kafka via the transactional outbox pattern). It demonstrates
 
 ## Architecture at a Glance
 
-![Container diagram](docs/architecture/diagrams/containers.svg)
+<p>
+  <a href="https://raw.githubusercontent.com/ShirongQuan/payment-platform/main/docs/architecture/diagrams/containers.svg">
+    <img src="docs/architecture/diagrams/containers.svg" alt="Container diagram" width="100%" />
+  </a>
+</p>
+
 *Figure 1: C4 Container diagram — auth-service, fraud-service, ledger-service, Kafka, Postgres,
 Redis, and the observability stack.*
 
@@ -72,8 +77,12 @@ The platform follows a C4 model:
   `AUTHORISED → REVERSED`, terminal `DECLINED`; account `ACTIVE ⇄ LOCKED`)
 - 📄 [Accounting Model](docs/domain/accounting-model.md) · [Payment State Machine](docs/domain/state-machine.md)
 
-![State machine](docs/domain/diagrams/payment-state-machine.svg)
-<br/>
+<p>
+  <a href="https://raw.githubusercontent.com/ShirongQuan/payment-platform/main/docs/domain/diagrams/payment-state-machine.svg">
+    <img src="docs/domain/diagrams/payment-state-machine.svg" alt="State machine" width="100%" />
+  </a>
+</p>
+
 *Figure 2: Payment status transitions.*
 
 ### Eventing & Outbox
@@ -104,9 +113,17 @@ The platform follows a C4 model:
 
 **Grafana dashboard — platform health, authorisation flow**
 
-![Grafana dashboard placeholder](docs/observability/screenshots/dashboard/platform-health.png)
-<br/>
-![Grafana dashboard placeholder](docs/observability/screenshots/dashboard/authorisation-flow.png)
+<p>
+  <a href="https://raw.githubusercontent.com/ShirongQuan/payment-platform/main/docs/observability/screenshots/dashboard/platform-health.png">
+    <img src="docs/observability/screenshots/dashboard/platform-health.png" alt="Grafana dashboard placeholder" width="100%" />
+  </a>
+</p>
+<p>
+  <a href="https://raw.githubusercontent.com/ShirongQuan/payment-platform/main/docs/observability/screenshots/dashboard/authorisation-flow.png">
+    <img src="docs/observability/screenshots/dashboard/authorisation-flow.png" alt="Grafana dashboard placeholder" width="100%" />
+  </a>
+</p>
+
 *Figure 3: Grafana dashboard — platform health, authorisation flow.*
 
 **Auth trace**
@@ -134,7 +151,7 @@ including the linked outbox trace, is in
 
 - Consistent RFC 7807 error model across services, with a service-specific `errorCode`
 - `idempotencyKey` request-body semantics for safe retries on every payment-critical endpoint
-- 📄 [API docs](docs/api/README.md) (overview, idempotency) · [OpenAPI specs](docs/api/openapi/)
+- 📄 [API docs](docs/api/README.md) (overview, idempotency) · [OpenAPI specs](docs/api/README.md#openapi-specs)
 
 ### Security
 
@@ -153,7 +170,8 @@ including the linked outbox trace, is in
   transitions, DLT routing, and concurrency conflicts on demand, for demos and manual verification
 - Every architecture/consistency decision is recorded as a numbered ADR
 
-📄 [Development Guide](docs/getting-started/development.md) · [Testing Strategy](docs/testing/strategy.md) · [load-tests/](load-tests/) · [Architecture Decision Records (ADR) Index](docs/decisions/README.md)
+📄 [Development Guide](docs/getting-started/development.md) · [Testing Strategy](docs/testing/strategy.md) · [load-tests/](load-tests/README.md) · [Architecture Decision Records (ADR) Index](docs/decisions/README.md)
+
 
 ## Quick Start
 
@@ -184,7 +202,12 @@ trace the request across services:
 
 Preview of what you'll see:
 
-![Payment Lifecycle Happy Path](docs/flows/diagrams/payment-lifecycle-happy-path.svg)
+<p>
+  <a href="https://raw.githubusercontent.com/ShirongQuan/payment-platform/main/docs/flows/diagrams/payment-lifecycle-happy-path.svg">
+    <img src="docs/flows/diagrams/payment-lifecycle-happy-path.svg" alt="Payment Lifecycle Happy Path" width="100%" />
+  </a>
+</p>
+
 *Figure 5: Authorize → Capture → Ledger posting → Event publish (happy path; see
 [Payment Lifecycle](docs/flows/payment-lifecycle.md) for the full per-endpoint sequence diagrams
 covering idempotency, concurrency, and failure handling).*
@@ -201,7 +224,7 @@ Legend: ✅ Implemented · 🟡 Partial/Basic · 🔵 Planned
 | Resilience (circuit breaker, fail-open, retries)             | ✅ Implemented          | [Resilience Patterns](docs/reliability/resilience-patterns.md)                   |
 | Observability (traces, metrics, dashboards, correlated logs) | ✅ Implemented          | [Telemetry Guidelines](docs/observability/telemetry.md)                          |
 | Automated tests + CI build                                   | ✅ Implemented          | [Testing Strategy](docs/testing/strategy.md)                                     |
-| Load/traffic-generation scripts                              | 🟡 Demo-scale baseline | [load-tests/](load-tests/)                                                       |
+| Load/traffic-generation scripts                              | 🟡 Demo-scale baseline | [load-tests/](load-tests/README.md)                                              |
 | AuthN/AuthZ (Spring Security + JWT)                          | 🔵 Planned             | [roadmap next steps #1](docs/roadmap.md#5-next-steps-prioritized)                |
 | API gateway / infra-level rate limiting                      | 🔵 Planned             | [roadmap next steps #4](docs/roadmap.md#5-next-steps-prioritized)                |
 | Reconciliation service                                       | 🔵 Planned             | [roadmap next steps #2](docs/roadmap.md#5-next-steps-prioritized)                |
@@ -209,6 +232,39 @@ Legend: ✅ Implemented · 🟡 Partial/Basic · 🔵 Planned
 | Partial capture / refunds                                    | 🔵 Planned             | [roadmap production considerations](docs/roadmap.md#6-production-considerations) |
 
 Full detail, rationale, and prioritization live in [Payment Platform MVP Progress](docs/roadmap.md).
+
+## Next Phase: Planned Architecture
+
+The diagrams and status above reflect the current MVP boundary. The sketch below shows how I'd evolve the
+system toward a more production-shaped architecture — dashed/grey elements are planned, not implemented:
+
+<p>
+  <a href="https://raw.githubusercontent.com/ShirongQuan/payment-platform/main/docs/architecture/diagrams/containers-next-phase.svg">
+    <img src="docs/architecture/diagrams/containers-next-phase.svg" alt="Next-phase container diagram" width="100%" />
+  </a>
+</p>
+
+*Figure 6: Planned next-phase containers.*
+
+- **API Gateway** — single ingress for routing, authN/authZ scope enforcement, and infra-level rate limiting
+  in front of `auth-service`/`ledger-service`
+- **Identity Provider (OIDC)** — centralized authn/authz issuing customer- vs. admin-scoped tokens, validated
+  by the gateway and `auth-service`
+- **Customer Web App / Admin Back-office Web App** — SPA frontends giving the public API its first real
+  consumer, authenticating via the IdP and routed through the gateway
+- **reconciliation-service** — scheduled job cross-checking ledger projections against account state (and
+  eventually an external processor) to detect and flag drift
+- **notification-service** — consumes `auth.events` to deliver email/SMS/webhook notifications on payment
+  lifecycle changes
+- **External Payment Processor / Card Network (simulated)** — settlement target for authorise/capture and
+  source of truth for reconciliation
+- **Config/Secrets Store** and **Object Storage** — supporting infra for secrets management and
+  receipt/statement storage
+
+➡️ Full detail and rationale: [Containers § Next Phase](docs/architecture/containers.md#next-phase-planned) ·
+[Roadmap § Next Steps](docs/roadmap.md#5-next-steps-prioritized)
+
+---
 
 ## Documentation Map
 
