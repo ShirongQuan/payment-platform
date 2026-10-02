@@ -126,7 +126,7 @@ The platform follows a C4 model:
 
 *Figure 3: Grafana dashboard — platform health, authorisation flow.*
 
-**Auth trace**
+**Authorisation trace**
 
 <p>
   <a href="https://raw.githubusercontent.com/ShirongQuan/payment-platform/main/docs/observability/screenshots/trace/auth-trace-e567d636-51fe-414a-938e-93d675f23094.png">
@@ -139,6 +139,14 @@ The platform follows a C4 model:
 <p>
   <a href="https://raw.githubusercontent.com/ShirongQuan/payment-platform/main/docs/observability/screenshots/trace/node-graph-e567d636-51fe-414a-938e-93d675f23094.png">
     <img src="docs/observability/screenshots/trace/node-graph-e567d636-51fe-414a-938e-93d675f23094.png" alt="Tempo node graph for the same authorise-request trace" width="100%" />
+  </a>
+</p>
+
+**Outbox event trace links to the same authorisation trace**
+
+<p>
+  <a href="https://raw.githubusercontent.com/ShirongQuan/payment-platform/main/docs/observability/screenshots/trace/outbox-trace-e567d636-51fe-414a-938e-93d675f23094.png">
+    <img src="docs/observability/screenshots/trace/outbox-trace-e567d636-51fe-414a-938e-93d675f23094.png" alt="Outbox event trace for the same authorise-request" width="100%" />
   </a>
 </p>
 
@@ -171,7 +179,6 @@ including the linked outbox trace, is in
 - Every architecture/consistency decision is recorded as a numbered ADR
 
 📄 [Development Guide](docs/getting-started/development.md) · [Testing Strategy](docs/testing/strategy.md) · [load-tests/](load-tests/README.md) · [Architecture Decision Records (ADR) Index](docs/decisions/README.md)
-
 
 ## Quick Start
 
