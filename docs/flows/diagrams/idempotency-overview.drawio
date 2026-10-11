@@ -1,0 +1,179 @@
+<mxfile host="app.diagrams.net">
+  <diagram name="Page-1" id="3NStb50x0JrVXaH4DiG5">
+    <mxGraphModel dx="1388" dy="1241" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="0" pageScale="1" pageWidth="827" pageHeight="1169" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <UserObject label="" mermaidData="{&#xa;  &quot;data&quot;: &quot;%% Presentation-friendly idempotency overview for Video 2, Slide 7.\n%% Detailed concurrency/unique-constraint behavior remains in idempotency-generic.mmd.\nflowchart LR\n    A[Request&lt;br/&gt;Idempotency-Key: K] --&gt; B{Redis lookup}\n\n    B --&gt;|Hit| C{Same payload?}\n    C --&gt;|Yes| D[Replay previous result&lt;br/&gt;No new side effect]\n    C --&gt;|No| E[409 Conflict&lt;br/&gt;Idempotency key reused]\n\n    B --&gt;|Miss| F{Database fallback}\n    F --&gt;|Existing + same payload| D\n    F --&gt;|Existing + different payload| E\n    F --&gt;|No existing request| G[Process normally]\n\n    G --&gt; H[Persist result]\n    H --&gt; I[Cache response in Redis]\n    I --&gt; J[Return result]\n\n    classDef entry fill:#E8F0FE,stroke:#3B6EA8,stroke-width:2px,color:#172B4D;\n    classDef decision fill:#FFF4CC,stroke:#B58B00,stroke-width:2px,color:#3D3200;\n    classDef success fill:#E6F4EA,stroke:#2E7D32,stroke-width:2px,color:#173A1A;\n    classDef conflict fill:#FDECEC,stroke:#C62828,stroke-width:2px,color:#5A1717;\n    classDef process fill:#F3F4F6,stroke:#6B7280,stroke-width:2px,color:#1F2937;\n\n    class A entry;\n    class B,C,F decision;\n    class D,J success;\n    class E conflict;\n    class G,H,I process;\n&quot;,&#xa;  &quot;config&quot;: null,&#xa;  &quot;version&quot;: &quot;12&quot;&#xa;}" id="Bspnvo7wXiG6xVa4hbxi-1">
+          <mxCell connectable="0" parent="1" style="group;transparentBounds=1;editIcon=1;lockedGroup=0;groupPadding=10;fontColor=default;fontStyle=1;fontSize=12;" vertex="1">
+            <mxGeometry as="geometry" />
+          </mxCell>
+        </UserObject>
+        <UserObject label="Request Idempotency Key" mermaidId="n:A" mermaidBaseStyle="html=1;whiteSpace=wrap;strokeWidth=2;fillColor=#E8F0FE;strokeColor=#3B6EA8;fontColor=#172B4D;fontFamily=Recursive;fontSize=14;shadow=1;shadowColor=#000000;shadowOffsetX=4;shadowOffsetY=4;shadowBlur=0;shadowOpacity=6;" mermaidBaseValue="Request&#xa;Idempotency-Key: K" id="Bspnvo7wXiG6xVa4hbxi-2">
+          <mxCell parent="Bspnvo7wXiG6xVa4hbxi-1" style="html=1;whiteSpace=wrap;strokeWidth=2;fillColor=#ffe6cc;strokeColor=#d79b00;fontFamily=Helvetica;fontSize=14;shadow=1;shadowColor=#000000;shadowOffsetX=4;shadowOffsetY=4;shadowBlur=0;shadowOpacity=6;labelWidth=120;fontStyle=1;fontColor=default;align=center;verticalAlign=middle;" vertex="1">
+            <mxGeometry height="96.5" width="162" x="32" y="219.25" as="geometry" />
+          </mxCell>
+        </UserObject>
+        <UserObject label="Same payload?" mermaidId="n:C" mermaidBaseStyle="rhombus;html=1;strokeWidth=2;whiteSpace=wrap;fillColor=#FFF4CC;strokeColor=#B58B00;fontColor=#3D3200;fontFamily=Recursive;fontSize=14;shadow=1;shadowColor=#000000;shadowOffsetX=4;shadowOffsetY=4;shadowBlur=0;shadowOpacity=6;" mermaidBaseValue="Same payload?" id="Bspnvo7wXiG6xVa4hbxi-4">
+          <mxCell parent="Bspnvo7wXiG6xVa4hbxi-1" style="rhombus;html=1;strokeWidth=2;whiteSpace=wrap;fillColor=#FFF4CC;strokeColor=#B58B00;fontColor=default;fontFamily=Helvetica;fontSize=14;shadow=1;shadowColor=#000000;shadowOffsetX=4;shadowOffsetY=4;shadowBlur=0;shadowOpacity=6;fontStyle=1;align=center;verticalAlign=middle;" vertex="1">
+            <mxGeometry height="175" width="182" x="430" y="50" as="geometry" />
+          </mxCell>
+        </UserObject>
+        <mxCell id="Bspnvo7wXiG6xVa4hbxi-75" edge="1" parent="Bspnvo7wXiG6xVa4hbxi-1" source="Bspnvo7wXiG6xVa4hbxi-8" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#94A3B8;strokeWidth=2;align=center;verticalAlign=middle;fontFamily=Helvetica;fontSize=11;fontColor=#333333;fontStyle=1;labelBackgroundColor=none;endArrow=classicThin;endFill=1;" target="Bspnvo7wXiG6xVa4hbxi-9" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <UserObject label="Process normally" mermaidId="n:G" mermaidBaseStyle="html=1;whiteSpace=wrap;strokeWidth=2;fillColor=#F3F4F6;strokeColor=#6B7280;fontColor=#1F2937;fontFamily=Recursive;fontSize=14;shadow=1;shadowColor=#000000;shadowOffsetX=4;shadowOffsetY=4;shadowBlur=0;shadowOpacity=6;" mermaidBaseValue="Process normally" id="Bspnvo7wXiG6xVa4hbxi-8">
+          <mxCell parent="Bspnvo7wXiG6xVa4hbxi-1" style="html=1;whiteSpace=wrap;strokeWidth=2;fillColor=#f9f7ed;strokeColor=#36393d;fontFamily=Helvetica;fontSize=14;shadow=1;shadowColor=#000000;shadowOffsetX=4;shadowOffsetY=4;shadowBlur=0;shadowOpacity=6;align=center;verticalAlign=middle;fontStyle=1" vertex="1">
+            <mxGeometry height="77" width="152" x="446" y="590" as="geometry" />
+          </mxCell>
+        </UserObject>
+        <UserObject label="Persist result&lt;div&gt;in DB&lt;/div&gt;" mermaidId="n:H" mermaidBaseStyle="html=1;whiteSpace=wrap;strokeWidth=2;fillColor=#F3F4F6;strokeColor=#6B7280;fontColor=#1F2937;fontFamily=Recursive;fontSize=14;shadow=1;shadowColor=#000000;shadowOffsetX=4;shadowOffsetY=4;shadowBlur=0;shadowOpacity=6;" mermaidBaseValue="Persist result" id="Bspnvo7wXiG6xVa4hbxi-9">
+          <mxCell parent="Bspnvo7wXiG6xVa4hbxi-1" style="html=1;whiteSpace=wrap;strokeWidth=2;fillColor=#f9f7ed;strokeColor=#36393d;fontFamily=Helvetica;fontSize=14;shadow=1;shadowColor=#000000;shadowOffsetX=4;shadowOffsetY=4;shadowBlur=0;shadowOpacity=6;align=center;verticalAlign=middle;fontStyle=1" vertex="1">
+            <mxGeometry height="77" width="152" x="623" y="590" as="geometry" />
+          </mxCell>
+        </UserObject>
+        <UserObject label="Cache response in Redis" mermaidId="n:I" mermaidBaseStyle="html=1;whiteSpace=wrap;strokeWidth=2;fillColor=#F3F4F6;strokeColor=#6B7280;fontColor=#1F2937;fontFamily=Recursive;fontSize=14;shadow=1;shadowColor=#000000;shadowOffsetX=4;shadowOffsetY=4;shadowBlur=0;shadowOpacity=6;" mermaidBaseValue="Cache response in Redis" id="Bspnvo7wXiG6xVa4hbxi-10">
+          <mxCell parent="Bspnvo7wXiG6xVa4hbxi-1" style="html=1;whiteSpace=wrap;strokeWidth=2;fillColor=#f9f7ed;strokeColor=#36393d;fontFamily=Helvetica;fontSize=14;shadow=1;shadowColor=#000000;shadowOffsetX=4;shadowOffsetY=4;shadowBlur=0;shadowOpacity=6;labelWidth=120;align=center;verticalAlign=middle;fontStyle=1" vertex="1">
+            <mxGeometry height="77" width="162" x="799" y="590" as="geometry" />
+          </mxCell>
+        </UserObject>
+        <UserObject label="Return result" mermaidId="n:J" mermaidBaseStyle="html=1;whiteSpace=wrap;strokeWidth=2;fillColor=#E6F4EA;strokeColor=#2E7D32;fontColor=#173A1A;fontFamily=Recursive;fontSize=14;shadow=1;shadowColor=#000000;shadowOffsetX=4;shadowOffsetY=4;shadowBlur=0;shadowOpacity=6;" mermaidBaseValue="Return result" id="Bspnvo7wXiG6xVa4hbxi-11">
+          <mxCell parent="Bspnvo7wXiG6xVa4hbxi-1" style="html=1;whiteSpace=wrap;strokeWidth=2;fillColor=#d5e8d4;strokeColor=#82b366;fontFamily=Helvetica;fontSize=14;shadow=1;shadowColor=#000000;shadowOffsetX=4;shadowOffsetY=4;shadowBlur=0;shadowOpacity=6;fontStyle=1" vertex="1">
+            <mxGeometry height="77" width="203" x="985" y="590" as="geometry" />
+          </mxCell>
+        </UserObject>
+        <UserObject label="" mermaidId="e:H-&gt;I#0" mermaidBaseStyle="edgeStyle=orthogonalEdgeStyle;rounded=1;curved=0;startArrow=none;endArrow=block;endSize=8;jumpStyle=arc;jumpSize=12;strokeColor=#000000;exitX=1;exitY=0.5;entryX=0;entryY=0.5;strokeWidth=2;targetPerimeterSpacing=4;" mermaidBaseValue="" id="Bspnvo7wXiG6xVa4hbxi-21">
+          <mxCell edge="1" parent="Bspnvo7wXiG6xVa4hbxi-1" source="Bspnvo7wXiG6xVa4hbxi-9" style="edgeStyle=orthogonalEdgeStyle;rounded=1;endArrow=classicThin;strokeColor=#94A3B8;exitX=1;exitY=0.5;entryX=0;entryY=0.5;strokeWidth=2;align=center;verticalAlign=middle;fontFamily=Helvetica;fontSize=11;fontColor=#333333;fontStyle=1;labelBackgroundColor=none;endFill=1;" target="Bspnvo7wXiG6xVa4hbxi-10">
+            <mxGeometry relative="1" as="geometry">
+              <Array as="points" />
+            </mxGeometry>
+          </mxCell>
+        </UserObject>
+        <UserObject label="" mermaidId="e:I-&gt;J#0" mermaidBaseStyle="edgeStyle=orthogonalEdgeStyle;rounded=1;curved=0;startArrow=none;endArrow=block;endSize=8;jumpStyle=arc;jumpSize=12;strokeColor=#000000;exitX=1;exitY=0.5;entryX=0;entryY=0.5;strokeWidth=2;targetPerimeterSpacing=4;" mermaidBaseValue="" id="Bspnvo7wXiG6xVa4hbxi-22">
+          <mxCell edge="1" parent="Bspnvo7wXiG6xVa4hbxi-1" source="Bspnvo7wXiG6xVa4hbxi-10" style="edgeStyle=orthogonalEdgeStyle;rounded=1;endArrow=classicThin;strokeColor=#94A3B8;exitX=1;exitY=0.5;entryX=0;entryY=0.5;strokeWidth=2;align=center;verticalAlign=middle;fontFamily=Helvetica;fontSize=11;fontColor=#333333;fontStyle=1;labelBackgroundColor=none;endFill=1;" target="Bspnvo7wXiG6xVa4hbxi-11">
+            <mxGeometry relative="1" as="geometry">
+              <Array as="points" />
+            </mxGeometry>
+          </mxCell>
+        </UserObject>
+        <mxCell id="Bspnvo7wXiG6xVa4hbxi-27" edge="1" parent="Bspnvo7wXiG6xVa4hbxi-1" source="Bspnvo7wXiG6xVa4hbxi-2" style="rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#94A3B8;fontFamily=Helvetica;fontSize=11;fontColor=#333333;labelBackgroundColor=none;endArrow=classicThin;endFill=1;fontStyle=1;align=center;verticalAlign=middle;entryX=0;entryY=0.5;entryDx=0;entryDy=0;exitX=1;exitY=0.5;exitDx=0;exitDy=0;" target="Bspnvo7wXiG6xVa4hbxi-77" value="">
+          <mxGeometry relative="1" x="0.6424" y="9" as="geometry">
+            <mxPoint as="offset" />
+            <mxPoint x="229" y="281" as="sourcePoint" />
+            <mxPoint x="415" y="282" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="Bspnvo7wXiG6xVa4hbxi-23" edge="1" parent="Bspnvo7wXiG6xVa4hbxi-1" source="Bspnvo7wXiG6xVa4hbxi-77" style="rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#94A3B8;fontFamily=Helvetica;fontSize=11;fontColor=#333333;labelBackgroundColor=none;endArrow=classicThin;endFill=1;fontStyle=1;align=center;verticalAlign=middle;entryX=0;entryY=0.5;entryDx=0;entryDy=0;exitX=0.5;exitY=0;exitDx=0;exitDy=0;edgeStyle=orthogonalEdgeStyle;" target="Bspnvo7wXiG6xVa4hbxi-4" value="">
+          <mxGeometry relative="1" x="0.7319" y="9" as="geometry">
+            <mxPoint as="offset" />
+            <mxPoint x="330" y="-40" as="sourcePoint" />
+            <mxPoint x="516" y="-39" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="Bspnvo7wXiG6xVa4hbxi-28" connectable="0" parent="Bspnvo7wXiG6xVa4hbxi-23" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];fontStyle=1;fontSize=11;" value="Hit" vertex="1">
+          <mxGeometry relative="1" x="0.2722" y="-2" as="geometry">
+            <mxPoint y="-14" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="Bspnvo7wXiG6xVa4hbxi-31" edge="1" parent="Bspnvo7wXiG6xVa4hbxi-1" source="Bspnvo7wXiG6xVa4hbxi-77" style="rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#94A3B8;fontFamily=Helvetica;fontSize=11;fontColor=#333333;labelBackgroundColor=none;endArrow=classicThin;endFill=1;fontStyle=1;align=center;verticalAlign=middle;entryX=0;entryY=0.5;entryDx=0;entryDy=0;exitX=0.5;exitY=1;exitDx=0;exitDy=0;edgeStyle=orthogonalEdgeStyle;" target="Bspnvo7wXiG6xVa4hbxi-76" value="">
+          <mxGeometry relative="1" x="0.5352" y="9" as="geometry">
+            <mxPoint as="offset" />
+            <mxPoint x="290" y="454" as="sourcePoint" />
+            <mxPoint x="460" y="434" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="Bspnvo7wXiG6xVa4hbxi-32" connectable="0" parent="Bspnvo7wXiG6xVa4hbxi-31" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];fontStyle=1;fontSize=11;labelBackgroundColor=none;" value="Miss" vertex="1">
+          <mxGeometry relative="1" x="0.1422" y="-2" as="geometry">
+            <mxPoint y="-14" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="Bspnvo7wXiG6xVa4hbxi-33" edge="1" parent="Bspnvo7wXiG6xVa4hbxi-1" source="Bspnvo7wXiG6xVa4hbxi-4" style="rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#94A3B8;fontFamily=Helvetica;fontSize=11;fontColor=#333333;labelBackgroundColor=none;endArrow=classicThin;endFill=1;fontStyle=1;align=center;verticalAlign=middle;exitX=1;exitY=0;exitDx=0;exitDy=0;edgeStyle=orthogonalEdgeStyle;entryX=0;entryY=0.25;entryDx=0;entryDy=0;" target="Bspnvo7wXiG6xVa4hbxi-43" value="">
+          <mxGeometry relative="1" x="0.6418" y="9" as="geometry">
+            <mxPoint as="offset" />
+            <Array as="points">
+              <mxPoint x="566.5" y="95.1" />
+            </Array>
+            <mxPoint x="660" y="70" as="sourcePoint" />
+            <mxPoint x="1040" y="137.5" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="Bspnvo7wXiG6xVa4hbxi-34" connectable="0" parent="Bspnvo7wXiG6xVa4hbxi-33" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];fontStyle=1;fontSize=11;fontFamily=Helvetica;fontColor=default;labelBackgroundColor=none;" value="Yes" vertex="1">
+          <mxGeometry relative="1" x="-0.2335" y="-2" as="geometry">
+            <mxPoint x="-60" y="-16" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="Bspnvo7wXiG6xVa4hbxi-37" edge="1" parent="Bspnvo7wXiG6xVa4hbxi-1" source="Bspnvo7wXiG6xVa4hbxi-76" style="rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#94A3B8;fontFamily=Helvetica;fontSize=12;fontColor=#333333;labelBackgroundColor=none;endArrow=classicThin;endFill=1;fontStyle=1;align=center;verticalAlign=middle;exitX=1;exitY=0.25;exitDx=0;exitDy=0;edgeStyle=orthogonalEdgeStyle;entryX=0;entryY=0.75;entryDx=0;entryDy=0;" target="Bspnvo7wXiG6xVa4hbxi-43" value="">
+          <mxGeometry relative="1" x="-0.0328" y="9" as="geometry">
+            <mxPoint as="offset" />
+            <Array as="points">
+              <mxPoint x="870.3" y="384.1" />
+              <mxPoint x="870.3" y="143.4" />
+            </Array>
+            <mxPoint x="390" y="312.7" as="sourcePoint" />
+            <mxPoint x="1040" y="185.45" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="Bspnvo7wXiG6xVa4hbxi-38" connectable="0" parent="Bspnvo7wXiG6xVa4hbxi-37" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];fontFamily=Helvetica;fontSize=11;fontColor=default;fontStyle=1;labelBackgroundColor=none;" value="Existing + same payload" vertex="1">
+          <mxGeometry relative="1" x="-0.902" y="-2" as="geometry">
+            <mxPoint x="71" y="-26" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="Bspnvo7wXiG6xVa4hbxi-41" edge="1" parent="Bspnvo7wXiG6xVa4hbxi-1" source="Bspnvo7wXiG6xVa4hbxi-76" style="rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#94A3B8;fontFamily=Helvetica;fontSize=11;fontColor=#333333;labelBackgroundColor=none;endArrow=classicThin;endFill=1;fontStyle=1;align=center;verticalAlign=middle;entryX=0.5;entryY=0;entryDx=0;entryDy=0;exitX=0.5;exitY=1;exitDx=0;exitDy=0;edgeStyle=orthogonalEdgeStyle;" target="Bspnvo7wXiG6xVa4hbxi-8" value="">
+          <mxGeometry relative="1" x="0.7489" y="9" as="geometry">
+            <mxPoint as="offset" />
+            <mxPoint x="612" y="690" as="sourcePoint" />
+            <mxPoint x="735" y="714" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="Bspnvo7wXiG6xVa4hbxi-42" connectable="0" parent="Bspnvo7wXiG6xVa4hbxi-41" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];fontStyle=1" value="No existing request" vertex="1">
+          <mxGeometry relative="1" x="0.3423" y="-2" as="geometry">
+            <mxPoint y="-14" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="Bspnvo7wXiG6xVa4hbxi-43" parent="Bspnvo7wXiG6xVa4hbxi-1" style="rounded=0;whiteSpace=wrap;fillColor=#d5e8d4;strokeColor=#82b366;fontStyle=1;html=1;fontSize=12;" value="Replay previous result&lt;br&gt;No new side effect" vertex="1">
+          <mxGeometry height="96.5" width="203" x="985" y="71" as="geometry" />
+        </mxCell>
+        <mxCell id="Bspnvo7wXiG6xVa4hbxi-74" parent="Bspnvo7wXiG6xVa4hbxi-1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontStyle=1" value="&lt;span style=&quot;font-size: 14px;&quot;&gt;409 Conflict&lt;/span&gt;&lt;br style=&quot;font-size: 14px;&quot;&gt;&lt;span style=&quot;font-size: 14px;&quot;&gt;Idempotency key reused&lt;/span&gt;" vertex="1">
+          <mxGeometry height="96.5" width="203" x="985" y="360" as="geometry" />
+        </mxCell>
+        <mxCell id="Bspnvo7wXiG6xVa4hbxi-39" edge="1" parent="Bspnvo7wXiG6xVa4hbxi-1" style="rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#94A3B8;fontFamily=Helvetica;fontSize=11;fontColor=#333333;labelBackgroundColor=none;endArrow=classicThin;endFill=1;fontStyle=1;align=center;verticalAlign=middle;edgeStyle=orthogonalEdgeStyle;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" target="Bspnvo7wXiG6xVa4hbxi-74" value="">
+          <mxGeometry relative="1" x="0.7577" y="9" as="geometry">
+            <mxPoint as="offset" />
+            <mxPoint x="550" y="200" as="sourcePoint" />
+            <mxPoint x="1390" y="260" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="Bspnvo7wXiG6xVa4hbxi-40" connectable="0" parent="Bspnvo7wXiG6xVa4hbxi-39" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];fontStyle=1;fontSize=11;fontFamily=Helvetica;fontColor=default;labelBackgroundColor=none;" value="No" vertex="1">
+          <mxGeometry relative="1" x="0.5094" y="-2" as="geometry">
+            <mxPoint x="-412" y="-22" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="Bspnvo7wXiG6xVa4hbxi-35" edge="1" parent="Bspnvo7wXiG6xVa4hbxi-1" source="Bspnvo7wXiG6xVa4hbxi-76" style="rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#94A3B8;fontFamily=Helvetica;fontSize=11;fontColor=#333333;labelBackgroundColor=none;endArrow=classicThin;endFill=1;fontStyle=1;align=center;verticalAlign=middle;edgeStyle=orthogonalEdgeStyle;exitX=1;exitY=0.75;exitDx=0;exitDy=0;entryX=0;entryY=0.75;entryDx=0;entryDy=0;" target="Bspnvo7wXiG6xVa4hbxi-74" value="">
+          <mxGeometry relative="1" x="0.7082" y="9" as="geometry">
+            <mxPoint as="offset" />
+            <mxPoint x="460" y="470" as="sourcePoint" />
+            <mxPoint x="1051" y="432.38" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="Bspnvo7wXiG6xVa4hbxi-36" connectable="0" parent="Bspnvo7wXiG6xVa4hbxi-35" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];fontStyle=1;fontSize=11;labelBackgroundColor=none;fontFamily=Helvetica;fontColor=default;" value="&lt;span style=&quot;color: rgb(40, 37, 61); font-size: 10px;&quot;&gt;Existing + different payload&lt;/span&gt;" vertex="1">
+          <mxGeometry relative="1" x="-0.1898" y="-2" as="geometry">
+            <mxPoint x="-59" y="-14" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <UserObject label="Database lookup" mermaidId="n:A" mermaidBaseStyle="html=1;whiteSpace=wrap;strokeWidth=2;fillColor=#E8F0FE;strokeColor=#3B6EA8;fontColor=#172B4D;fontFamily=Recursive;fontSize=14;shadow=1;shadowColor=#000000;shadowOffsetX=4;shadowOffsetY=4;shadowBlur=0;shadowOpacity=6;" mermaidBaseValue="Request&#xa;Idempotency-Key: K" id="Bspnvo7wXiG6xVa4hbxi-76">
+          <mxCell parent="Bspnvo7wXiG6xVa4hbxi-1" style="html=1;whiteSpace=wrap;strokeWidth=2;fillColor=#dae8fc;strokeColor=#6c8ebf;fontFamily=Helvetica;fontSize=14;shadow=1;shadowColor=#000000;shadowOffsetX=4;shadowOffsetY=4;shadowBlur=0;shadowOpacity=6;labelWidth=120;fontStyle=1;align=center;verticalAlign=middle;" vertex="1">
+            <mxGeometry height="96.5" width="162" x="440" y="360" as="geometry" />
+          </mxCell>
+        </UserObject>
+        <UserObject label="Redis lookup" mermaidId="n:A" mermaidBaseStyle="html=1;whiteSpace=wrap;strokeWidth=2;fillColor=#E8F0FE;strokeColor=#3B6EA8;fontColor=#172B4D;fontFamily=Recursive;fontSize=14;shadow=1;shadowColor=#000000;shadowOffsetX=4;shadowOffsetY=4;shadowBlur=0;shadowOpacity=6;" mermaidBaseValue="Request&#xa;Idempotency-Key: K" id="Bspnvo7wXiG6xVa4hbxi-77">
+          <mxCell parent="Bspnvo7wXiG6xVa4hbxi-1" style="html=1;whiteSpace=wrap;strokeWidth=2;fillColor=#b0e3e6;strokeColor=#0e8088;fontFamily=Helvetica;fontSize=14;shadow=1;shadowColor=#000000;shadowOffsetX=4;shadowOffsetY=4;shadowBlur=0;shadowOpacity=6;labelWidth=120;fontStyle=1;align=center;verticalAlign=middle;" vertex="1">
+            <mxGeometry height="96.5" width="162" x="248" y="219.25" as="geometry" />
+          </mxCell>
+        </UserObject>
+        <mxCell id="Bspnvo7wXiG6xVa4hbxi-78" parent="1" style="text;html=1;align=left;verticalAlign=middle;whiteSpace=wrap;fontSize=24;fontColor=#333333;fontStyle=1;labelBackgroundColor=none;" value="&lt;div&gt;Safe Retries with Idempotency&amp;nbsp;&lt;/div&gt;" vertex="1">
+          <mxGeometry height="86" width="860" x="320" y="-70" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

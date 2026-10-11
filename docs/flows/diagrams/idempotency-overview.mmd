@@ -1,0 +1,29 @@
+%% Presentation-friendly idempotency overview for Video 2, Slide 7.
+%% Detailed concurrency/unique-constraint behavior remains in idempotency-generic.mmd.
+flowchart LR
+    A[Request<br/>Idempotency-Key: K] --> B{Redis lookup}
+
+    B -->|Hit| C{Same payload?}
+    C -->|Yes| D[Replay previous result<br/>No new side effect]
+    C -->|No| E[409 Conflict<br/>Idempotency key reused]
+
+    B -->|Miss| F{Database fallback}
+    F -->|Existing + same payload| D
+    F -->|Existing + different payload| E
+    F -->|No existing request| G[Process normally]
+
+    G --> H[Persist result]
+    H --> I[Cache response in Redis]
+    I --> J[Return result]
+
+    classDef entry fill:#E8F0FE,stroke:#3B6EA8,stroke-width:2px,color:#172B4D;
+    classDef decision fill:#FFF4CC,stroke:#B58B00,stroke-width:2px,color:#3D3200;
+    classDef success fill:#E6F4EA,stroke:#2E7D32,stroke-width:2px,color:#173A1A;
+    classDef conflict fill:#FDECEC,stroke:#C62828,stroke-width:2px,color:#5A1717;
+    classDef process fill:#F3F4F6,stroke:#6B7280,stroke-width:2px,color:#1F2937;
+
+    class A entry;
+    class B,C,F decision;
+    class D,J success;
+    class E conflict;
+    class G,H,I process;

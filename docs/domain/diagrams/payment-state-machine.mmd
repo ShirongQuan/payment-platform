@@ -1,9 +1,0 @@
-stateDiagram-v2
-    [*] --> AUTHORISED : sufficient funds & fraud approved
-    [*] --> DECLINED : insufficient funds, fraud decline,\nor account not ACTIVE
-    AUTHORISED --> CAPTURED : capture (full amount)
-    AUTHORISED --> REVERSED : reverse (full amount)
-    DECLINED --> [*]
-    CAPTURED --> [*]
-    REVERSED --> [*]
-

@@ -12,6 +12,8 @@ sequenceDiagram
     Client ->> Auth: POST /authorisations<br/>(authorise, amount, idempotencyKey)
     Auth ->> Cache: check idempotency key
     Cache -->> Auth: cache miss
+    Auth ->> DB: check idempotency key<br/>(best-effort pre-check, before paying<br/>for a fraud-service call)
+    DB -->> Auth: not found
     Auth ->> Fraud: POST /fraud/check
     Fraud -->> Auth: APPROVE
     Auth ->> DB: reserve funds +<br/>save authorisation (AUTHORISED)<br/>+ outbox event

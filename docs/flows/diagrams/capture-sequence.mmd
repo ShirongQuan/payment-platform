@@ -3,6 +3,7 @@ sequenceDiagram
 	actor Client
 	participant AC as Auth<br/>Controller
 	participant AS as Authorisation<br/>ServiceImpl
+	participant Cache as Idempotency<br/>Cache (Redis)
 	participant ATE as Authorisation<br/>Transactional<br/>ExecutorImpl
 	participant AR as Authorisation<br/>Repository
 	participant AER as Authorisation<br/>EventRepository
@@ -11,49 +12,58 @@ sequenceDiagram
 
 	Client->>AC: POST /authorisations/{id}/captures
 	AC->>AS: capture(authorisationId,<br/>captureRequest)
-	AS->>ATE: captureInTransaction(authorisationId,<br/>captureRequest)
+	AS->>Cache: get(CAPTURE, authorisationId,<br/>idempotencyKey)
+	alt Cache hit (fingerprint matches)
+		Cache-->>AS: cached CaptureResponse
+		AS-->>AC: replayed response<br/>(no DB call)
+	else Cache miss
+		Cache-->>AS: miss
+		AS->>ATE: captureInTransaction(authorisationId,<br/>captureRequest)
 
-	ATE->>AR: findById(authorisationId)
-	AR-->>ATE: AuthorisationEntity
+		ATE->>AR: findById(authorisationId)
+		AR-->>ATE: AuthorisationEntity
 
-	alt status == CAPTURED
-		ATE->>AER: findByAccountIdAndEventTypeAndIdempotencyKey(accountId,<br/>idemKey, AUTHORISATION_CAPTURED)
-		alt capture event exists for idempotency key
-			AER-->>ATE: existing capture event
-			ATE-->>AS: previous CaptureResponse
-		else capture key mismatch
-			ATE-->>AS: throw IdempotencyConflictException
+		alt status == CAPTURED
+			ATE->>AER: findByAccountIdAndEventTypeAndIdempotencyKey(accountId,<br/>idemKey, AUTHORISATION_CAPTURED)
+			alt capture event exists for idempotency key
+				AER-->>ATE: existing capture event
+				ATE-->>AS: previous CaptureResponse
+			else capture key mismatch
+				ATE-->>AS: throw IdempotencyConflictException
+			end
+		else status != AUTHORISED
+			ATE-->>AS: throw AuthorisationIllegalStateException
+		else status == AUTHORISED
+			ATE->>AccR: findById(accountId)
+			AccR-->>ATE: AccountEntity
+			ATE->>ATE: account.capture(amount, currency)
+			ATE->>ATE: set authorisation status = CAPTURED
+
+			ATE->>AR: saveAndFlush(authorisation CAPTURED)
+			ATE->>AER: saveAndFlush(event AUTHORISATION_CAPTURED)
+			ATE->>OES: enqueueAuthorisation(...,<br/>OperationType.CAPTURE)
+			OES->>OES: build CAPTURE payload map
+			OES->>OES: save outbox event (status NEW)
+			ATE-->>AS: CaptureResponse
 		end
-	else status != AUTHORISED
-		ATE-->>AS: throw AuthorisationIllegalStateException
-	else status == AUTHORISED
-		ATE->>AccR: findById(accountId)
-		AccR-->>ATE: AccountEntity
-		ATE->>ATE: account.capture(amount, currency)
-		ATE->>ATE: set authorisation status = CAPTURED
 
-		ATE->>AR: saveAndFlush(authorisation CAPTURED)
-		ATE->>AER: saveAndFlush(event AUTHORISATION_CAPTURED)
-		ATE->>OES: enqueueAuthorisation(...,<br/>OperationType.CAPTURE)
-		OES->>OES: build CAPTURE payload map
-		OES->>OES: save outbox event (status NEW)
-		ATE-->>AS: CaptureResponse
-	end
-
-	alt Concurrent capture insert race
-		ATE-->>AS: throw ConcurrentIdempotencyRaceException
-		AS->>AR: findById(authorisationId)
-		AS->>AER: findByAccountIdAndEventTypeAndIdempotencyKey(accountId,<br/>idemKey, AUTHORISATION_CAPTURED)
-		alt capture event found
-			AS-->>AC: recovered CaptureResponse
-		else
-			AS-->>AC: IdempotencyConflictException
+		alt Concurrent capture insert race
+			ATE-->>AS: throw ConcurrentIdempotencyRaceException
+			AS->>AR: findById(authorisationId)
+			AS->>AER: findByAccountIdAndEventTypeAndIdempotencyKey(accountId,<br/>idemKey, AUTHORISATION_CAPTURED)
+			alt capture event found
+				AS->>Cache: store response (TTL)
+				AS-->>AC: recovered CaptureResponse
+			else
+				AS-->>AC: IdempotencyConflictException
+			end
+		else Concurrent account-version conflict<br/>(different idempotency key)
+			ATE-->>AS: throw AccountConcurrencyConflictException
+			AS-->>AC: 409 Conflict (retry hint)
+		else No race
+			AS->>Cache: store response (TTL)
+			AS-->>AC: CaptureResponse
 		end
-	else Concurrent account-version conflict<br/>(different idempotency key)
-		ATE-->>AS: throw AccountConcurrencyConflictException
-		AS-->>AC: 409 Conflict (retry hint)
-	else No race
-		AS-->>AC: CaptureResponse
 	end
 
 	AC-->>Client: 200 OK / error

@@ -12,6 +12,8 @@ sequenceDiagram
     Ctrl ->> Svc: authorise(request)
     Svc ->> Cache: get(scopeId, idempotencyKey)
     Cache -->> Svc: miss
+    Svc ->> DB: findByAccountIdAndAuthoriseEventTypesAndIdempotencyKey<br/>(best-effort pre-check)
+    DB -->> Svc: not found
     Svc ->> Fraud: evaluate(request)
     Fraud -->> Svc: APPROVE (risk score)
     Svc ->> Exec: authoriseInTransaction(...)

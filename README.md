@@ -1,10 +1,15 @@
 # Payment Platform
 
-A demo-grade payment platform showcasing authorize → capture → reverse flows, built with an
-event-driven architecture (transactional outbox + Kafka), an event-sourced ledger projection, and
-full observability (OpenTelemetry, Prometheus, Grafana, Tempo).
+A distributed payment-processing project built around explicit service boundaries, reliable event
+delivery, resilience, and end-to-end observability.
 
-> **Status:** personal MVP / demo project — see [Status: Implemented vs. Planned](#status-implemented-vs-planned).
+It implements authorise → capture → reverse payment flows across three Spring Boot services,
+combining synchronous fraud evaluation with asynchronous ledger propagation through a transactional
+outbox and Kafka.
+
+The current implementation provides the working foundation described below. The
+[roadmap](docs/roadmap.md) extends that foundation with identity and access management, an API
+gateway, reconciliation, notifications, and user-facing applications.
 
 [![CI](https://github.com/ShirongQuan/payment-platform/actions/workflows/ci.yml/badge.svg)](https://github.com/ShirongQuan/payment-platform/actions/workflows/ci.yml)
 ![Java](https://img.shields.io/badge/Java-21-orange)
@@ -12,7 +17,7 @@ full observability (OpenTelemetry, Prometheus, Grafana, Tempo).
 
 ## Table of Contents
 
-- [What This Project Demonstrates](#what-this-project-demonstrates)
+- [What the Platform Implements](#what-the-platform-implements)
 - [Architecture at a Glance](#architecture-at-a-glance)
 - [Key Design Highlights](#key-design-highlights)
     - [Domain & Ledger](#domain--ledger)
@@ -24,16 +29,19 @@ full observability (OpenTelemetry, Prometheus, Grafana, Tempo).
     - [Engineering Practices](#engineering-practices)
 - [Quick Start](#quick-start)
 - [Demo Journey](#demo-journey)
-- [Status: Implemented vs. Planned](#status-implemented-vs-planned)
+- [Implementation Status & Roadmap](#implementation-status--roadmap)
 - [Documentation Map](#documentation-map)
 
 ---
 
-## What This Project Demonstrates
+## What the Platform Implements
 
-This project simulates a simplified real-world payment platform composed of three services —
-**auth-service**, **fraud-service**, and **ledger-service** — communicating synchronously (REST)
-and asynchronously (Kafka via the transactional outbox pattern). It demonstrates:
+The platform is composed of three independently deployed Spring Boot services — **auth-service**,
+**fraud-service**, and **ledger-service** — with explicit service and data-ownership boundaries.
+Services coordinate synchronously over REST where an immediate decision is required and
+asynchronously through Kafka where independent processing and eventual consistency are appropriate.
+
+The current implementation includes:
 
 - Payment lifecycle handling (authorise, full capture, full reverse) with a real, guarded state
   machine
@@ -58,7 +66,10 @@ and asynchronously (Kafka via the transactional outbox pattern). It demonstrates
 *Figure 1: C4 Container diagram — auth-service, fraud-service, ledger-service, Kafka, Postgres,
 Redis, and the observability stack.*
 
-The platform follows a C4 model:
+Each service owns its application data. Cross-service coordination happens through explicit APIs
+and events rather than shared database access.
+
+The architecture documentation follows a C4 model:
 
 - **[System Context (L1)](docs/architecture/system-context.md)** — external actors and system boundary
 - **[Containers (L2)](docs/architecture/containers.md)** — services, data stores, messaging
@@ -69,17 +80,16 @@ The platform follows a C4 model:
 
 ### Domain & Ledger
 
-- Event-sourced, single-entry ledger projection: every state-changing event (authorise, capture,
-  reverse) produces exactly one durable ledger row; balance conservation, currency consistency, and
-  idempotent posting are enforced invariants — evolving toward full double-entry bookkeeping is
-  tracked as a future step, not assumed today
+- Event-sourced, single-entry ledger projection: each state-changing payment event (authorise,
+  capture, reverse) produces a durable ledger entry, with balance conservation, currency consistency,
+  and idempotent posting enforced as invariants
 - Explicit authorisation/account state machines with guarded transitions (`AUTHORISED → CAPTURED`,
   `AUTHORISED → REVERSED`, terminal `DECLINED`; account `ACTIVE ⇄ LOCKED`)
 - 📄 [Accounting Model](docs/domain/accounting-model.md) · [Payment State Machine](docs/domain/state-machine.md)
 
 <p>
-  <a href="https://raw.githubusercontent.com/ShirongQuan/payment-platform/main/docs/domain/diagrams/payment-state-machine.svg">
-    <img src="docs/domain/diagrams/payment-state-machine.svg" alt="State machine" width="100%" />
+  <a href="https://raw.githubusercontent.com/ShirongQuan/payment-platform/main/docs/flows/diagrams/payment-lifecycle-state.svg">
+    <img src="docs/flows/diagrams/payment-lifecycle-state.svg" alt="State machine" width="100%" />
   </a>
 </p>
 
@@ -87,19 +97,24 @@ The platform follows a C4 model:
 
 ### Eventing & Outbox
 
-- Transactional outbox guarantees no lost events on service crash — domain state change and outbox
-  row commit atomically in one DB transaction
+- Payment state changes and their corresponding outbox records are committed atomically in the
+  same local database transaction, allowing events to be published reliably to Kafka without a
+  distributed transaction
 - Kafka topics keyed by the authorisation id for per-aggregate ordering
 - At-least-once delivery; `ledger-service` deduplicates by `eventId` for effectively-once projection
 - 📄 [Outbox Pattern](docs/eventing/outbox-pattern.md) · [Kafka Topics](docs/eventing/kafka-topics.md)
 
 ### Reliability
 
-- Optimistic locking + idempotency-race recovery prevent double reservation/capture/reverse under
-  concurrent same-key retries
-- Circuit breaker + time limiter around the fraud-service call; retry + dead-letter topic around
-  Kafka consumption
-  📄 [Concurrency & Consistency](docs/reliability/concurrency-consistency.md) · [Resilience Patterns](docs/reliability/resilience-patterns.md)
+- Optimistic locking and idempotency-race recovery protect payment state transitions from
+  concurrent duplicate operations
+- Fraud evaluation is protected by a time limiter and circuit breaker, with a constrained fail-open
+  policy for explicitly eligible requests
+- Kafka consumers use retry and dead-letter handling so downstream processing failures remain
+  isolated from the originating payment transaction
+-
+
+📄 [Concurrency & Consistency](docs/reliability/concurrency-consistency.md) · [Resilience Patterns](docs/reliability/resilience-patterns.md)
 
 ### Observability
 
@@ -174,8 +189,8 @@ including the linked outbox trace, is in
 - `shared-spring-lib` centralizes cross-cutting concerns (correlation ids, RFC 7807 error model,
   idempotency hashing) so all three services stay consistent without copy-paste
 - Unit + integration tests (Testcontainers-backed) run in every module, wired into GitHub Actions CI
-- Scripted traffic generation (`load-tests/`) reproduces idempotency replay, circuit-breaker
-  transitions, DLT routing, and concurrency conflicts on demand, for demos and manual verification
+- Scripted traffic generation (`load-tests/`) provides repeatable testing and demonstration of
+  idempotency replay, circuit-breaker transitions, DLT routing, and concurrency conflicts
 - Every architecture/consistency decision is recorded as a numbered ADR
 
 📄 [Development Guide](docs/getting-started/development.md) · [Testing Strategy](docs/testing/strategy.md) · [load-tests/](load-tests/README.md) · [Architecture Decision Records (ADR) Index](docs/decisions/README.md)
@@ -219,46 +234,65 @@ Preview of what you'll see:
 [Payment Lifecycle](docs/flows/payment-lifecycle.md) for the full per-endpoint sequence diagrams
 covering idempotency, concurrency, and failure handling).*
 
-## Status: Implemented vs. Planned
+## Implementation Status & Roadmap
 
-Legend: ✅ Implemented · 🟡 Partial/Basic · 🔵 Planned
+The current codebase provides the distributed-system foundation used throughout the project. The
+next phase builds on that foundation with additional access, operational, and payment capabilities.
 
-| Area                                                         | Status                 | Details                                                                          |
-|--------------------------------------------------------------|------------------------|----------------------------------------------------------------------------------|
-| Core payment flow (authorise/capture/reverse)                | ✅ Implemented          | [Payment State Machine](docs/domain/state-machine.md)                            |
-| Event-driven ledger (outbox + Kafka + DLT)                   | ✅ Implemented          | [Outbox Pattern](docs/eventing/outbox-pattern.md)                                |
-| Idempotency & concurrency control                            | ✅ Implemented          | [Concurrency & Consistency](docs/reliability/concurrency-consistency.md)         |
-| Resilience (circuit breaker, fail-open, retries)             | ✅ Implemented          | [Resilience Patterns](docs/reliability/resilience-patterns.md)                   |
-| Observability (traces, metrics, dashboards, correlated logs) | ✅ Implemented          | [Telemetry Guidelines](docs/observability/telemetry.md)                          |
-| Automated tests + CI build                                   | ✅ Implemented          | [Testing Strategy](docs/testing/strategy.md)                                     |
-| Load/traffic-generation scripts                              | 🟡 Demo-scale baseline | [load-tests/](load-tests/README.md)                                              |
-| AuthN/AuthZ (Spring Security + JWT)                          | 🔵 Planned             | [roadmap next steps #1](docs/roadmap.md#5-next-steps-prioritized)                |
-| API gateway / infra-level rate limiting                      | 🔵 Planned             | [roadmap next steps #4](docs/roadmap.md#5-next-steps-prioritized)                |
-| Reconciliation service                                       | 🔵 Planned             | [roadmap next steps #2](docs/roadmap.md#5-next-steps-prioritized)                |
-| Customer-facing UI                                           | 🔵 Planned             | [roadmap next steps #3](docs/roadmap.md#5-next-steps-prioritized)                |
-| Partial capture / refunds                                    | 🔵 Planned             | [roadmap production considerations](docs/roadmap.md#6-production-considerations) |
+### Implemented foundation
 
-Full detail, rationale, and prioritization live in [Payment Platform MVP Progress](docs/roadmap.md).
+| Area                                                         | Details                                                                  |
+|--------------------------------------------------------------|--------------------------------------------------------------------------|
+| Core payment flow (authorise/capture/reverse)                | [Payment State Machine](docs/domain/state-machine.md)                    |
+| Event-driven ledger (outbox + Kafka + DLT)                   | [Outbox Pattern](docs/eventing/outbox-pattern.md)                        |
+| Idempotency & concurrency control                            | [Concurrency & Consistency](docs/reliability/concurrency-consistency.md) |
+| Resilience (circuit breaker, fail-open, retries)             | [Resilience Patterns](docs/reliability/resilience-patterns.md)           |
+| Observability (traces, metrics, dashboards, correlated logs) | [Telemetry Guidelines](docs/observability/telemetry.md)                  |
+| Automated tests + CI build                                   | [Testing Strategy](docs/testing/strategy.md)                             |
+| Repeatable traffic and failure scenarios                     | [load-tests/](load-tests/README.md)                                      |
 
-## Next Phase: Planned Architecture
+### Planned next phase
 
-The diagrams and status above reflect the current MVP boundary. The sketch below shows how I'd evolve the
-system toward a more production-shaped architecture — dashed/grey elements are planned, not implemented:
+| Area                                     | Roadmap                                                        |
+|------------------------------------------|----------------------------------------------------------------|
+| Identity, authentication & authorisation | [Roadmap next steps](docs/roadmap.md#5-next-steps-prioritized) |
+| API gateway & infrastructure rate limits | [Roadmap next steps](docs/roadmap.md#5-next-steps-prioritized) |
+| Reconciliation service                   | [Roadmap next steps](docs/roadmap.md#5-next-steps-prioritized) |
+| Customer and admin applications          | [Roadmap next steps](docs/roadmap.md#5-next-steps-prioritized) |
+| Notification service                     | [Roadmap next steps](docs/roadmap.md#5-next-steps-prioritized) |
+| Broader payment lifecycle capabilities   | [Roadmap](docs/roadmap.md)                                     |
+
+Full detail, rationale, and prioritization live in the [project roadmap](docs/roadmap.md).
+
+## Planned Next-Phase Architecture
+
+The next phase extends the existing distributed-system foundation with access and identity
+capabilities, reconciliation, notifications, external processor integration, and user-facing
+applications.
+
+The diagram below provides a simplified view of that planned evolution. It distinguishes the
+existing platform foundation from planned next-phase components.
 
 <p>
-  <a href="https://raw.githubusercontent.com/ShirongQuan/payment-platform/main/docs/architecture/diagrams/containers-next-phase.svg">
-    <img src="docs/architecture/diagrams/containers-next-phase.svg" alt="Next-phase container diagram" width="100%" />
+  <a href="https://raw.githubusercontent.com/ShirongQuan/payment-platform/main/docs/architecture/diagrams/payment_Platform_Planned_Next_Phase_architecture.svg">
+    <img src="docs/architecture/diagrams/payment_Platform_Planned_Next_Phase_architecture.svg"
+         alt="Planned next-phase architecture"
+         width="100%" />
   </a>
 </p>
 
-*Figure 6: Planned next-phase containers.*
+*Figure 6: Planned next-phase architecture — extending the existing distributed-system foundation.*
+
+For the full container-level view, see the
+**[detailed C4 next-phase container diagram](docs/architecture/diagrams/containers-next-phase.svg)**
+and **[Containers — Next Phase](docs/architecture/containers.md#next-phase-planned)**.
 
 - **API Gateway** — single ingress for routing, authN/authZ scope enforcement, and infra-level rate limiting
   in front of `auth-service`/`ledger-service`
 - **Identity Provider (OIDC)** — centralized authn/authz issuing customer- vs. admin-scoped tokens, validated
   by the gateway and `auth-service`
-- **Customer Web App / Admin Back-office Web App** — SPA frontends giving the public API its first real
-  consumer, authenticating via the IdP and routed through the gateway
+- **Customer Web App / Admin Operations App** — planned user-facing applications authenticating
+  through the identity provider and accessing platform APIs through the gateway
 - **reconciliation-service** — scheduled job cross-checking ledger projections against account state (and
   eventually an external processor) to detect and flag drift
 - **notification-service** — consumes `auth.events` to deliver email/SMS/webhook notifications on payment
@@ -292,9 +326,9 @@ system toward a more production-shaped architecture — dashed/grey elements are
 | Load tests (how to run)                                     | [load-tests/](load-tests/README.md)                              |
 | Load-testing methodology (why, scenarios, results)          | [Load Testing Report](docs/testing/load-testing.md)              |
 | Architecture Decision Records                               | [docs/decisions/](docs/decisions/README.md)                      |
-| Roadmap (status, next steps, production considerations)     | [Payment Platform MVP Progress](docs/roadmap.md)                 |
+| Roadmap (current status and planned evolution)              | [Project Roadmap](docs/roadmap.md)                               |
 
 ---
 
-Personal learning project by Shirong Quan.
+Personal engineering project by Shirong Quan.
 

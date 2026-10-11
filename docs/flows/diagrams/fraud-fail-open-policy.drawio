@@ -1,0 +1,97 @@
+<mxfile host="app.diagrams.net" agent="ChatGPT">
+  <diagram id="fraud-fail-open" name="Fraud Fail-Open Policy">
+    <mxGraphModel dx="1388" dy="1741" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1600" pageHeight="900" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="title" parent="1" style="text;html=1;align=left;verticalAlign=middle;fontSize=28;fontStyle=1;" value="Controlled Fail-Open for Fraud Check" vertex="1">
+          <mxGeometry height="45" width="900" x="400" y="-75" as="geometry" />
+        </mxCell>
+        <mxCell id="subtitle" parent="1" style="text;html=1;align=left;verticalAlign=middle;fontSize=17;fontColor=#666666;fontStyle=1" value="Degraded-mode policy when the synchronous fraud dependency is unavailable" vertex="1">
+          <mxGeometry height="30" width="900" x="400" y="-30" as="geometry" />
+        </mxCell>
+        <mxCell id="request" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=18;fontStyle=1;" value="Authorisation&lt;div&gt;request&lt;/div&gt;" vertex="1">
+          <mxGeometry height="80" width="220" x="400" y="40" as="geometry" />
+        </mxCell>
+        <mxCell id="fraud" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#b0e3e6;strokeColor=#0e8088;fontSize=18;fontStyle=1;" value="Call fraud service" vertex="1">
+          <mxGeometry height="80" width="220" x="400" y="190" as="geometry" />
+        </mxCell>
+        <mxCell id="available" parent="1" style="rhombus;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=17;fontStyle=1;" value="fraud-service&lt;br&gt;available?" vertex="1">
+          <mxGeometry height="140" width="190" x="670" y="160" as="geometry" />
+        </mxCell>
+        <mxCell id="normal" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=18;fontStyle=1;" value="Use normal&lt;br&gt;fraud decision" vertex="1">
+          <mxGeometry height="100" width="300" x="1110" y="180" as="geometry" />
+        </mxCell>
+        <mxCell id="enabled" parent="1" style="rhombus;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=17;fontStyle=1;" value="Fail-open&lt;br&gt;enabled?" vertex="1">
+          <mxGeometry height="140" width="190" x="670" y="360" as="geometry" />
+        </mxCell>
+        <mxCell id="trusted" parent="1" style="rhombus;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=17;fontStyle=1;" value="Trusted&lt;br&gt;account?" vertex="1">
+          <mxGeometry height="140" width="190" x="910" y="360" as="geometry" />
+        </mxCell>
+        <mxCell id="threshold" parent="1" style="rhombus;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=16;fontStyle=1;" value="Amount within&lt;br&gt;configured maximum?" vertex="1">
+          <mxGeometry height="160" width="220" x="1150" y="350" as="geometry" />
+        </mxCell>
+        <mxCell id="bypass" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;fontSize=18;fontStyle=1;" value="CONTROLLED BYPASS&lt;br&gt;&lt;font style=&quot;font-size:15px&quot;&gt;Continue authorisation&amp;nbsp;&lt;/font&gt;&lt;div&gt;&lt;font style=&quot;font-size:15px&quot;&gt;without fraud decision&lt;/font&gt;&lt;/div&gt;" vertex="1">
+          <mxGeometry height="100" width="300" x="1410" y="380" as="geometry" />
+        </mxCell>
+        <mxCell id="fail" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=18;fontStyle=1;" value="DO NOT BYPASS&lt;br&gt;Authorisation fails safely" vertex="1">
+          <mxGeometry height="100" width="300" x="1110" y="620" as="geometry" />
+        </mxCell>
+        <mxCell id="takeaway" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=none;strokeColor=none;fontSize=22;fontStyle=1;align=center;" value="Fail-open is constrained: enabled + trusted account + amount within threshold" vertex="1">
+          <mxGeometry height="55" width="1020" x="540" y="750" as="geometry" />
+        </mxCell>
+        <mxCell id="e1" edge="1" parent="1" source="request" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;endArrow=classicThin;endFill=1;strokeWidth=2;strokeColor=#94A3B8;align=center;verticalAlign=middle;fontFamily=Helvetica;fontSize=11;fontColor=#333333;fontStyle=1;labelBackgroundColor=none;" target="fraud">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e2" edge="1" parent="1" source="fraud" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;endArrow=classicThin;endFill=1;strokeWidth=2;strokeColor=#94A3B8;align=center;verticalAlign=middle;fontFamily=Helvetica;fontSize=11;fontColor=#333333;fontStyle=1;labelBackgroundColor=none;" target="available">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e3" edge="1" parent="1" source="available" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;endArrow=classicThin;endFill=1;strokeWidth=2;fontSize=11;fontStyle=1;strokeColor=#94A3B8;align=center;verticalAlign=middle;fontFamily=Helvetica;fontColor=#333333;labelBackgroundColor=none;" target="normal" value="Yes">
+          <mxGeometry relative="1" x="0.0323" y="20" as="geometry">
+            <mxPoint as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e4" edge="1" parent="1" source="available" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;endArrow=classicThin;endFill=1;strokeWidth=2;fontSize=11;fontStyle=1;strokeColor=#94A3B8;align=center;verticalAlign=middle;fontFamily=Helvetica;fontColor=#333333;labelBackgroundColor=none;" target="enabled" value="No">
+          <mxGeometry relative="1" y="25" as="geometry">
+            <mxPoint as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e5" edge="1" parent="1" source="enabled" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;endArrow=classicThin;endFill=1;strokeWidth=2;fontSize=11;fontStyle=1;strokeColor=#94A3B8;align=center;verticalAlign=middle;fontFamily=Helvetica;fontColor=#333333;labelBackgroundColor=none;" target="trusted" value="Yes">
+          <mxGeometry relative="1" x="-0.1429" y="20" as="geometry">
+            <mxPoint as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e6" edge="1" parent="1" source="enabled" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;endArrow=classicThin;endFill=1;strokeWidth=2;fontSize=11;fontStyle=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0;entryY=0.75;entryDx=0;entryDy=0;strokeColor=#94A3B8;align=center;verticalAlign=middle;fontFamily=Helvetica;fontColor=#333333;labelBackgroundColor=none;" target="fail" value="No">
+          <mxGeometry relative="1" x="-0.1852" y="25" as="geometry">
+            <mxPoint as="offset" />
+            <mxPoint x="1150" y="475" as="sourcePoint" />
+            <mxPoint x="1830" y="290" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e7" edge="1" parent="1" source="trusted" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;endArrow=classicThin;endFill=1;strokeWidth=2;fontSize=11;fontStyle=1;strokeColor=#94A3B8;align=center;verticalAlign=middle;fontFamily=Helvetica;fontColor=#333333;labelBackgroundColor=none;" target="threshold" value="Yes">
+          <mxGeometry relative="1" x="-0.1429" y="20" as="geometry">
+            <mxPoint as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e8" edge="1" parent="1" source="trusted" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;endArrow=classicThin;endFill=1;strokeWidth=2;fontSize=11;fontStyle=1;entryX=0;entryY=0.5;entryDx=0;entryDy=0;strokeColor=#94A3B8;align=center;verticalAlign=middle;fontFamily=Helvetica;fontColor=#333333;labelBackgroundColor=none;" target="fail" value="No">
+          <mxGeometry relative="1" x="0.5551" y="20" as="geometry">
+            <mxPoint as="offset" />
+            <Array as="points">
+              <mxPoint x="1025" y="670" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e9" edge="1" parent="1" source="threshold" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;endArrow=classicThin;endFill=1;strokeWidth=2;fontSize=11;fontStyle=1;strokeColor=#94A3B8;align=center;verticalAlign=middle;fontFamily=Helvetica;fontColor=#333333;labelBackgroundColor=none;" target="bypass" value="Yes">
+          <mxGeometry relative="1" y="20" as="geometry">
+            <mxPoint as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e10" edge="1" parent="1" source="threshold" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;endArrow=classicThin;endFill=1;strokeWidth=2;fontSize=11;fontStyle=1;entryX=0.5;entryY=0;entryDx=0;entryDy=0;strokeColor=#94A3B8;align=center;verticalAlign=middle;fontFamily=Helvetica;fontColor=#333333;labelBackgroundColor=none;" target="fail" value="No">
+          <mxGeometry relative="1" x="0.3023" y="20" as="geometry">
+            <mxPoint as="offset" />
+          </mxGeometry>
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

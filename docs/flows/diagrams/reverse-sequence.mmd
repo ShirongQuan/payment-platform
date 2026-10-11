@@ -3,6 +3,7 @@ sequenceDiagram
 	actor Client
 	participant AC as Auth<br/>Controller
 	participant AS as Authorisation<br/>ServiceImpl
+	participant Cache as Idempotency<br/>Cache (Redis)
 	participant ATE as Authorisation<br/>Transactional<br/>ExecutorImpl
 	participant AR as Authorisation<br/>Repository
 	participant AER as Authorisation<br/>EventRepository
@@ -11,50 +12,59 @@ sequenceDiagram
 
 	Client->>AC: POST /authorisations/{id}/reversals
 	AC->>AS: reverse(authorisationId,<br/>reverseRequest)
-	AS->>ATE: reverseInTransaction(authorisationId,<br/>reverseRequest, correlationId)
+	AS->>Cache: get(REVERSE, authorisationId,<br/>idempotencyKey)
+	alt Cache hit (fingerprint matches)
+		Cache-->>AS: cached ReverseResponse
+		AS-->>AC: replayed response<br/>(no DB call)
+	else Cache miss
+		Cache-->>AS: miss
+		AS->>ATE: reverseInTransaction(authorisationId,<br/>reverseRequest, correlationId)
 
-	ATE->>AR: findById(authorisationId)
-	AR-->>ATE: AuthorisationEntity
+		ATE->>AR: findById(authorisationId)
+		AR-->>ATE: AuthorisationEntity
 
-	alt status == REVERSED
-		ATE->>AER: findByAccountIdAndEventTypeAndIdempotencyKey(accountId,<br/>idemKey, AUTHORISATION_REVERSED)
-		alt reverse event exists for idempotency key
-			AER-->>ATE: existing reverse event
-			ATE-->>AS: previous ReverseResponse
-		else key mismatch / no matching event
-			ATE-->>AS: throw AuthorisationIllegalStateException<br/>(already REVERSED)
+		alt status == REVERSED
+			ATE->>AER: findByAccountIdAndEventTypeAndIdempotencyKey(accountId,<br/>idemKey, AUTHORISATION_REVERSED)
+			alt reverse event exists for idempotency key
+				AER-->>ATE: existing reverse event
+				ATE-->>AS: previous ReverseResponse
+			else key mismatch / no matching event
+				ATE-->>AS: throw AuthorisationIllegalStateException<br/>(already REVERSED)
+			end
+		else status != AUTHORISED
+			ATE-->>AS: throw AuthorisationIllegalStateException<br/>(e.g. CAPTURED/DECLINED)
+		else status == AUTHORISED
+			ATE->>AccR: findById(accountId)
+			AccR-->>ATE: AccountEntity
+			ATE->>ATE: account.reverse(amount, currency)
+			Note over ATE: reservedBalance -= amount only -<br/>availableBalance untouched (funds were never debited from it)
+			ATE->>ATE: set authorisation status = REVERSED
+
+			ATE->>AR: saveAndFlush(authorisation REVERSED)
+			ATE->>AER: saveAndFlush(event AUTHORISATION_REVERSED,<br/>reasonCode)
+			ATE->>OES: enqueueAuthorisation(...,<br/>OperationType.REVERSE)
+			OES->>OES: build REVERSE payload map
+			OES->>OES: save outbox event (status NEW)
+			ATE-->>AS: ReverseResponse
 		end
-	else status != AUTHORISED
-		ATE-->>AS: throw AuthorisationIllegalStateException<br/>(e.g. CAPTURED/DECLINED)
-	else status == AUTHORISED
-		ATE->>AccR: findById(accountId)
-		AccR-->>ATE: AccountEntity
-		ATE->>ATE: account.reverse(amount, currency)
-		Note over ATE: reservedBalance -= amount only -<br/>availableBalance untouched (funds were never debited from it)
-		ATE->>ATE: set authorisation status = REVERSED
 
-		ATE->>AR: saveAndFlush(authorisation REVERSED)
-		ATE->>AER: saveAndFlush(event AUTHORISATION_REVERSED,<br/>reasonCode)
-		ATE->>OES: enqueueAuthorisation(...,<br/>OperationType.REVERSE)
-		OES->>OES: build REVERSE payload map
-		OES->>OES: save outbox event (status NEW)
-		ATE-->>AS: ReverseResponse
-	end
-
-	alt Concurrent idempotency race
-		ATE-->>AS: throw ConcurrentIdempotencyRaceException
-		AS->>AR: findById(authorisationId)
-		AS->>AER: findByAccountIdAndEventTypeAndIdempotencyKey(accountId,<br/>idemKey, AUTHORISATION_REVERSED)
-		alt reverse event found
-			AS-->>AC: recovered ReverseResponse
-		else
-			AS-->>AC: IdempotencyConflictException
+		alt Concurrent idempotency race
+			ATE-->>AS: throw ConcurrentIdempotencyRaceException
+			AS->>AR: findById(authorisationId)
+			AS->>AER: findByAccountIdAndEventTypeAndIdempotencyKey(accountId,<br/>idemKey, AUTHORISATION_REVERSED)
+			alt reverse event found
+				AS->>Cache: store response (TTL)
+				AS-->>AC: recovered ReverseResponse
+			else
+				AS-->>AC: IdempotencyConflictException
+			end
+		else Concurrent account-version race<br/>(different idempotency key)
+			ATE-->>AS: throw AccountConcurrencyConflictException
+			AS-->>AC: 409 Conflict (retry hint)
+		else No race
+			AS->>Cache: store response (TTL)
+			AS-->>AC: ReverseResponse
 		end
-	else Concurrent account-version race<br/>(different idempotency key)
-		ATE-->>AS: throw AccountConcurrencyConflictException
-		AS-->>AC: 409 Conflict (retry hint)
-	else No race
-		AS-->>AC: ReverseResponse
 	end
 
 	AC-->>Client: 200 OK / error

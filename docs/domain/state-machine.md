@@ -23,8 +23,8 @@
 ### Authorisation state machine
 
 <p>
-  <a href="https://raw.githubusercontent.com/ShirongQuan/payment-platform/main/docs/domain/diagrams/payment-state-machine.svg">
-    <img src="diagrams/payment-state-machine.svg" alt="Payment authorisation state machine diagram" width="49%" />
+  <a href="https://raw.githubusercontent.com/ShirongQuan/payment-platform/main/docs/flows/diagrams/payment-lifecycle-state.svg">
+    <img src="../flows/diagrams/payment-lifecycle-state.svg" alt="Payment authorisation state machine diagram" width="49%" />
   </a>
 </p>
 
@@ -33,8 +33,8 @@
 ### Account lock state machine
 
 <p>
-  <a href="https://raw.githubusercontent.com/ShirongQuan/payment-platform/main/docs/domain/diagrams/account-state-machine.svg">
-    <img src="diagrams/account-state-machine.svg" alt="Account lock state machine diagram" width="49%" />
+  <a href="https://raw.githubusercontent.com/ShirongQuan/payment-platform/main/docs/flows/diagrams/account-lock-state.svg">
+    <img src="../flows/diagrams/account-lock-state.svg" alt="Account lock state machine diagram" width="49%" />
   </a>
 </p>
 
@@ -106,9 +106,9 @@ Concurrency/Idempotency Behavior below).
 
 ### Account-level transition (parallel state machine)
 
-| From     | Event/Command                                                                                                  | To       | Notes                                                                       |
-|----------|----------------------------------------------------------------------------------------------------------------|----------|-----------------------------------------------------------------------------|
-| `ACTIVE` | Fraud-service recommends a lock (very high risk score, or a repeated-decline pattern within a trailing window) | `LOCKED` | Applied in the same transaction as the triggering `DECLINED` authorisation  |
+| From     | Event/Command                                                                                                  | To       | Notes                                                                      |
+|----------|----------------------------------------------------------------------------------------------------------------|----------|----------------------------------------------------------------------------|
+| `ACTIVE` | Fraud-service recommends a lock (very high risk score, or a repeated-decline pattern within a trailing window) | `LOCKED` | Applied in the same transaction as the triggering `DECLINED` authorisation |
 
 ## Guards / Preconditions
 
@@ -140,7 +140,8 @@ machine simple and predictable for this platform's scope.
 
 - **Scope of uniqueness:** idempotency is scoped per operation, not globally —
   `account_id + event_type + idempotency_key` for authorise, and `authorisation_id + event_type + idempotency_key` for
-  capture/reverse (see [ADR 0005: Idempotency and Concurrency Rules for Authorisation Flows](../decisions/0005-idempotency-and-concurrency.md)).
+  capture/reverse (
+  see [ADR 0005: Idempotency and Concurrency Rules for Authorisation Flows](../decisions/0005-idempotency-and-concurrency.md)).
 - **Duplicate request, same payload:** returns the previously computed response; no new side effect (no second
   reservation, capture, or reversal).
 - **Duplicate request, different payload, same key:** rejected with `409 IDEMPOTENCY_CONFLICT`.

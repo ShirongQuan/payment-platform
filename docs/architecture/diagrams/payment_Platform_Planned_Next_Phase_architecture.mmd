@@ -1,0 +1,68 @@
+flowchart LR
+
+    %% Architectural sections describe responsibility.
+    %% Component styling indicates existing vs planned.
+
+    subgraph ACCESS["ACCESS & IDENTITY"]
+        direction TB
+        CUSTOMER["Customer Web App"]
+        ADMIN["Admin / Ops App"]
+        IDP["Identity Provider"]
+        GW["API Gateway"]
+
+        CUSTOMER -->|API| GW
+        ADMIN -->|API| GW
+        CUSTOMER -->|Authenticate| IDP
+        ADMIN -->|Authenticate| IDP
+        GW -->|Validate token| IDP
+    end
+
+    subgraph PAYMENT["PAYMENT PROCESSING"]
+        direction TB
+        AUTH["Auth Service"]
+        FRAUD["Fraud Service"]
+        KAFKA["Kafka"]
+        LEDGER["Ledger Service"]
+        DATA["Service-owned data"]
+        REDIS["Redis"]
+
+        AUTH -->|Fraud check| FRAUD
+        AUTH -->|Events| KAFKA
+        KAFKA -->|Consume| LEDGER
+        AUTH -->|Owned data| DATA
+        LEDGER -->|Owned data| DATA
+        AUTH -->|Idempotency| REDIS
+        FRAUD -->|Velocity| REDIS
+    end
+
+    subgraph OPS["OPERATIONS & INTEGRATION"]
+        direction TB
+        NOTIFY["Notification Service"]
+        RECON["Reconciliation Service"]
+        MERCHANT["Merchant System"]
+        PROCESSOR["External Payment Processor"]
+
+        NOTIFY -->|Notify| MERCHANT
+        RECON -->|Reconcile| PROCESSOR
+    end
+
+    GW -->|Commands| AUTH
+    GW -->|Queries| LEDGER
+    KAFKA -->|Events| NOTIFY
+    RECON -.->|Compare| AUTH
+    RECON -.->|Compare| LEDGER
+    AUTH -->|Process| PROCESSOR
+
+    OBS["OBSERVABILITY<br/>metrics · traces · dashboards"]
+    PAYMENT ~~~ OBS
+    OPS ~~~ OBS
+
+    classDef existing fill:#FFFFFF,stroke:#355C7D,stroke-width:2px,color:#17324D;
+    classDef planned fill:#E8F7F6,stroke:#1597A5,stroke-width:2px,color:#17324D;
+    classDef supporting fill:#F4F7F9,stroke:#9AAAB6,stroke-width:1.5px,color:#4B5D6B;
+    classDef external fill:#F4F7F9,stroke:#9AAAB6,stroke-width:1.5px,color:#4B5D6B;
+
+    class AUTH,FRAUD,KAFKA,LEDGER,DATA,REDIS existing;
+    class CUSTOMER,ADMIN,IDP,GW,NOTIFY,RECON planned;
+    class OBS supporting;
+    class MERCHANT,PROCESSOR external;
