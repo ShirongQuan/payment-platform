@@ -274,8 +274,8 @@ The diagram below provides a simplified view of that planned evolution. It disti
 existing platform foundation from planned next-phase components.
 
 <p>
-  <a href="https://raw.githubusercontent.com/ShirongQuan/payment-platform/main/docs/architecture/diagrams/payment_Platform_Planned_Next_Phase_architecture.svg">
-    <img src="docs/architecture/diagrams/payment_Platform_Planned_Next_Phase_architecture.svg"
+  <a href="https://raw.githubusercontent.com/ShirongQuan/payment-platform/main/docs/architecture/diagrams/next_phase_architecture.svg">
+    <img src="docs/architecture/diagrams/next_phase_architecture.svg"
          alt="Planned next-phase architecture"
          width="100%" />
   </a>
