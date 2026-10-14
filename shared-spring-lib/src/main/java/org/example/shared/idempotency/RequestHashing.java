@@ -3,7 +3,18 @@ package org.example.shared.idempotency;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 
-/** Helpers for canonicalizing request data and computing deterministic idempotency hashes. */
+/**
+ * Helpers for canonicalizing request data and computing deterministic idempotency hashes.
+ *
+ * <p>{@link #canonicalJoin(String...)} builds a length-prefixed, pipe-delimited representation of
+ * a sequence of strings so that values containing delimiter-like characters (or {@code null}
+ * values) cannot be confused with each other — e.g. {@code ["ab", "c"]} and {@code ["a", "bc"]}
+ * never collide. {@link #sha256Hex(String)} then reduces that canonical representation to a fixed
+ * length SHA-256 hex digest, suitable for use as an idempotency key or fingerprint when comparing
+ * whether two requests carry the same payload.
+ *
+ * <p>This class is stateless and not meant to be instantiated.
+ */
 public final class RequestHashing {
 
   private RequestHashing() {}

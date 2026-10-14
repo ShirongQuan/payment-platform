@@ -26,23 +26,24 @@
 
 *Figure 2: Containers — the platform's deployable services and infrastructure.*
 
-This zooms into the [System Context](./system-context.md) and shows the main deployable/runtime units that make
-up the Payment Platform. All of these — the three application services, Kafka/Redis/PostgreSQL, and the
-observability stack — are internal to the platform's single deployment/environment today (no separate team or
-release boundary between them); the observability stack is still grouped as its own visual sub-boundary since
-it's a distinct telemetry concern from the payment data path, not because it's operated separately.
+This view expands the [System Context](./system-context.md) into the main runtime units of the Payment Platform.
+The architecture is built around three application services with explicit responsibility and data-ownership
+boundaries, coordinated through synchronous REST and asynchronous Kafka messaging.
+
+PostgreSQL, Redis, and Kafka provide persistence and messaging infrastructure, while the observability stack
+forms a separate supporting boundary around the payment-processing path.
 
 ## Runtime units
 
 ### Application services (internal)
 
-| Container                        | Responsibility                                                                                                                                                                                                                                                                  | Tech stack                                                                                           | Owned data                                                                                                                                       |
-|----------------------------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|------------------------------------------------------------------------------------------------------|--------------------------------------------------------------------------------------------------------------------------------------------------|
-| **auth-service** (port `9000`)   | Account management; authorise/capture/reverse lifecycle; idempotency enforcement; optimistic-locking concurrency control; calls fraud-service; writes the transactional outbox.                                                                                                 | Java 21, Spring Boot 4, Spring Data JPA, Spring Kafka (producer), Resilience4j, Flyway, Redis client | `auth_db` (PostgreSQL): `account`, `authorisation`, `authorisation_event`, `outbox_event`. Also owns keys in Redis (idempotency response cache). |
-| **fraud-service** (port `9010`)  | Synchronous risk evaluation for a proposed authorisation (velocity + amount-deviation rules); returns approve/decline (+ risk score, optional account-lock recommendation) to auth-service. Not exposed externally.                                                             | Java 21, Spring Boot 4, Spring Data JPA, Flyway, Redis (Lua scripts for sliding-window counters)     | `fraud_db` (PostgreSQL): `fraud_evaluation`. Also owns keys in Redis (`fraud:sw:*` velocity counters, amount-baseline cache).                    |
-| **ledger-service** (port `9020`) | Consumes `auth-service`'s domain events from Kafka, deduplicates them, and projects them into raw + normalized ledger storage; exposes read-only query endpoints. Never called synchronously by another service — Kafka is its only inbound trigger besides its own REST reads. | Java 21, Spring Boot 4, Spring Kafka (consumer), Spring Data JPA, Flyway, MapStruct                  | `ledger_db` (PostgreSQL): `ledger_event_log`, `ledger_entry`, `processed_event`.                                                                 |
+| Container                        | Responsibility                                                                                                                                                                                                                                                                                                 | Tech stack                                                                                           | Owned data                                                                                                                                       |
+|----------------------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|------------------------------------------------------------------------------------------------------|--------------------------------------------------------------------------------------------------------------------------------------------------|
+| **auth-service** (port `9000`)   | Account management; authorise/capture/reverse lifecycle; idempotency enforcement; optimistic-locking concurrency control; calls fraud-service; writes the transactional outbox.                                                                                                                                | Java 21, Spring Boot 4, Spring Data JPA, Spring Kafka (producer), Resilience4j, Flyway, Redis client | `auth_db` (PostgreSQL): `account`, `authorisation`, `authorisation_event`, `outbox_event`. Also owns keys in Redis (idempotency response cache). |
+| **fraud-service** (port `9010`)  | Synchronous risk evaluation for a proposed authorisation (velocity + amount-deviation rules); returns approve/decline (+ risk score, optional account-lock recommendation) to auth-service. Not exposed externally.                                                                                            | Java 21, Spring Boot 4, Spring Data JPA, Flyway, Redis (Lua scripts for sliding-window counters)     | `fraud_db` (PostgreSQL): `fraud_evaluation`. Also owns keys in Redis (`fraud:sw:*` velocity counters, amount-baseline cache).                    |
+| **ledger-service** (port `9020`) | Consumes `auth-service`'s domain events from Kafka, deduplicates them, and projects them into raw + normalized ledger storage; exposes read-only query endpoints. Receives payment state changes asynchronously through Kafka, so no synchronous service-to-service dependency is required for ledger updates. | Java 21, Spring Boot 4, Spring Kafka (consumer), Spring Data JPA, Flyway, MapStruct                  | `ledger_db` (PostgreSQL): `ledger_event_log`, `ledger_entry`, `processed_event`.                                                                 |
 
-### Shared library (not independently deployed)
+### Shared cross-cutting library
 
 | Container             | Responsibility                                                                                                                                                                                                                                                                                                                       | Tech stack                                            |
 |-----------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|-------------------------------------------------------|
@@ -52,7 +53,7 @@ it's a distinct telemetry concern from the payment data path, not because it's o
 
 | Container                                       | Responsibility                                                                                                                                                                                                                                                                                                                                                                                                                                                 | Tech / image                                 | Used by                                            |
 |-------------------------------------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|----------------------------------------------|----------------------------------------------------|
-| **postgres**                                    | Single PostgreSQL instance hosting three logically separate databases (`auth_db`, `fraud_db`, `ledger_db`), created via `infra/postgres/init/01-create-databases.sql`. Each service only ever touches its own database — there is no cross-service schema access.                                                                                                                                                                                              | `postgres:16`, port `5432`                   | auth-service, fraud-service, ledger-service        |
+| **postgres**                                    | PostgreSQL instance hosting three logically separate service-owned databases (`auth_db`, `fraud_db`, `ledger_db`), created via `infra/postgres/init/01-create-databases.sql`. Each application service accesses only its own database; cross-service coordination occurs through APIs and events rather than database access.                                                                                                                                  | `postgres:16`, port `5432`                   | auth-service, fraud-service, ledger-service        |
 | **redis**                                       | Shared low-latency store for two distinct purposes: auth-service's idempotent-response cache (keyed per operation, TTL-based) and fraud-service's sliding-window velocity/rate-limit counters (Lua-script atomic ops). See [ADR 0006: Use Redis for Sliding-Window Rate Limiting (Fraud Service)](../decisions/0006-redis-sliding-window-rate-limit.md) / [ADR 0007: Idempotency store and key policy](../decisions/0007-idempotency-store-and-key-policy.md). | `redis:8.6-alpine`, port `6379`              | auth-service, fraud-service                        |
 | **kafka** (3-node KRaft cluster: `kafka-1/2/3`) | Durable, replicated event log for the `auth.events` topic (replication factor 3, min ISR 2) and its dead-letter topic. Decouples auth-service (producer) from ledger-service (consumer).                                                                                                                                                                                                                                                                       | `apache/kafka:4.3.0`, ports `9092/9094/9095` | auth-service (producer), ledger-service (consumer) |
 
@@ -65,8 +66,9 @@ it's a distinct telemetry concern from the payment data path, not because it's o
 | **Prometheus**     | Two independent scrape paths: (1) each service's own `/actuator/prometheus` endpoint, for app/JVM/business metrics (e.g. `auth_authorisations_total`), and (2) the OTel Collector's `:8889` span-metrics endpoint, for RED metrics derived from traces. Both are pull-based; neither path depends on the other.                         | `v3.5.4`                           | Grafana (reads); all three services + OTel Collector (scraped) |
 | **Grafana**        | Dashboards for business metrics, JVM/HTTP internals, Redis, and Kafka health; also the trace-search UI (via the Tempo datasource).                                                                                                                                                                                                      | `11.6`                             | Admin/Ops                                                      |
 
-Not on the request path — a service failure/latency spike in the observability stack does not affect
-authorise/capture/reverse traffic; it only degrades what Ops can *see*.
+The observability stack is deliberately outside the payment-processing request path. Its availability affects
+operational visibility rather than payment execution, keeping telemetry concerns isolated from application
+behaviour.
 
 ### Admin/dev tooling (internal, ops-facing)
 
@@ -78,6 +80,10 @@ authorise/capture/reverse traffic; it only degrades what Ops can *see*.
 
 ## Key interactions
 
+Cross-service coordination uses two interaction models based on the consistency and coupling required by each
+operation: synchronous REST where an immediate decision is needed, and asynchronous Kafka events where
+independent processing and eventual consistency are appropriate.
+
 ### Synchronous (REST, request/response)
 
 - `Client -> auth-service`: `POST /accounts`, `POST /authorisations`, `POST /authorisations/{id}/captures`,
@@ -86,7 +92,8 @@ authorise/capture/reverse traffic; it only degrades what Ops can *see*.
   limiter (`ResilientFraudGateway`); on timeout/circuit-open, auth-service falls back to an `unavailable`
   decision rather than blocking indefinitely.
 - `Client -> ledger-service`: read-only `GET /authorisations/{id}`, `GET /accounts/{id}/events` — no writes.
-- No service calls `auth-service` back — it is the only inbound entry point that mutates state.
+- `auth-service` is the state-changing API boundary for payment and account operations; downstream processing does not
+  require synchronous callbacks into it.
 
 ### Asynchronous (Kafka, at-least-once)
 
@@ -99,8 +106,9 @@ authorise/capture/reverse traffic; it only degrades what Ops can *see*.
 
 ### Data access
 
-- Each service connects **only** to its own database; there is no shared-schema access between services —
-  cross-service data sharing happens exclusively through the Kafka event stream (see
+- Each service connects **only** to its own database. There is no cross-service schema access: services maintain
+  strong transactional consistency within their own data boundary and coordinate across service boundaries
+  through explicit APIs and events. Ledger state is propagated through the Kafka event stream (see
   [ADR 0003: Store Both Raw and Normalized Ledger Events](../decisions/0003-ledger-raw-and-normalized-events.md)).
 - Redis is the only store touched by two different services (auth-service and fraud-service), but each uses a
   disjoint key namespace (`{operation}:idempotency:*` vs `fraud:sw:*` / amount-baseline keys) — there is no
@@ -108,7 +116,7 @@ authorise/capture/reverse traffic; it only degrades what Ops can *see*.
 
 ### Telemetry (traces vs. metrics)
 
-These are **two independent paths**, not one — a common point of confusion when reading the diagram at a glance:
+Traces and application metrics follow two independent telemetry paths:
 
 - **Traces (push):** each service's Spring Boot auto-instrumentation exports spans via **OTLP** to the OTel
   Collector, which forwards them to Tempo. The Collector's `spanmetrics` connector also derives RED-style
@@ -129,16 +137,16 @@ These are **two independent paths**, not one — a common point of confusion whe
   </a>
 </p>
 
-*Figure 3: Planned next-phase containers — dashed/grey elements are not yet implemented.*
+*Figure 3: Planned next-phase containers — dashed elements are not yet implemented.*
 
-Beyond the current MVP boundary, the next phase introduces:
+The next phase extends the existing distributed-system foundation with the following capabilities:
 
 - **API Gateway** — single ingress for routing, scope enforcement, and infra-level rate limiting in front of
   `auth-service`/`ledger-service` ([roadmap item 4](../roadmap.md#5-next-steps-prioritized))
 - **Identity Provider (OIDC)** — centralized authn/authz (customer vs. admin scopes), validated by the gateway
   and `auth-service` ([roadmap item 1](../roadmap.md#5-next-steps-prioritized))
-- **Customer Web App / Admin Back-office Web App** — SPA frontends consuming the platform through the gateway,
-  giving the public API its first real external consumer
+- **Customer Web App / Admin Operations App** — user-facing applications authenticating through the Identity
+  Provider and accessing platform APIs through the API Gateway
   ([roadmap item 3](../roadmap.md#5-next-steps-prioritized))
 - **reconciliation-service** — scheduled cross-check of ledger projections against account state (and
   eventually an external processor) to detect and flag drift ([roadmap item 2](../roadmap.md#5-next-steps-prioritized))
@@ -149,9 +157,5 @@ Beyond the current MVP boundary, the next phase introduces:
 - **Config/Secrets Store** and **Object Storage** — supporting infra for secrets management and
   receipt/statement/document storage
 
-This diagram is directional, not committed scope — see
-[Roadmap § Next Steps](../roadmap.md#5-next-steps-prioritized) for what's actually prioritized.
-
-
-
-
+This diagram presents the planned architectural direction. Implementation sequencing and priorities are
+maintained in the [Roadmap § Next Steps](../roadmap.md#5-next-steps-prioritized).

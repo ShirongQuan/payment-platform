@@ -283,10 +283,11 @@ existing platform foundation from planned next-phase components.
 
 *Figure 6: Planned next-phase architecture — extending the existing distributed-system foundation.*
 
-For the full container-level view, see the
-**[detailed C4 next-phase container diagram](docs/architecture/diagrams/containers-next-phase.svg)**
-and **[Containers — Next Phase](docs/architecture/containers.md#next-phase-planned)**.
-
+For the full container-level view, see
+the <a href="https://raw.githubusercontent.com/ShirongQuan/payment-platform/main/docs/architecture/diagrams/containers-next-phase.svg">
+detailed C4 next-phase container diagram</a>, and
+**[Containers — Next Phase](docs/architecture/containers.md#next-phase-planned)**.
+  
 - **API Gateway** — single ingress for routing, authN/authZ scope enforcement, and infra-level rate limiting
   in front of `auth-service`/`ledger-service`
 - **Identity Provider (OIDC)** — centralized authn/authz issuing customer- vs. admin-scoped tokens, validated

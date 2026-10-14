@@ -107,7 +107,7 @@ create table outbox_event (
     claimed_at timestamp with time zone,
     claim_until timestamp with time zone,
 
-    constraint chk_outbox_event_status check (status in ('PENDING', 'PUBLISHED', 'FAILED'))
+    constraint chk_outbox_event_status check (status in ('NEW', 'PUBLISHING', 'PUBLISHED', 'FAILED'))
 );
 
 create unique index if not exists uq_outbox_event_aggregateid_eventtype_idempotency

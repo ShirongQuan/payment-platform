@@ -1,13 +1,30 @@
 # Architecture Docs Index
 
-C4-style architecture documentation for the Payment Platform, from broadest zoom to most detailed.
+C4-style architecture documentation for the Payment Platform, describing the distributed system from its
+external boundary through service-level and component-level design.
+
+The documentation follows the C4 zoom levels: **System Context (L1)** establishes the platform boundary,
+**Containers (L2)** describes the distributed service and infrastructure architecture, and
+**Components (L3)** shows how `auth-service` implements its local consistency and cross-service coordination
+responsibilities.
+
+## Table of Contents
+
+- [Diagrams (C4)](#diagrams-c4)
+  - [System Context (L1)](#system-context-l1)
+  - [Containers (L2)](#containers-l2)
+  - [Components — auth-service (L3)](#components--auth-service-l3)
+- [Security](#security)
+  - [Trust Boundaries](#trust-boundaries)
+- [Related](#related)
 
 ## Diagrams (C4)
 
 ### System Context (L1)
 
-[System Context (L1)](./system-context.md) — the platform as a single external-facing box, its actors
-(Customer/Client App, Admin/Ops), and their major interactions. No internal services are shown at this level.
+[System Context (L1)](./system-context.md) — defines the Payment Platform's system boundary, its external actors
+(Customer/Client App and Admin/Ops), its payment-processing responsibilities, and the major interactions that
+cross the boundary.
 
 <p>
   <a href="https://raw.githubusercontent.com/ShirongQuan/payment-platform/main/docs/architecture/diagrams/system-context.svg">
@@ -20,10 +37,10 @@ Click the diagram to open the full-size SVG.*
 
 ### Containers (L2)
 
-[Containers (L2)](./containers.md) — zooms into that box: the deployable runtime units (`auth-service`,
-`fraud-service`, `ledger-service`), platform infrastructure (Postgres, Redis, Kafka), and the observability stack
-(OTel Collector, Tempo, Prometheus, Grafana), with their responsibilities, tech stack, owned data, and sync/async
-interactions.
+[Containers (L2)](./containers.md) — expands the platform into its distributed runtime architecture:
+`auth-service`, `fraud-service`, and `ledger-service`, their service-owned data, synchronous REST and asynchronous
+Kafka interactions, platform infrastructure (Postgres, Redis, Kafka), and the supporting observability stack
+(OTel Collector, Tempo, Prometheus, Grafana).
 
 <p>
   <a href="https://raw.githubusercontent.com/ShirongQuan/payment-platform/main/docs/architecture/diagrams/containers.svg">
@@ -36,10 +53,11 @@ interactions.
 
 ### Components — auth-service (L3)
 
-[Components — auth-service (L3)](./components-auth-service.md) — internals of `auth-service` only: component
-diagram (controllers, application services, domain, repositories, outbox, outbound clients), a mini "authorise
-happy path" sequence, a responsibility table, and boundary notes (transaction boundaries, idempotency/concurrency
-points, external calls).
+[Components — auth-service (L3)](./components-auth-service.md) — expands the state-owning `auth-service` into its
+internal components and shows how the payment write path implements local transactional consistency, idempotency,
+concurrency control, synchronous fraud coordination, transactional outbox persistence, asynchronous event
+publication, and observability. It also includes a mini authorise happy-path sequence, a responsibility table,
+and boundary notes covering transaction boundaries, idempotency/concurrency points, and external calls.
 
 <p>
   <a href="https://raw.githubusercontent.com/ShirongQuan/payment-platform/main/docs/architecture/diagrams/components-auth-service.svg">
@@ -63,10 +81,10 @@ the full-size SVG.*
 
 ### Trust Boundaries
 
-[Trust Boundaries](./trust-boundaries.md) — public API / internal service / data / messaging boundaries and what
-each enforces at the application level today. Infrastructure-level hardening (TLS, network policy, broker/cache
-auth, etc.) and planned application-level controls (e.g. authentication) are linked out to the
-[roadmap](../roadmap.md) rather than assessed here.
+[Trust Boundaries](./trust-boundaries.md) — documents the trust boundaries crossed by public API traffic,
+internal service communication, service-owned data, and asynchronous messaging. It identifies the controls
+applied at each boundary and separates the current architecture from planned identity, access, transport, and
+deployment-security evolution.
 
 <p>
   <a href="https://raw.githubusercontent.com/ShirongQuan/payment-platform/main/docs/architecture/diagrams/trust-boundaries.svg">
@@ -74,12 +92,14 @@ auth, etc.) and planned application-level controls (e.g. authentication) are lin
   </a>
 </p>
 
-*Figure 5: Trust boundaries — public API, internal service, data, and messaging boundaries. Click the diagram
-to open the full-size SVG.*
+*Figure 5: Trust boundaries — public API, internal service, service-owned data, and asynchronous messaging
+boundaries. Click the diagram to open the full-size SVG.*
 
 ## Related
 
-- [Flow Diagrams](../flows/README.md) — detailed sequence diagrams per use case (authorise/capture/reverse,
-  idempotency, event publishing/consuming).
-- [Data Model](../data/data-model.md) — table-level detail per service database.
-- [ADRs](../decisions/README.md) — the "why" behind the decisions referenced throughout these docs.
+- [Flow Diagrams](../flows/README.md) — end-to-end interaction sequences for payment lifecycle, idempotency, and
+  asynchronous event flows.
+- [Data Model](../data/data-model.md) — service-owned persistence models and table-level detail for each
+  application service.
+- [ADRs](../decisions/README.md) — architectural decision records capturing the rationale behind the major
+  distributed-system design choices referenced throughout these documents.

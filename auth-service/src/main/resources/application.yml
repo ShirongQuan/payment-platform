@@ -165,8 +165,8 @@ resilience4j:
         slidingWindowSize: 10               # window = last 10 calls
         minimumNumberOfCalls: 5            # need at least 5 calls before evaluating failure rate
         failureRateThreshold: 50            # OPEN if >=50% of the window's calls failed
+        waitDurationInOpenState: 15s        # stay OPEN for 15s before allowing a trial
         slowCallRateThreshold: 50           # OPEN if >=50% of calls were "slow" (see below)
         slowCallDurationThreshold: 100ms    # a call counts as "slow" if it took >100ms
-        waitDurationInOpenState: 15s        # stay OPEN for 10s before allowing a trial
         permittedNumberOfCallsInHalfOpenState: 3   # allow 3 trial calls in HALF_OPEN
         automaticTransitionFromOpenToHalfOpenEnabled: true  # auto-flip after 10s, no need to wait for an incoming call to trigger it

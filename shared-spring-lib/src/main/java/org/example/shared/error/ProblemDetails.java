@@ -5,7 +5,17 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
 import org.springframework.web.context.request.WebRequest;
 
-/** Utility for consistent RFC 7807 ProblemDetail construction across services. */
+/**
+ * Utility for building consistent RFC 7807 {@link ProblemDetail} responses across services.
+ *
+ * <p>Centralizes the common fields every error response should carry: HTTP status, title, detail
+ * message, a service-defined {@code errorCode} property, and the request's {@code instance} URI
+ * derived from the current {@link WebRequest}. Callers can also attach arbitrary extra properties
+ * (e.g. validation field errors, retry hints) as key/value pairs without duplicating this
+ * boilerplate in every controller advice.
+ *
+ * <p>This class is stateless and not meant to be instantiated.
+ */
 public final class ProblemDetails {
 
   private ProblemDetails() {}
@@ -33,7 +43,7 @@ public final class ProblemDetails {
     pd.setTitle(title);
     pd.setProperty("errorCode", errorCode);
     String description = request.getDescription(false);
-    if (description != null && description.startsWith("uri=")) {
+    if (description.startsWith("uri=")) {
       pd.setInstance(URI.create(description.substring(4)));
     }
     return pd;
