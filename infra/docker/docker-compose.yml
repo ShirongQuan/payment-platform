@@ -93,62 +93,6 @@ services:
       - "9121:9121"
     depends_on:
       - redis
-  
-  # --------------------------------------------      prometheus   -------------------------------------------------
-
-  prometheus:
-    image: prom/prometheus:v3.5.4
-    container_name: prometheus
-    ports:
-      - "9090:9090"
-    volumes:
-      - ./../prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
-      - prometheus_data:/prometheus
-    # auth-service/fraud-service/ledger-service run as host processes (not containers in this
-    # compose network), so Prometheus must reach them via the host. host.docker.internal resolves
-    # automatically on Docker Desktop (macOS/Windows), but on Linux it requires this explicit
-    # host-gateway mapping. See infra/prometheus/prometheus.yml for the scrape targets.
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
-    depends_on:
-      otel-collector:
-        condition: service_healthy
-      redis_exporter:
-        condition: service_started
-    healthcheck:
-      test: [ "CMD-SHELL", "wget -q -O /dev/null http://localhost:9090/-/healthy" ]
-      interval: 15s
-      timeout: 5s
-      retries: 10
-      start_period: 15s
-
-  # --------------------------------------------      grafana   -------------------------------------------------
-
-  grafana:
-    image: grafana/grafana:11.6
-    container_name: grafana
-    ports:
-      - "3000:3000"
-    environment:
-      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
-      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-password}
-      GF_USERS_ALLOW_SIGN_UP: "false"
-    volumes:
-      - grafana_data:/var/lib/grafana
-      - ./../grafana/provisioning/datasources:/etc/grafana/provisioning/datasources:ro
-      - ./../grafana/provisioning/dashboards:/etc/grafana/provisioning/dashboards:ro
-      - ./../grafana/dashboards:/var/lib/grafana/dashboards:ro
-    depends_on:
-      prometheus:
-        condition: service_started
-      tempo:
-        condition: service_healthy
-    healthcheck:
-      test: [ "CMD-SHELL", "wget -q -O /dev/null http://localhost:3000/api/health" ]
-      interval: 15s
-      timeout: 5s
-      retries: 10
-      start_period: 30s
 
   # --------------------------------------------      kafka   -------------------------------------------------
   kafka-1:
@@ -323,6 +267,62 @@ services:
       timeout: 5s
       retries: 10
       start_period: 15s
+
+  # --------------------------------------------      prometheus   -------------------------------------------------
+
+  prometheus:
+    image: prom/prometheus:v3.5.4
+    container_name: prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./../prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    # auth-service/fraud-service/ledger-service run as host processes (not containers in this
+    # compose network), so Prometheus must reach them via the host. host.docker.internal resolves
+    # automatically on Docker Desktop (macOS/Windows), but on Linux it requires this explicit
+    # host-gateway mapping. See infra/prometheus/prometheus.yml for the scrape targets.
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      otel-collector:
+        condition: service_healthy
+      redis_exporter:
+        condition: service_started
+    healthcheck:
+      test: [ "CMD-SHELL", "wget -q -O /dev/null http://localhost:9090/-/healthy" ]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 15s
+
+  # --------------------------------------------      grafana   -------------------------------------------------
+
+  grafana:
+    image: grafana/grafana:11.6
+    container_name: grafana
+    ports:
+      - "3000:3000"
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-password}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./../grafana/provisioning/datasources:/etc/grafana/provisioning/datasources:ro
+      - ./../grafana/provisioning/dashboards:/etc/grafana/provisioning/dashboards:ro
+      - ./../grafana/dashboards:/var/lib/grafana/dashboards:ro
+    depends_on:
+      prometheus:
+        condition: service_started
+      tempo:
+        condition: service_healthy
+    healthcheck:
+      test: [ "CMD-SHELL", "wget -q -O /dev/null http://localhost:3000/api/health" ]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
 
   # --------------------------------------------  trace backend + collector   -------------------------------------------------
 
