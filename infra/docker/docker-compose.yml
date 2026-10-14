@@ -1,3 +1,16 @@
+# Base infrastructure stack for the payment platform.
+#
+# Usage (from this directory):
+#   docker compose -f docker-compose.yml up -d
+#
+# This file provisions the shared infra the services depend on: Postgres
+# (+ pgAdmin), Redis (+ RedisInsight, redis_exporter), a 3-broker Kafka
+# cluster (+ kafka-ui, kafka-topic-init, kafka-exporter), and the observability
+# stack (Prometheus, Grafana, cAdvisor, otel-collector, Tempo).
+#
+# The application services (auth/fraud/ledger-service) live in docker-compose.app.yml and are layered on top,
+# e.g.: docker compose -f docker-compose.yml -f docker-compose.app.yml up -d
+
 services:
 
   # --------------------------------------------      postgres   -------------------------------------------------
@@ -136,7 +149,6 @@ services:
       timeout: 5s
       retries: 10
       start_period: 30s
-
 
   # --------------------------------------------      kafka   -------------------------------------------------
   kafka-1:
