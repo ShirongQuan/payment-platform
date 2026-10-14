@@ -12,7 +12,7 @@
 - cascade latency/failures back to callers of `auth-service`
 - keep retrying a downstream that is already known to be failing
 
-A bounded-timeout, fail-fast, self-healing call pattern is needed for this dependency.
+A bounded-latency, failure-isolating call pattern is needed for this synchronous service dependency.
 
 ## Decision
 
@@ -48,17 +48,11 @@ Trade-offs:
   fail-closed) — this ADR only covers the resilience mechanics, not that business policy
 - circuit breaker state is per `auth-service` instance (no shared state across instances), so different instances
   can independently be open/closed for the same downstream
-- no `@Retry` is currently configured for the fraud call — a transient blip is treated the same as a timeout/failure
-  rather than retried once before failing (see
-  [roadmap: Production Considerations](../roadmap.md#6-production-considerations))
+- the fraud call deliberately has no automatic retry decorator; this avoids multiplying synchronous calls against a downstream service that is already slow or unavailable. Retry policy can be revisited separately if measured failure patterns justify it.
 
 ## Alternatives Considered
 
-- add `@Retry` on top of `@CircuitBreaker`/`@TimeLimiter` (deferred, not rejected outright — see
-  `AccountConcurrencyConflictException` docs, which note a `@Retry` decorator mirroring `ResilientFraudGateway`
-  could resolve some race-loss retries; not yet adopted for the fraud gateway to avoid amplifying load on an
-  already-slow downstream during partial outages — tracked under
-  [roadmap: Production Considerations](../roadmap.md#6-production-considerations))
+- add `@Retry` on top of `@CircuitBreaker`/`@TimeLimiter` (deferred: automatic retries can amplify load and latency against a degraded synchronous dependency; the policy can be revisited using observed failure characteristics — see [roadmap: Production Considerations](../roadmap.md#6-production-considerations))
 - plain HTTP client timeout only, no circuit breaker (rejected: does not prevent repeated calls to a downstream
   that is already failing, no fail-fast behavior once failure is sustained)
 - hand-rolled circuit breaker/timeout logic (rejected: reinvents a well-tested library, worse observability)

@@ -9,7 +9,7 @@
 - [5) Concurrency Handling](#5-concurrency-handling)
 - [6) Downstream Event Idempotency](#6-downstream-event-idempotency)
 - [7) Error Handling](#7-error-handling)
-- [8) Trade-offs](#8-trade-offs)
+- [8) Design Boundaries and Trade-offs](#8-design-boundaries-and-trade-offs)
 - [9) Alternatives Considered](#9-alternatives-considered)
 - [10) Consequences](#10-consequences)
 - [Related](#related)
@@ -116,15 +116,17 @@ Auth API maps failures to stable HTTP semantics:
 - `AccountNotFoundException` / `AuthorisationNotFoundException` -> `404 Not Found`
 - request validation failures (bean validation / malformed payload) -> `400 Bad Request`
 
-## 8) Trade-offs
+## 8) Design Boundaries and Trade-offs
 
-Intentional non-goals in the current design:
+The design places correctness controls at the boundary where each concern is owned:
 
-- no distributed locking between service instances
-- no exactly-once guarantee end-to-end across HTTP, DB, Kafka, and consumers
-- no partial capture / partial reverse support yet (full operation only) — see
+- `auth-service` uses operation-scoped request idempotency, database uniqueness, and optimistic locking for payment commands
+- `ledger-service` uses `eventId` deduplication at the asynchronous consumer boundary
+- concurrency is resolved through service-owned database state rather than a distributed lock shared across services
+- the platform targets recoverable at-least-once event delivery with consumer deduplication rather than requiring an end-to-end distributed exactly-once transaction
+- idempotency rules remain explicit per operation flow, keeping replay and conflict semantics aligned with each payment command
+- partial capture and partial reverse are planned lifecycle extensions; see
   [roadmap: Production Considerations](../roadmap.md#6-production-considerations)
-- no generic cross-endpoint idempotency framework yet; rules are implemented per operation flow
 
 ## 9) Alternatives Considered
 
@@ -155,7 +157,7 @@ See also [ADR 0007: Idempotency Store Strategy and Key Policy (Auth/Fraud)](./00
 for storage/policy (Redis vs DB, TTL, key scope, replay/conflict implementation details).
 
 - [ADR 0001: Use Kafka + Transactional Outbox](./0001-use-kafka-outbox.md)
-- [ADR 0002: Support Full Capture and Full Reverse Only (MVP)](./0002-full-capture-only.md)
+- [ADR 0002: Support Full Capture and Full Reverse](./0002-full-capture-only.md)
 - [ADR 0003: Store Both Raw and Normalized Ledger Events](./0003-ledger-raw-and-normalized-events.md)
 - [ADR 0004: Use Separate Main Event and DLT Topics](./0004-use-event-and-dlt-topics.md)
 - [ADR 0007: Idempotency Store Strategy and Key Policy (Auth/Fraud)](./0007-idempotency-store-and-key-policy.md)

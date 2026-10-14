@@ -127,6 +127,6 @@ implementation sequencing and priorities.
 - [Containers](./containers.md)
 - [Components — auth-service](./components-auth-service.md)
 - [Roadmap](../roadmap.md)
-- [ADR 0006 — Redis sliding-window rate limiting](../decisions/0006-redis-sliding-window-rate-limit.md)
+- [ADR 0006 — Redis sliding-window rate limiting](../decisions/0006-use-redis-for-sliding-window-fraud-velocity-checks.md)
 - [ADR 0007 — Idempotency store and key policy](../decisions/0007-idempotency-store-and-key-policy.md)
 - [API docs — Security](../api/README.md#security)

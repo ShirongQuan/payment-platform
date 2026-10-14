@@ -1,4 +1,4 @@
-# ADR 0006: Use Redis for Sliding-Window Rate Limiting (Fraud Service)
+# ADR 0006: Use Redis for Sliding-Window Fraud Velocity Checks
 
 - Status: Accepted
 - Date: 2026-08-13
@@ -17,14 +17,14 @@ A shared, low-latency, atomic counter store is required.
 
 ## Decision
 
-Use Redis sorted sets to implement a sliding-window rate limiter in `fraud-service`, driven by an atomic Lua script:
+Use Redis sorted sets to implement sliding-window fraud velocity checks in `fraud-service`, driven by an atomic Lua script:
 
 - key shape: `fraud:sw:{dimension}:{name}` (for example `fraud:sw:account:{accountId}`)
 - each check adds a unique member (`timestamp-uuid`) with score = event timestamp (ms)
 - the Lua script atomically: trims entries older than the window, adds the new entry, counts remaining entries, and
   sets a TTL, all in a single round trip
 - TTL = `window + 5s`, so idle keys expire automatically instead of accumulating forever
-- `count > maxRequests` means the dimension is "too frequent" for that rule
+- `count > maxRequests` means the observed velocity exceeds the threshold for that fraud rule
 
 The add-trim-count sequence executes server-side via `RedisScript` (`scripts/sliding_window_rate_limit.lua`,
 registered in `RedisLuaConfig`) so concurrent requests against the same key cannot race on a read-then-write basis.
@@ -38,7 +38,7 @@ Positive:
 - low latency (single Redis round trip) suitable for the fraud check hot path
 
 Trade-offs:
-- adds a hard runtime dependency on Redis availability for velocity rules
+- velocity rules depend on Redis availability at runtime
 - Redis outage/latency directly affects fraud-check latency/availability for velocity-based rules
 - sorted-set memory usage grows with request volume within the active window per dimension
 

@@ -34,8 +34,7 @@ Introduce `shared-spring-lib`, a common library included by all three services, 
 - **Validation** (`org.example.shared.currency`): `ValidCurrencyCode` / `CurrencyCodeValidator` — shared bean
   validation for currency code fields.
 
-Each service depends on `shared-spring-lib` as a regular Maven module dependency; auto-configuration wires the
-filter/interceptor beans without per-service boilerplate.
+Each service depends on `shared-spring-lib` as a regular Maven module dependency; auto-configuration wires the filter/interceptor beans without per-service boilerplate. The library is limited to reusable cross-cutting plumbing: domain models, business rules, and persistence remain owned by the individual services.
 
 ## Consequences
 
@@ -49,9 +48,8 @@ Positive:
 Trade-offs:
 - introduces a shared build/versioning dependency between otherwise independently deployable services — a breaking
   change in `shared-spring-lib` can require coordinated upgrades across services
-- shared library needs its own testing/versioning discipline; it is effectively a mini-platform now
-- risk of the library becoming a dumping ground for anything "shared" if scope isn't kept to genuinely
-  cross-cutting concerns
+- the shared library needs explicit testing and versioning discipline because changes can affect multiple independently deployable services
+- its scope must remain limited to genuinely cross-cutting behaviour so reuse does not blur service-level domain or data ownership
 
 ## Alternatives Considered
 

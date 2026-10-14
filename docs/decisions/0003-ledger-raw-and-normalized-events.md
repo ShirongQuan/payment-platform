@@ -5,16 +5,16 @@
 
 ## Context
 
-Ledger consumers need two different capabilities:
+`ledger-service` consumes payment events asynchronously from Kafka and maintains its own ledger data boundary. That boundary needs two complementary representations:
 
-- immutable audit/replay of exactly what was received from Kafka
-- query-friendly records for API access patterns
+- raw event history preserving what the consumer received for replay and diagnosis
+- normalized, query-friendly records for ledger API access patterns
 
-A single table shape cannot optimize both use cases well.
+Separating these representations lets ingestion history and the read model serve different purposes.
 
 ## Decision
 
-In ledger-service, store both:
+In `ledger-service`, independently persist the consumed event into both:
 
 - raw event records in `ledger_event_log`
 - normalized projection rows in `ledger_entry`
@@ -25,9 +25,10 @@ Also store processed event ids in `processed_event` for consumer idempotency.
 
 Positive:
 
-- strong auditability and replay/debug support from raw payload history
+- replay and diagnostic support from retained raw payload history
 - efficient query/read endpoints using normalized rows
-- clearer separation between ingestion evidence and read model
+- clear separation between asynchronous event ingestion and the ledger read model
+- ledger data remains owned and maintained by `ledger-service` rather than read from `auth-service`
 
 Trade-offs:
 

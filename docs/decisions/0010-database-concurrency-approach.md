@@ -17,16 +17,15 @@ row-level locks for the duration of a transaction.
 
 ## Decision
 
-Use **optimistic locking** (JPA `@Version`) as the default and, so far, only concurrency control mechanism for
-mutable entities in `auth-service`:
+Use **optimistic locking** (JPA `@Version`) as the concurrency guard for mutable entities in `auth-service`:
 
 - `AccountEntity.version`
 - `AuthorisationEntity.version`
 - `OutboxEventEntity.version`
 
-No pessimistic locking (`@Lock(LockModeType.PESSIMISTIC_WRITE)`, `SELECT ... FOR UPDATE`) is used anywhere in the
-codebase today. Combined with the unique constraints from ADR 0005 (idempotency tuple uniqueness) and
-`fraud-service`'s idempotency-claim insert (ADR 0007), the following race pattern is used consistently:
+Combined with the unique constraints from ADR 0005 (idempotency tuple uniqueness) and `fraud-service`'s
+idempotency-claim insert (ADR 0007), the platform uses a consistent conflict-detection and resolution pattern
+within each service-owned data boundary:
 
 1. Read current state.
 2. Attempt to write (insert/update), relying on `@Version`/unique constraints to detect a conflicting concurrent

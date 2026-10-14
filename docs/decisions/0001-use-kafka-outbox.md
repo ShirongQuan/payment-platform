@@ -5,25 +5,28 @@
 
 ## Context
 
-The auth service must persist business state changes (authorisation, capture, reverse) and publish related domain events for downstream consumers (ledger). If event publishing is done directly from request code, failures can create a mismatch between database state and published events.
+`auth-service` owns the payment lifecycle state for authorisation, capture, and reverse, while `ledger-service` maintains an independent ledger projection from asynchronously delivered events. Coordinating the local database update with Kafka publication therefore crosses a distributed-system boundary: the database and broker cannot participate in one local transaction.
 
 ## Decision
 
-Use Kafka for inter-service event delivery and the transactional outbox pattern in auth-service:
-- write domain state + outbox row in the same database transaction
-- publish outbox rows asynchronously to Kafka
-- mark outbox rows as published only after broker acknowledgement
+Use Kafka for asynchronous inter-service event delivery and the transactional outbox pattern in `auth-service`:
+- commit payment state and the corresponding outbox row atomically in the same local Postgres transaction
+- publish committed outbox rows to Kafka asynchronously, outside the originating request transaction
+- mark an outbox row as published only after broker acknowledgement
+
+This keeps database consistency local to `auth-service` while providing a reliable bridge to asynchronous downstream processing without requiring a distributed transaction across Postgres and Kafka.
 
 ## Consequences
 
 Positive:
-- avoids dual-write inconsistency between DB and Kafka
-- supports retries without losing business events
-- decouples request latency from broker/network conditions
+- payment state and the intent to publish its event commit atomically inside the `auth-service` data boundary
+- publication can be retried independently after the local transaction commits
+- request-time database consistency is separated from asynchronous Kafka publication
+- `ledger-service` can process payment events independently of the originating HTTP request
 
 Trade-offs:
 - adds outbox table, scheduler, and retry lifecycle complexity
-- events are eventually consistent for downstream projections
+- downstream projections are eventually consistent with committed payment state
 
 ## Related
 

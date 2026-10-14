@@ -33,12 +33,10 @@ Builds on correctness constraints from 0005.
   Instead it relies on a **DB unique constraint** on `(accountId, idempotencyKey)` plus a `tryInsertPending`-style
   atomic insert to claim the key, then updates the row with the final decision once evaluation completes.
 
-Rationale for the split:
-- `auth-service` idempotency responses are ephemeral, replay-only payloads with a bounded lifetime — Redis is a
-  natural fit (fast, TTL-native, no need for durable audit history beyond the ledger/outbox trail already covered by
-  ADR 0001/0003).
-- `fraud-service` evaluations are also written as durable rows for audit/rule-history purposes, so the same table
-  that stores the evaluation result is used to enforce the idempotency boundary; no separate cache is required.
+Rationale for using service-specific mechanisms:
+
+- `auth-service` uses Redis as the low-latency replay path for bounded-lifetime response payloads, while persisted domain state and database constraints remain the durable correctness boundary described in ADR 0005.
+- `fraud-service` owns durable fraud-evaluation rows, so the same service-owned table stores the decision and enforces the idempotency claim boundary without introducing a second store for that responsibility.
 
 ### Key scope
 
@@ -74,18 +72,16 @@ Rationale for the split:
 ## Consequences
 
 Positive:
+
 - fast replay path for `auth-service` (single Redis GET) without re-running business logic or hitting Postgres
 - `fraud-service` gets replay + audit history from a single write, no dual-write consistency problem
 - TTL keeps Redis memory bounded to realistic retry windows
 
 Trade-offs:
-- two different idempotency mechanisms across services increases the amount of implementation detail contributors
-  need to hold in their heads
-- Redis-cached replay in `auth-service` is best-effort: if the key expires before a very late retry, the operation
-  is re-evaluated against current DB state rather than replayed (acceptable given ADR 0005's DB-level guards still
-  prevent duplicate side effects)
-- Redis outage removes the fast replay path in `auth-service` (falls through to normal execution/DB-level conflict
-  handling, not a hard failure, but higher latency/load)
+
+- the two services use different storage mechanisms, so their idempotency implementation details need to remain clearly documented even though they implement the same replay/conflict principles
+- the Redis replay entry in `auth-service` has a bounded lifetime; after expiry, a later request is evaluated against persisted state and the database-level guards from ADR 0005 continue to protect the correctness boundary
+- if Redis is unavailable, `auth-service` loses the low-latency replay path and falls through to normal execution and database-level conflict handling, increasing database work without making Redis the sole correctness mechanism
 
 ## Alternatives Considered
 
@@ -97,8 +93,9 @@ Trade-offs:
 
 ## Related
 
-- [ADR 0005: Idempotency and Concurrency Rules for Authorisation Flows](./0005-idempotency-and-concurrency.md) — see also 0005 for correctness rules this policy implements
-- [ADR 0006: Use Redis for Sliding-Window Rate Limiting (Fraud Service)](./0006-redis-sliding-window-rate-limit.md)
+- [ADR 0005: Idempotency and Concurrency Rules for Authorisation Flows](./0005-idempotency-and-concurrency.md) — see
+  also 0005 for correctness rules this policy implements
+- [ADR 0006: Use Redis for Sliding-Window Fraud Velocity Checks](0006-use-redis-for-sliding-window-fraud-velocity-checks.md)
 - `auth-service/src/main/java/org/example/auth/idempotency/IdempotencyService.java`
 - `fraud-service/src/main/java/org/example/fraud/infrastructure/FraudEvaluationEntity.java`
 - `shared-spring-lib/src/main/java/org/example/shared/idempotency/RequestHashing.java`

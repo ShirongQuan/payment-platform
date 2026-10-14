@@ -1,33 +1,31 @@
-# ADR 0002: Support Full Capture and Full Reverse Only (MVP)
+# ADR 0002: Support Full Capture and Full Reverse
 
 - Status: Accepted
 - Date: 2026-07-31
 
 ## Context
 
-Payment operations can include partial capture, partial reverse, refunds, and settlement variants. Supporting all variants early increases domain rules, state transitions, validation complexity, and testing surface.
+The current payment lifecycle needs clear, deterministic state transitions for the authorise, capture, and reverse flows while the platform exercises idempotency, concurrency control, event delivery, and downstream ledger projection across service boundaries.
 
 ## Decision
 
-For MVP scope, support only:
+Define the current lifecycle around:
 - full capture of an authorised amount
 - full reverse of an authorised amount
 
-Out of scope for now (see [roadmap: Production Considerations](../roadmap.md#6-production-considerations)):
-- partial capture
-- partial reverse
-- refunds/settlement flows
+This gives `auth-service` explicit terminal transitions from `AUTHORISED` to either `CAPTURED` or `REVERSED`, with corresponding events propagated asynchronously to downstream consumers.
+
+Partial capture, partial reverse, refunds, and settlement flows are planned lifecycle extensions; see [roadmap: Production Considerations](../roadmap.md#6-production-considerations).
 
 ## Consequences
 
 Positive:
-- simpler and safer state machine (`AUTHORISED -> CAPTURED` or `AUTHORISED -> REVERSED`)
-- lower implementation and testing complexity
-- faster iteration on core idempotency/concurrency/eventing behavior
+- explicit state machine (`AUTHORISED -> CAPTURED` or `AUTHORISED -> REVERSED`)
+- deterministic idempotency and concurrency semantics for the implemented lifecycle
+- clear event semantics for asynchronous ledger projection
 
 Trade-offs:
-- does not cover many real payment lifecycle scenarios
-- future expansion will require migration of API, state rules, and projection logic
+- extending the lifecycle with partial operations or refunds will require coordinated evolution of API contracts, state rules, event semantics, and ledger projection logic
 
 ## Related
 
