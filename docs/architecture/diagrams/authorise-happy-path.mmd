@@ -14,6 +14,8 @@ sequenceDiagram
     Cache -->> Svc: miss
     Svc ->> DB: findByAccountIdAndAuthoriseEventTypesAndIdempotencyKey<br/>(best-effort pre-check)
     DB -->> Svc: not found
+    Svc ->> DB: findById(accountId)<br/>(account-active gate)
+    DB -->> Svc: account (status=ACTIVE)
     Svc ->> Fraud: evaluate(request)
     Fraud -->> Svc: APPROVE (risk score)
     Svc ->> Exec: authoriseInTransaction(...)

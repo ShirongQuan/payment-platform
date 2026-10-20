@@ -1,6 +1,6 @@
 <mxfile host="app.diagrams.net" agent="ChatGPT">
   <diagram id="planned-next-phase-slide" name="Planned Next-Phase Architecture">
-    <mxGraphModel dx="1165" dy="677" grid="0" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="0" pageScale="1" pageWidth="1600" pageHeight="900" background="#FFFFFF" math="0" shadow="0">
+    <mxGraphModel dx="1371" dy="834" grid="0" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="0" pageScale="1" pageWidth="1600" pageHeight="900" background="#FFFFFF" math="0" shadow="0">
       <root>
         <mxCell id="0" />
         <mxCell id="1" parent="0" />
@@ -11,9 +11,12 @@
           <mxGeometry height="427" width="427" x="465" y="177" as="geometry" />
         </mxCell>
         <mxCell id="wNQ11hjjRMyI8uPMgFXQ-20" edge="1" parent="1" source="wNQ11hjjRMyI8uPMgFXQ-7" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;entryX=0.15;entryY=-0.02;entryDx=0;entryDy=0;entryPerimeter=0;labelBackgroundColor=none;" target="wNQ11hjjRMyI8uPMgFXQ-12" value="&lt;span style=&quot;color: rgb(51, 51, 51); font-weight: 700;&quot;&gt;Telemetry&lt;/span&gt;">
-          <mxGeometry relative="1" x="0.0903" as="geometry">
+          <mxGeometry relative="1" x="0.0805" as="geometry">
             <mxPoint as="offset" />
-            <Array as="points" />
+            <Array as="points">
+              <mxPoint x="275.95" y="610" />
+              <mxPoint x="275.95" y="610" />
+            </Array>
             <mxPoint x="274" y="642" as="targetPoint" />
           </mxGeometry>
         </mxCell>
@@ -38,7 +41,7 @@
         <mxCell id="gateway" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=default;strokeColor=default;strokeWidth=1;fontFamily=Helvetica;fontSize=12;fontStyle=1;fontColor=default;dashed=1;align=center;verticalAlign=middle;roundedPerimeter=1;" value="API Gateway" vertex="1">
           <mxGeometry height="65" width="135" x="284" y="460" as="geometry" />
         </mxCell>
-        <mxCell id="auth" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=default;strokeColor=default;strokeWidth=1;fontFamily=Helvetica;fontSize=12;fontStyle=1;fontColor=default;align=center;verticalAlign=middle;roundedPerimeter=1;" value="Auth Service" vertex="1">
+        <mxCell id="auth" parent="1" style="rounded=1;whiteSpace=wrap;html=1;strokeWidth=1;fontFamily=Helvetica;fontSize=12;fontStyle=1;align=center;verticalAlign=middle;roundedPerimeter=1;" value="Auth Service" vertex="1">
           <mxGeometry height="65" width="135" x="500" y="240" as="geometry" />
         </mxCell>
         <mxCell id="fraud" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=default;strokeColor=default;strokeWidth=1;fontFamily=Helvetica;fontSize=12;fontStyle=1;fontColor=default;align=center;verticalAlign=middle;roundedPerimeter=1;" value="Fraud Service" vertex="1">
@@ -59,16 +62,16 @@
         <mxCell id="coreNote" parent="1" style="text;html=1;fontFamily=Helvetica;fontSize=12;fontStyle=2;fontColor=#333333;align=center;" value="Existing platform foundation" vertex="1">
           <mxGeometry height="25" width="300" x="528.5" y="574.5" as="geometry" />
         </mxCell>
-        <mxCell id="notify" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=default;strokeColor=default;strokeWidth=1;fontFamily=Helvetica;fontSize=12;fontStyle=1;fontColor=default;dashed=1;align=center;verticalAlign=middle;roundedPerimeter=1;" value="Notification Service" vertex="1">
+        <mxCell id="notify" parent="1" style="rounded=1;whiteSpace=wrap;html=1;strokeWidth=1;fontFamily=Helvetica;fontSize=12;fontStyle=1;dashed=1;align=center;verticalAlign=middle;roundedPerimeter=1;" value="Notification Service" vertex="1">
           <mxGeometry height="65" width="135" x="916" y="458" as="geometry" />
         </mxCell>
-        <mxCell id="merchant" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F4F7F9;strokeColor=#9AAAB6;strokeWidth=1.5;fontFamily=Helvetica;fontSize=12;fontStyle=1;fontColor=default;align=center;verticalAlign=middle;roundedPerimeter=1;" value="Merchant System" vertex="1">
+        <mxCell id="merchant" parent="1" style="rounded=1;whiteSpace=wrap;html=1;strokeWidth=0.5;fontFamily=Helvetica;fontSize=12;fontStyle=1;align=center;verticalAlign=middle;roundedPerimeter=1;" value="Merchant System" vertex="1">
           <mxGeometry height="65" width="135" x="1074" y="458" as="geometry" />
         </mxCell>
-        <mxCell id="recon" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=default;strokeColor=default;strokeWidth=1;fontFamily=Helvetica;fontSize=12;fontStyle=1;fontColor=default;dashed=1;align=center;verticalAlign=middle;roundedPerimeter=1;" value="Reconciliation Service" vertex="1">
+        <mxCell id="recon" parent="1" style="rounded=1;whiteSpace=wrap;html=1;strokeWidth=1;fontFamily=Helvetica;fontSize=12;fontStyle=1;dashed=1;align=center;verticalAlign=middle;roundedPerimeter=1;" value="Reconciliation&amp;nbsp;&lt;div&gt;Service&lt;/div&gt;" vertex="1">
           <mxGeometry height="65" width="135" x="920" y="243.75" as="geometry" />
         </mxCell>
-        <mxCell id="processor" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F4F7F9;strokeColor=#9AAAB6;strokeWidth=1.5;fontFamily=Helvetica;fontSize=12;fontStyle=1;fontColor=default;roundedPerimeter=1;align=center;verticalAlign=middle;" value="External Payment Processor" vertex="1">
+        <mxCell id="processor" parent="1" style="rounded=1;whiteSpace=wrap;html=1;strokeWidth=0.5;fontFamily=Helvetica;fontSize=12;fontStyle=1;roundedPerimeter=1;align=center;verticalAlign=middle;" value="External Payment Processor" vertex="1">
           <mxGeometry height="65" width="135" x="1077" y="243.75" as="geometry" />
         </mxCell>
         <mxCell id="e_app_gateway1" edge="1" parent="1" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#333333;strokeWidth=1;fontSize=11;fontColor=#333333;endArrow=block;endFill=1;exitX=0.75;exitY=1;exitDx=0;exitDy=0;dashed=1;align=center;verticalAlign=middle;fontFamily=Helvetica;labelBackgroundColor=none;fontStyle=1;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" target="gateway" value="API">

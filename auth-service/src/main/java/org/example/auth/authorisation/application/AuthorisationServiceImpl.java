@@ -95,7 +95,7 @@ public class AuthorisationServiceImpl implements AuthorisationService {
             expectedFingerprint);
     if (authorisationResponseOpt.isPresent()) {
       log.debug(
-          "Found authorisationResponse in cache for operation=authorise, accountId={}, idempotencyKey={}",
+          "Found authorisationResponse in cache for operation=authorise, accountId={}, idempotencyKey={}, returning stored response",
           request.accountId(),
           request.idempotencyKey());
       return authorisationResponseOpt.get();
