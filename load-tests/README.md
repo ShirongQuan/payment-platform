@@ -51,7 +51,7 @@ kcat -V
 
 | Script                              | Purpose                                                                                                   | Default runtime |
 |--------------------------------------|-------------------------------------------------------------------------------------------------------------|------------------|
-| `generate-traffic.sh`                | Full demo traffic: bulk authorise/capture/reverse + idempotency replay, circuit-breaker open→hold→recover + HTTP 5xx, DLT publish, then delegates to the two scripts below | ~5–6 minutes     |
+| `generate-traffic.sh`                | Full demo traffic: bulk authorise/capture/reverse + idempotency replay, circuit-breaker open→hold→recover + HTTP 5xx, DLT publish, fraud-service latency/TimeLimiter timeout + recovery demo, then delegates to the two scripts below | ~6–7 minutes     |
 | `generate-dedup-events.sh`           | Publishes duplicate Kafka events (same `eventId`) to exercise `ledger-service`'s consumer-side dedup path   | seconds–~1 minute (rounds-dependent) |
 | `generate-concurrency-conflicts.sh`  | Fires truly concurrent authorise/capture/reverse requests to exercise idempotency-race and optimistic-lock conflict paths | seconds (rounds-dependent) |
 
@@ -72,7 +72,7 @@ All variables have working defaults — override only what you need.
 | `KAFKA_BROKER`                                                 | `generate-dedup-events.sh`             | `localhost:9092`                |
 | `ROUNDS`, `DUPLICATES_PER_EVENT`, `INTERVAL_SECONDS`          | `generate-dedup-events.sh`             | `10`, `3`, `1`                   |
 | `ROUNDS`, `PARALLEL_REQUESTS`                                  | `generate-concurrency-conflicts.sh`    | `5`, `6`                          |
-| `BULK1_COUNT`/`BULK2_COUNT`, `CB_*`, `DLT_MESSAGE_COUNT`, `DEDUP_*`, `CONCURRENCY_*`, `REST_BETWEEN_STEPS_SECONDS` | `generate-traffic.sh` phase tuning | see the script header comments |
+| `BULK1_COUNT`, `CB_*`, `DLT_MESSAGE_COUNT`, `DEDUP_*`, `CONCURRENCY_*`, `FRAUD_RECOVERY_*`, `REST_BETWEEN_STEPS_SECONDS` | `generate-traffic.sh` phase tuning | see the script header comments |
 
 ## Target Base URLs
 
@@ -88,7 +88,7 @@ A shrunk, fast run to confirm connectivity and basic behavior before a full run:
 
 ```bash
 cd load-tests
-BULK1_COUNT=5 BULK1_INTERVAL_SECONDS=1 BULK2_COUNT=5 BULK2_INTERVAL_SECONDS=1 \
+BULK1_COUNT=5 BULK1_INTERVAL_SECONDS=1 \
 CB_OPEN_REQUEST_COUNT=2 CB_HOLD_SECONDS=5 CB_RECOVERY_REQUEST_COUNT=2 \
 DEDUP_ROUNDS=1 CONCURRENCY_ROUNDS=1 \
 ./generate-traffic.sh
@@ -102,7 +102,7 @@ curl -s http://localhost:9000/actuator/health | jq
 
 ## Normal Load Test
 
-The full default run (all phases, ~5–6 minutes):
+The full default run (all phases, ~6–7 minutes):
 
 ```bash
 cd load-tests

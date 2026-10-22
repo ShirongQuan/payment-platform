@@ -28,7 +28,7 @@
 #      account untouched, so the only possible race is on the event-table unique constraint ->
 #      type=idempotency_race. All N requests get HTTP 200 with an identical (DECLINED) body.
 #
-# Known gap: capture/reverse always mutate the account when transitioning a valid AUTHORISED
+# Current behaviour: capture/reverse always mutate the account when transitioning a valid AUTHORISED
 # authorisation, so a genuine capture/reverse duplicate-key race under true concurrency will (per
 # the interaction above) surface as type=optimistic_lock, not type=idempotency_race - there is no
 # reliable way to isolate a pure capture/reverse type=idempotency_race sample with this script.
@@ -111,14 +111,49 @@ echo "============================================================"
 
 # Fires $PARALLEL_REQUESTS concurrent POSTs to $1 (URL) with body $2, all in the background, then
 # waits for all of them. Prints each response's HTTP status code as it completes.
+#
+# Launch barrier: forking PARALLEL_REQUESTS subshells in a plain bash for-loop is NOT atomic - each
+# iteration's fork/exec of a subshell+curl takes a small, variable amount of time, so without a
+# barrier the requests can reach auth-service staggered by several milliseconds. Once auth-service
+# is warm, a single authorise transaction (SELECT idempotency check -> INSERT -> COMMIT) can
+# complete in just a few milliseconds too, so that stagger alone is often enough for the DB-level
+# unique-constraint race (type=idempotency_race) to never actually occur: by the time a later
+# request's SELECT runs, an earlier request may have already committed, so the later request just
+# finds the existing row and takes the idempotent-replay short-circuit (logged as "authorisation
+# with the same idempotency key ... exist") instead of racing. To make the race reproducible even
+# with a single round, every subshell below computes a shared target start time (now +
+# LAUNCH_BARRIER_DELAY_SECONDS) up front and busy-waits until that instant before firing its curl,
+# so all PARALLEL_REQUESTS requests hit the server within a much tighter window.
+LAUNCH_BARRIER_DELAY_SECONDS="${LAUNCH_BARRIER_DELAY_SECONDS:-0.3}"
+
+# Current time in nanoseconds since epoch. Prefers `date +%s%N` (works on GNU date and on current
+# macOS /bin/date); falls back to perl's Time::HiRes on any platform where %N isn't honoured (some
+# older BSD dates print it back literally instead of expanding it).
+now_ns() {
+  local candidate
+  candidate=$(date +%s%N)
+  if [[ "$candidate" =~ ^[0-9]+$ ]]; then
+    echo "$candidate"
+  else
+    perl -MTime::HiRes=time -e 'printf "%.0f\n", time()*1e9'
+  fi
+}
+
 fire_concurrent() {
   local url="$1" payload="$2" label="$3"
   local pids=()
   local tmp_dir
   tmp_dir=$(mktemp -d)
 
+  local start_epoch_ns
+  start_epoch_ns=$(( $(now_ns) + $(awk -v d="$LAUNCH_BARRIER_DELAY_SECONDS" 'BEGIN{printf "%d", d*1000000000}') ))
+
   for ((p = 1; p <= PARALLEL_REQUESTS; p++)); do
     (
+      # Busy-wait (not sleep, for tighter precision) until the shared start instant so every
+      # racer's curl fires within nanoseconds of the others, instead of being staggered by
+      # fork/exec overhead.
+      while [ "$(now_ns)" -lt "$start_epoch_ns" ]; do :; done
       code=$(curl -sS -o "${tmp_dir}/body_${p}" -w '%{http_code}' -X POST "$url" \
         -H "Content-Type: application/json" -d "$payload")
       echo "$code" > "${tmp_dir}/code_${p}"

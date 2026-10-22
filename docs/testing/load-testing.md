@@ -60,17 +60,22 @@ For **how** to actually run these scripts, see **[Load Tests](../../load-tests/R
 ### Traffic profile (current scripted baseline)
 
 - source script: `load-tests/generate-traffic.sh`
-- phase 1 bulk auth flow: 80 authorisations by default
-    - 50 requests at 1 request per 2 seconds
-    - 30 requests at 1 request per 1 second
+- phase 1 bulk auth flow: 50 authorisations by default, 1 request per 2 seconds
 - phase 2 resilience flow: circuit-breaker open/hold/recovery with fraud-service forced `ALWAYS_503`
 - phase 3 DLT flow: malformed/unsupported event injection to verify dead-letter routing
 - phase 4 dedup flow: repeated same `eventId` publications (`generate-dedup-events.sh`)
 - phase 5 concurrency flow: parallel authorise/capture/reverse races (`generate-concurrency-conflicts.sh`)
-- default runtime: about 5-6 minutes per full run (phase 1: 50×2s + 30×1s ≈ 130s; phase 2 adds a
+- phase 6 fraud-latency flow: one fast baseline authorisation, then a comparable authorisation
+  with fraud-service forced `DELAY_2S` to trip auth-service's 250ms fraudService TimeLimiter
+- phase 7 fraud-recovery flow: resets fraud-service to `OFF`, actively drives the fraudService
+  circuit breaker back to a confirmed `CLOSED` state, then sends a few fresh authorisations that
+  each perform a real, successful fraud-service check
+- default runtime: about 6-7 minutes per full run (phase 1: 50×2s ≈ 100s; phase 2 adds a
   25s hold plus 10×2s recovery ≈ 55s; phase 3 is quick; phase 4 delegates to
   `generate-dedup-events.sh` with 10 rounds ≈ 60s+; phase 5 delegates to
-  `generate-concurrency-conflicts.sh` with 5 rounds ≈ 10s+; plus ~5×2s rest between phases)
+  `generate-concurrency-conflicts.sh` with 5 rounds ≈ 10s+; phase 6 adds a 2s DELAY_2S timeout;
+  phase 7 adds up to ~48s settling the circuit breaker plus 3×1s recovery requests; plus ~7×2s
+  rest between phases)
 
 ### Idempotency keys are timestamp-scoped
 
@@ -108,17 +113,19 @@ the last 6 digits of `date +%s` at script start), e.g. `ikey-483920-001`, `cap-4
 
 ## 4) Traffic Profiles
 
-`generate-traffic.sh` runs five phases back-to-back, each separated by a
+`generate-traffic.sh` runs seven phases back-to-back, each separated by a
 `REST_BETWEEN_STEPS_SECONDS` (default **2s**) pause so Grafana panels show a clear gap between
 phases instead of one continuous blur:
 
 | Phase | Name                                                          | What it drives                                                                                                                                                                                                                                                                                                                                                   |
 |-------|---------------------------------------------------------------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| 1     | Bulk authorisations (80 by default)                           | Round-robins across 3 accounts (GBP/USD/EUR), £1/$1/€1 per request. First 50 requests at 1/2s, next 30 at 1/1s (faster, to trip fraud-service velocity rules and produce some `DECLINED`). Every authorise/capture is immediately re-sent with the same idempotency key + payload to hit the replay path. Odd-numbered keys → capture; even-numbered → reversal. |
+| 1     | Bulk authorisations (50 by default)                           | Round-robins across 3 accounts (GBP/USD/EUR), £1/$1/€1 per request, 1 request per 2 seconds. Every authorise/capture is immediately re-sent with the same idempotency key + payload to hit the replay path. Odd-numbered keys → capture; even-numbered → reversal. |
 | 2     | Circuit breaker open → hold → half-open → closed (+ HTTP 5xx) | Sets fraud-service to `ALWAYS_503`, fires 10 authorisations 1s apart (trips the breaker open + generates real 5xx samples), holds `ALWAYS_503` for 25s so the OPEN state is clearly visible and `waitDurationInOpenState` (15s) fully elapses, resets to `OFF`, then fires 10 more authorisations 2s apart to observe half-open → closed recovery.               |
 | 3     | DLT (dead-letter-topic) publishes                             | Publishes records with `eventType=UNSUPPORTED_EVENT_TYPE` directly onto `auth.events` via `kcat` (see [Runbook](../development/runbook.md)); `ledger-service` treats this as non-retryable and routes it straight to `auth.events.ledger.dlt`.                                                                                                                   |
 | 4     | Dedup events                                                  | Delegates to `generate-dedup-events.sh` (defaults: `ROUNDS=10 DUPLICATES_PER_EVENT=3 INTERVAL_SECONDS=1`) — generates `ledger_event_duplicate_skipped_total` samples across all event types.                                                                                                                                                                     |
-| 5     | Concurrency conflicts                                         | Delegates to `generate-concurrency-conflicts.sh` (defaults: `ROUNDS=5 PARALLEL_REQUESTS=6 INTERVAL_SECONDS=2`), the **last** phase — generates `auth_concurrency_conflict_total{operation,type}` samples via truly concurrent authorise/capture/reverse races, auto-provisioning its own dedicated GBP account per round.                                        |
+| 5     | Concurrency conflicts                                         | Delegates to `generate-concurrency-conflicts.sh` (defaults: `ROUNDS=5 PARALLEL_REQUESTS=6 INTERVAL_SECONDS=2`) — generates `auth_concurrency_conflict_total{operation,type}` samples via truly concurrent authorise/capture/reverse races, auto-provisioning its own dedicated GBP account per round.                                        |
+| 6     | Fraud-service latency/TimeLimiter demo                        | Two sub-steps, paused for Return in between: **6a** sends one fresh authorisation with fraud-service healthy (baseline, fast real fraud check, expect `AUTHORISED`); **6b** sets fraud-service to `DELAY_2S` (every `/fraud/check` call sleeps 2s) and sends a *comparable* authorisation (same account/currency/amount as 6a, different idempotency key) — auth-service's 250ms fraudService `TimeLimiter` times out, treating the call as `UNAVAILABLE` and declining (this account is not in `fraud.fail-open.trusted-account-ids`). fraud-service is deliberately left in `DELAY_2S` mode afterwards, for phase 7 to reset. |
+| 7     | Fraud-service recovery                                        | Resets fraud-service to `OFF`, actively drives the fraudService circuit breaker to a confirmed `CLOSED` state (reusing the same polling helper used by the fail-open-policy demo sub-step), then sends `FRAUD_RECOVERY_REQUEST_COUNT` (3 by default) fresh authorisations 1s apart, each performing a real, successful fraud-service check — the **last** phase. |
 
 The script always resets fraud-service's failure-mode to `OFF` at the end (even on error/Ctrl-C),
 via an `EXIT` trap, so it never leaves the environment in a broken state.
@@ -233,7 +240,14 @@ A run is considered successful when, for every phase:
 - the concurrency phase produces `auth_concurrency_conflict_total` samples for both
   `type=idempotency_race` and `type=optimistic_lock` across the round set, with account balances
   remaining internally consistent (`availableBalance + reservedBalance` never diverges from what
-  the surviving operations imply).
+  the surviving operations imply);
+- the fraud-latency phase's baseline request (6a) is `AUTHORISED` via a fast, real fraud check,
+  and the `DELAY_2S` request (6b) is `DECLINED` with a reason indicating fraud-service
+  unavailability (TimeLimiter timeout), visible via `auth_fraud_check_duration_seconds` and the
+  resilience4j TimeLimiter metrics;
+- the fraud-recovery phase (7) confirms the fraudService circuit breaker reports `CLOSED` via
+  `resilience4j_circuitbreaker_state{name="fraudService",state="closed"}` before its verification
+  requests run, and every one of those requests is `AUTHORISED` via a real, successful fraud check.
 
 ## 8) Latency and Error-Rate Thresholds
 
@@ -255,6 +269,7 @@ as follow-up work (see [§13](#13-conclusions-and-follow-up-work)).
 | DLT publish path visible            | Yes            | `ledger_kafka_dlt_published_total`                          |
 | Ledger duplicate-event skip visible | Yes            | `ledger_event_duplicate_skipped_total`                      |
 | Concurrency conflict path visible   | Yes            | `auth_concurrency_conflict_total{type=...}`                 |
+| Fraud-service TimeLimiter timeout + recovery visible | Yes | fraud forced `DELAY_2S` mode + circuit breaker `CLOSED` confirmation |
 
 ### 9.2 Quantitative baseline table
 

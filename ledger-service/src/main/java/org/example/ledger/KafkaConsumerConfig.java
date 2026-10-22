@@ -24,6 +24,13 @@ public class KafkaConsumerConfig {
 
   private static final String DLT_TOPIC = "auth.events.ledger.dlt";
 
+  // Payload/contract errors (e.g. invalid JSON, missing headers, unknown enum values) are
+  // deterministic and will never succeed on retry, so they're sent straight to the DLT instead
+  // of wasting retry attempts. Kept as a single source of truth so the error handler
+  // registration and the "is this non-retryable?" log check below can't drift apart.
+  private static final Class<? extends Exception> NON_RETRYABLE_EXCEPTION =
+      IllegalArgumentException.class;
+
   @Bean
   public DefaultErrorHandler kafkaErrorHandler(
       KafkaTemplate<UUID, String> kafkaTemplate, LedgerMetrics ledgerMetrics) {
@@ -33,34 +40,73 @@ public class KafkaConsumerConfig {
         new DeadLetterPublishingRecoverer(
             kafkaTemplate,
             (ConsumerRecord<?, ?> record, Exception ex) -> {
-              ledgerMetrics.incrementDltPublished(
-                  record.topic(), DLT_TOPIC, rootCauseSimpleName(ex));
+              Throwable rootCause = rootCause(ex);
+              String exceptionClass = rootCause.getClass().getSimpleName();
+              if (NON_RETRYABLE_EXCEPTION.isInstance(rootCause)) {
+                log.warn(
+                    "Non-retryable exception, sending record directly to DLT without retrying,"
+                        + " topic={}, partition={}, offset={}, key={}, dlt={}, exceptionClass={}",
+                    record.topic(),
+                    record.partition(),
+                    record.offset(),
+                    record.key(),
+                    DLT_TOPIC,
+                    exceptionClass,
+                    rootCause);
+              } else {
+                log.warn(
+                    "Retries exhausted, sending record to DLT, topic={}, partition={}, offset={},"
+                        + " key={}, dlt={}, exceptionClass={}",
+                    record.topic(),
+                    record.partition(),
+                    record.offset(),
+                    record.key(),
+                    DLT_TOPIC,
+                    exceptionClass,
+                    rootCause);
+              }
+              ledgerMetrics.incrementDltPublished(record.topic(), DLT_TOPIC, exceptionClass);
               return new TopicPartition(DLT_TOPIC, record.partition());
             });
 
     // Retry 3 times with 2-second intervals before handing off to DLT.
     DefaultErrorHandler errorHandler =
         new DefaultErrorHandler(recoverer, new FixedBackOff(2000L, 3L));
+    errorHandler.addNotRetryableExceptions(NON_RETRYABLE_EXCEPTION);
 
-    // Payload/contract errors (e.g. invalid JSON, missing headers) are deterministic and will
-    // never succeed on retry, so send them straight to the DLT instead of wasting retry attempts.
-    errorHandler.addNotRetryableExceptions(IllegalArgumentException.class);
+    // Logs every retry attempt (before the record is finally recovered/sent to the DLT), so it's
+    // clear from the logs whether a failure is being retried or was recovered straight away.
+    errorHandler.setRetryListeners(
+        (record, ex, deliveryAttempt) ->
+            log.warn(
+                "Retrying Kafka record after failure, deliveryAttempt={}, topic={}, partition={},"
+                    + " offset={}, key={}, exceptionClass={}",
+                deliveryAttempt,
+                record.topic(),
+                record.partition(),
+                record.offset(),
+                record.key(),
+                rootCause(ex).getClass().getSimpleName()));
+
     log.debug(
-        "Configured Kafka error handler, fixedBackOffMs=2000, maxRetries=3, dlt={}", DLT_TOPIC);
+        "Configured Kafka error handler, fixedBackOffMs=2000, maxRetries=3, dlt={},"
+            + " notRetryableExceptions={}",
+        DLT_TOPIC,
+        NON_RETRYABLE_EXCEPTION.getSimpleName());
     return errorHandler;
   }
 
   /**
    * Spring wraps the listener's real exception in a {@code ListenerExecutionFailedException}
-   * before it reaches the recoverer, so unwrap to the deepest cause to get a meaningful,
-   * low-cardinality label for the {@code exceptionClass} metric tag (e.g. {@code
-   * IllegalArgumentException} rather than always {@code ListenerExecutionFailedException}).
+   * before it reaches the recoverer/retry listener, so unwrap to the deepest cause to get a
+   * meaningful, low-cardinality exception type (e.g. {@code IllegalArgumentException} rather than
+   * always {@code ListenerExecutionFailedException}).
    */
-  private String rootCauseSimpleName(Throwable ex) {
+  private Throwable rootCause(Throwable ex) {
     Throwable cause = ex;
     while (cause.getCause() != null && cause.getCause() != cause) {
       cause = cause.getCause();
     }
-    return cause.getClass().getSimpleName();
+    return cause;
   }
 }

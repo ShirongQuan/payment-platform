@@ -3,6 +3,7 @@ package org.example.auth.fraud;
 import io.github.resilience4j.circuitbreaker.CallNotPermittedException;
 import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
 import io.github.resilience4j.timelimiter.annotation.TimeLimiter;
+import io.opentelemetry.api.trace.Span;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
@@ -59,7 +60,8 @@ public class ResilientFraudGateway {
                     ? List.of()
                     : resp.reasons().stream().map(RuleResult::toString).toList();
             if (resp.lockAccountRecommended()) {
-              return FraudDecision.declineWithLock(resp.riskScore(), reasons, resp.lockReasonCode());
+              return FraudDecision.declineWithLock(
+                  resp.riskScore(), reasons, resp.lockReasonCode());
             }
             return FraudDecision.decline(resp.riskScore(), reasons);
           }
@@ -72,6 +74,7 @@ public class ResilientFraudGateway {
   @SuppressWarnings("unused")
   private CompletableFuture<FraudDecision> fallback(FraudCheckRequest req, Throwable t) {
     String reason = unavailableReasonFromThrowable(t);
+    Span.current().setAttribute("fraud.fallback.reason", reason);
     log.warn(
         "Fraud gateway fallback triggered, accountId={}, idempotencyKey={}, reason={}, errorType={}, errorMessage={}",
         req.accountId(),
@@ -83,7 +86,8 @@ public class ResilientFraudGateway {
   }
 
   private static String unavailableReasonFromThrowable(Throwable throwable) {
-    if (hasCause(throwable, TimeoutException.class)) {
+    if (hasCause(throwable, TimeoutException.class)
+        || hasCause(throwable, java.net.SocketTimeoutException.class)) {
       return "fraud_fallback:TIMEOUT";
     }
     if (hasCause(throwable, CallNotPermittedException.class)) {

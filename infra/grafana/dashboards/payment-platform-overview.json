@@ -18,7 +18,7 @@
   "editable": true,
   "fiscalYearStartMonth": 0,
   "graphTooltip": 0,
-  "id": 3,
+  "id": 4,
   "links": [],
   "panels": [
     {
@@ -1074,7 +1074,32 @@
           },
           "unit": "short"
         },
-        "overrides": []
+        "overrides": [
+          {
+            "__systemRef": "hideSeriesFrom",
+            "matcher": {
+              "id": "byNames",
+              "options": {
+                "mode": "exclude",
+                "names": [
+                  "fraud_unavailable_decline"
+                ],
+                "prefix": "All except:",
+                "readOnly": true
+              }
+            },
+            "properties": [
+              {
+                "id": "custom.hideFrom",
+                "value": {
+                  "legend": false,
+                  "tooltip": false,
+                  "viz": true
+                }
+              }
+            ]
+          }
+        ]
       },
       "gridPos": {
         "h": 9,
@@ -1735,21 +1760,21 @@
         },
         {
           "editorMode": "code",
-          "expr": "sum(rate(resilience4j_circuitbreaker_calls_seconds_count{name=\"fraudService\", kind=\"ignored\"}[1m]))",
+          "expr": "sum(rate(resilience4j_circuitbreaker_calls_seconds_count{name=\"fraudService\", kind=\"ignored\"}[5m]) * 60)",
           "legendFormat": "ignored",
           "range": true,
           "refId": "B"
         },
         {
           "editorMode": "code",
-          "expr": "sum(rate(resilience4j_circuitbreaker_calls_seconds_count{name=\"fraudService\", kind=\"not_permitted\"}[1m]))",
+          "expr": "sum(rate(resilience4j_circuitbreaker_not_permitted_calls_total{name=\"fraudService\"}[5m])) * 60",
           "legendFormat": "not_permitted",
           "range": true,
           "refId": "C"
         },
         {
           "editorMode": "code",
-          "expr": "sum(rate(resilience4j_circuitbreaker_calls_seconds_count{name=\"fraudService\", kind=\"failed\"}[1m]))",
+          "expr": "sum(rate(resilience4j_circuitbreaker_calls_seconds_count{name=\"fraudService\", kind=\"failed\"}[5m]) * 60)",
           "legendFormat": "failed",
           "range": true,
           "refId": "D"
@@ -2916,6 +2941,8 @@
             "axisColorMode": "text",
             "axisLabel": "Events/min",
             "axisPlacement": "auto",
+            "axisSoftMax": 5,
+            "axisSoftMin": 0,
             "barAlignment": 0,
             "barWidthFactor": 0.6,
             "drawStyle": "line",
@@ -2928,12 +2955,12 @@
             },
             "insertNulls": false,
             "lineInterpolation": "linear",
-            "lineWidth": 1,
+            "lineWidth": 2,
             "pointSize": 0,
             "scaleDistribution": {
               "type": "linear"
             },
-            "showPoints": "auto",
+            "showPoints": "always",
             "spanNulls": false,
             "stacking": {
               "group": "A",
@@ -2958,7 +2985,7 @@
       },
       "gridPos": {
         "h": 9,
-        "w": 24,
+        "w": 14,
         "x": 0,
         "y": 124
       },
@@ -2980,7 +3007,7 @@
       "targets": [
         {
           "editorMode": "code",
-          "expr": "sum by (eventType) (rate(ledger_event_duplicate_skipped_total{application=\"ledger-service\"}[5m]) * 60)",
+          "expr": "sum by (eventType) (rate(ledger_event_duplicate_skipped_total{application=\"ledger-service\"}[1m]) * 60)",
           "legendFormat": "{{eventType}}",
           "range": true,
           "refId": "A"
@@ -2988,6 +3015,69 @@
       ],
       "title": "Ledger duplicate events skipped/min by type",
       "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green"
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 10,
+        "x": 14,
+        "y": 124
+      },
+      "id": 508,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "percentChangeColorMode": "standard",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showPercentChange": false,
+        "textMode": "auto",
+        "wideLayout": true
+      },
+      "pluginVersion": "11.6.15",
+      "targets": [
+        {
+          "editorMode": "code",
+          "expr": "sum by (eventType) (\n  ledger_event_duplicate_skipped_total{\n    application=\"ledger-service\"\n  }\n)",
+          "legendFormat": "{{eventType}}",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "Duplicate events skipped — total",
+      "type": "stat"
     },
     {
       "datasource": {
@@ -3383,5 +3473,5 @@
   "timezone": "",
   "title": "Payment Platform Overview",
   "uid": "payment-platform-overview",
-  "version": 7
+  "version": 10
 }
