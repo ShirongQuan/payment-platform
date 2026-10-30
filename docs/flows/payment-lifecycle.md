@@ -25,10 +25,10 @@ emitted events.
 - Auth-service request handling and state transitions
 - The synchronous fraud pre-check (fraud-service) and its account-lock side effect
 - Ledger-side effects via published/consumed events
-- Idempotency behavior for key mutating operations
+- Idempotency behaviour for key mutating operations
 
 See [Payment Platform MVP Progress](../roadmap.md) for what's planned beyond this MVP scope (e.g. refunds,
-authentication/authorization, account-unlock flow).
+authentication/authorisation, account-unlock flow).
 
 ---
 
@@ -79,7 +79,7 @@ covers:
   `currencyCode`, `merchantReference`).
 - `idempotencyKey` is required and scoped to `(accountId, idempotencyKey)`.
 
-### Expected behavior
+### Expected behaviour
 
 1. Redis idempotency-cache check for `(AUTHORISE, accountId, idempotencyKey)`; a fingerprint hit
    replays the cached response immediately (no DB write, no fraud-service call).
@@ -125,7 +125,7 @@ covers:
 - Authorisation exists and is currently `AUTHORISED` (capture from any other status is rejected).
 - Capture request provides `idempotencyKey`, scoped to `(authorisationId, idempotencyKey)`.
 
-### Expected behavior
+### Expected behaviour
 
 1. Validate legal state transition (`AUTHORISED -> CAPTURED`); any other current status raises
    `AuthorisationIllegalStateException` (`409`, `INVALID_AUTHORISATION_STATE`) — **except** when
@@ -161,7 +161,7 @@ to the available balance.
   (`AuthorisationEventReason`, e.g. `CUSTOMER_REQUEST`/`MERCHANT_REQUEST`), scoped to
   `(authorisationId, idempotencyKey)`.
 
-### Expected behavior
+### Expected behaviour
 
 1. Validate legal state transition (`AUTHORISED -> REVERSED`).
 2. Release the reserved amount: `reservedBalance -= amount`, `availableBalance += amount` — unlike
@@ -196,7 +196,7 @@ ledger entries + an event log:
 
 Every projected event is deduplicated by `eventId` via `processed_event` (`INSERT ... ON CONFLICT
 DO NOTHING`), giving effectively-once projection over Kafka's at-least-once delivery. A genuinely
-unrecognized event type raises a non-retryable `IllegalArgumentException`, routed straight to the
+unrecognised event type raises a non-retryable `IllegalArgumentException`, routed straight to the
 `auth.events.ledger.dlt` dead-letter topic; other runtime failures are retried 3× with a 2s fixed
 backoff before falling back to the DLT.
 

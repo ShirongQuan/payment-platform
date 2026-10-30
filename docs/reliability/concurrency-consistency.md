@@ -190,9 +190,9 @@ follow-ups are tracked in [Payment Platform MVP Progress](../roadmap.md):
   `@Lock(LockModeType.PESSIMISTIC_WRITE)`) for reserve/capture/reverse, to compare throughput vs.
   contention trade-offs against the current optimistic-locking approach under the existing
   `load-tests/generate-concurrency-conflicts.sh` scenario (see
-  [Next Steps item 5](../roadmap.md#5-next-steps-prioritized)).
+  [Next Steps item 5](../roadmap.md#5-next-steps-prioritised)).
 - Extending idempotency coverage to `POST /accounts` and `POST /accounts/{id}/deposits`, which are
-  not idempotent today (see [Next Steps item 6](../roadmap.md#5-next-steps-prioritized)).
+  not idempotent today (see [Next Steps item 6](../roadmap.md#5-next-steps-prioritised)).
 - Expanded failure-path/concurrency test automation (timeouts, duplicate events, DLT replay) — see
-  [Next Steps item 7](../roadmap.md#5-next-steps-prioritized).
+  [Next Steps item 7](../roadmap.md#5-next-steps-prioritised).
 

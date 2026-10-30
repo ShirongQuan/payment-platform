@@ -154,7 +154,7 @@ Defined in `OutboxBackoffPolicy`:
 
 ## Failure Modes
 
-| Scenario                                                                                      | Behavior today                                                                                                                                                                                                                                                                                                                                                                           |
+| Scenario                                                                                      | Behaviour today                                                                                                                                                                                                                                                                                                                                                                           |
 |-----------------------------------------------------------------------------------------------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | **Broker down / unreachable**                                                                 | Publish attempts fail; `retry_count` increments and `next_attempt_at` is pushed out per the backoff schedule. Once the broker recovers, the next scheduler cycle picks the row up again.                                                                                                                                                                                                 |
 | **Partial publish** (send succeeds, ack lost, or instance crashes before marking `PUBLISHED`) | The claim lease (`claim_until`) bounds how long a row can sit `PUBLISHING` before being reclaimed to `NEW` and retried. Producer idempotence (`enable.idempotence: true`) means a retried send for the same logical record does not create a duplicate broker-side write; downstream consumer dedup (`processed_event`) is the final safety net against any residual duplicate delivery. |
@@ -170,7 +170,7 @@ Exposed by `auth-service` via Micrometer/Prometheus (`/actuator/prometheus`):
 - `auth_outbox_publish_lag_seconds` — histogram, time from `created_at` to successful publish.
 - `auth_outbox_publish_attempts_total{result="success"|"retry"|"failed"}` — counter, per-attempt
   outcome; `result="retry"` and `result="failed"` together give the retry/failure rate.
-- Visualized in the `payment-platform-overview.json` Grafana dashboard
+- Visualised in the `payment-platform-overview.json` Grafana dashboard
   (`infra/grafana/dashboards/`).
 
 ## Runbook Links

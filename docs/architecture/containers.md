@@ -41,7 +41,7 @@ forms a separate supporting boundary around the payment-processing path.
 |----------------------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|------------------------------------------------------------------------------------------------------|--------------------------------------------------------------------------------------------------------------------------------------------------|
 | **auth-service** (port `9000`)   | Account management; authorise/capture/reverse lifecycle; idempotency enforcement; optimistic-locking concurrency control; calls fraud-service; writes the transactional outbox.                                                                                                                                | Java 21, Spring Boot 4, Spring Data JPA, Spring Kafka (producer), Resilience4j, Flyway, Redis client | `auth_db` (PostgreSQL): `account`, `authorisation`, `authorisation_event`, `outbox_event`. Also owns keys in Redis (idempotency response cache). |
 | **fraud-service** (port `9010`)  | Synchronous risk evaluation for a proposed authorisation (velocity + amount-deviation rules); returns approve/decline (+ risk score, optional account-lock recommendation) to auth-service. Not exposed externally.                                                                                            | Java 21, Spring Boot 4, Spring Data JPA, Flyway, Redis (Lua scripts for sliding-window counters)     | `fraud_db` (PostgreSQL): `fraud_evaluation`. Also owns keys in Redis (`fraud:sw:*` velocity counters, amount-baseline cache).                    |
-| **ledger-service** (port `9020`) | Consumes `auth-service`'s domain events from Kafka, deduplicates them, and projects them into raw + normalized ledger storage; exposes read-only query endpoints. Receives payment state changes asynchronously through Kafka, so no synchronous service-to-service dependency is required for ledger updates. | Java 21, Spring Boot 4, Spring Kafka (consumer), Spring Data JPA, Flyway, MapStruct                  | `ledger_db` (PostgreSQL): `ledger_event_log`, `ledger_entry`, `processed_event`.                                                                 |
+| **ledger-service** (port `9020`) | Consumes `auth-service`'s domain events from Kafka, deduplicates them, and projects them into raw + normalised ledger storage; exposes read-only query endpoints. Receives payment state changes asynchronously through Kafka, so no synchronous service-to-service dependency is required for ledger updates. | Java 21, Spring Boot 4, Spring Kafka (consumer), Spring Data JPA, Flyway, MapStruct                  | `ledger_db` (PostgreSQL): `ledger_event_log`, `ledger_entry`, `processed_event`.                                                                 |
 
 ### Shared cross-cutting library
 
@@ -109,7 +109,7 @@ independent processing and eventual consistency are appropriate.
 - Each service connects **only** to its own database. There is no cross-service schema access: services maintain
   strong transactional consistency within their own data boundary and coordinate across service boundaries
   through explicit APIs and events. Ledger state is propagated through the Kafka event stream (see
-  [ADR 0003: Store Both Raw and Normalized Ledger Events](../decisions/0003-ledger-raw-and-normalized-events.md)).
+  [ADR 0003: Store Both Raw and Normalised Ledger Events](../decisions/0003-ledger-raw-and-normalised-events.md)).
 - Redis is the only store touched by two different services (auth-service and fraud-service), but each uses a
   disjoint key namespace (`{operation}:idempotency:*` vs `fraud:sw:*` / amount-baseline keys) — there is no
   shared key space or read/write coupling between them.
@@ -142,14 +142,14 @@ Traces and application metrics follow two independent telemetry paths:
 The next phase extends the existing distributed-system foundation with the following capabilities:
 
 - **API Gateway** — single ingress for routing, scope enforcement, and infra-level rate limiting in front of
-  `auth-service`/`ledger-service` ([roadmap item 4](../roadmap.md#5-next-steps-prioritized))
-- **Identity Provider (OIDC)** — centralized authn/authz (customer vs. admin scopes), validated by the gateway
-  and `auth-service` ([roadmap item 1](../roadmap.md#5-next-steps-prioritized))
+  `auth-service`/`ledger-service` ([roadmap item 4](../roadmap.md#5-next-steps-prioritised))
+- **Identity Provider (OIDC)** — centralised authn/authz (customer vs. admin scopes), validated by the gateway
+  and `auth-service` ([roadmap item 1](../roadmap.md#5-next-steps-prioritised))
 - **Customer Web App / Admin Operations App** — user-facing applications authenticating through the Identity
   Provider and accessing platform APIs through the API Gateway
-  ([roadmap item 3](../roadmap.md#5-next-steps-prioritized))
+  ([roadmap item 3](../roadmap.md#5-next-steps-prioritised))
 - **reconciliation-service** — scheduled cross-check of ledger projections against account state (and
-  eventually an external processor) to detect and flag drift ([roadmap item 2](../roadmap.md#5-next-steps-prioritized))
+  eventually an external processor) to detect and flag drift ([roadmap item 2](../roadmap.md#5-next-steps-prioritised))
 - **notification-service** — consumes `auth.events` to deliver email/SMS/webhook notifications on payment
   lifecycle changes
 - **External Payment Processor / Card Network (simulated)** — settlement target for authorise/capture, and
@@ -158,4 +158,4 @@ The next phase extends the existing distributed-system foundation with the follo
   receipt/statement/document storage
 
 This diagram presents the planned architectural direction. Implementation sequencing and priorities are
-maintained in the [Roadmap § Next Steps](../roadmap.md#5-next-steps-prioritized).
+maintained in the [Roadmap § Next Steps](../roadmap.md#5-next-steps-prioritised).

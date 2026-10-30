@@ -14,7 +14,7 @@
     - [Account-level transition (parallel state machine)](#account-level-transition-parallel-state-machine)
 - [Guards / Preconditions](#guards--preconditions)
 - [Terminal States](#terminal-states)
-- [Concurrency / Idempotency Behavior](#concurrency--idempotency-behavior)
+- [Concurrency / Idempotency Behaviour](#concurrency--idempotency-behaviour)
 - [Error Mapping](#error-mapping)
 - [Related](#related)
 
@@ -42,14 +42,14 @@
 
 ## Aggregates
 
-Two independent state machines govern payment behavior:
+Two independent state machines govern payment behaviour:
 
 1. **Authorisation** — the payment/transaction lifecycle (`AuthorisationStatus`, `auth-service`). This is the primary
    aggregate this document focuses on.
 2. **Account** — a coarser-grained fraud-response gate (`AccountStatus`, `auth-service`) that runs alongside, not
    instead of, the authorisation state machine.
 
-There is no separate "reservation" aggregate — the reservation concept is modeled as a pair of balance fields (
+There is no separate "reservation" aggregate — the reservation concept is modelled as a pair of balance fields (
 `availableBalance`, `reservedBalance`) on the account, mutated as a side effect of authorisation state transitions, not
 as its own state machine.
 
@@ -102,7 +102,7 @@ future work has a documented target, and are tracked in [Payment Platform MVP Pr
 
 Any capture or reverse request against an authorisation **not** currently `AUTHORISED` is rejected as an invalid
 transition — **except** when it is a same-idempotency-key replay of an operation that already completed (see
-Concurrency/Idempotency Behavior below).
+Concurrency/Idempotency Behaviour below).
 
 ### Account-level transition (parallel state machine)
 
@@ -136,7 +136,7 @@ machine simple and predictable for this platform's scope.
 - The only "operation" still valid against a terminal-state authorisation is a safe retry with the exact same
   idempotency key and payload that already produced that state.
 
-## Concurrency / Idempotency Behavior
+## Concurrency / Idempotency Behaviour
 
 - **Scope of uniqueness:** idempotency is scoped per operation, not globally —
   `account_id + event_type + idempotency_key` for authorise, and `authorisation_id + event_type + idempotency_key` for

@@ -8,13 +8,13 @@
 
 Base path: `/` (server port `9010`)
 
-This document covers the important fraud-service endpoint and the expected behavior for:
+This document covers the important fraud-service endpoint and the expected behaviour for:
 
 - request
 - response
 - decision logic
 - error cases
-- idempotency behavior
+- idempotency behaviour
 
 Fraud-service is called **synchronously over REST** by auth-service as a pre-check before an
 authorisation reserves funds (see [Auth API](./auth-api.md#post-authorisations)). It is not driven by
@@ -112,7 +112,7 @@ account; it is `false`/`null` for every `APPROVE`.
     - Pattern-based: more than `risk.lock.repeated-decline-threshold` (`3`) declines for the same
       account within `risk.lock.repeated-decline-window-seconds` (`600`s / 10 min) →
       reason `REPEATED_DECLINE_PATTERN`.
-5. The evaluation row is finalized (`PENDING` → `APPROVE`/`DECLINE`) so a retried request with the same
+5. The evaluation row is finalised (`PENDING` → `APPROVE`/`DECLINE`) so a retried request with the same
    `(accountId, idempotencyKey)` replays the stored decision instead of re-scoring.
 
 ### Error cases
@@ -123,12 +123,12 @@ account; it is `false`/`null` for every `APPROVE`.
 - `409 Conflict`: a duplicate request for the same `(accountId, idempotencyKey)` arrived while the
   original evaluation is still being scored (`FRAUD_EVALUATION_IN_PROGRESS`)
 
-### Idempotency behavior
+### Idempotency behaviour
 
 - Scoped by `(accountId, idempotencyKey)`, enforced via a database unique constraint (conditional
   insert of the `PENDING` row).
 - If the same key is retried with an identical payload after the original evaluation finished, the
-  previously finalized decision is replayed (no re-scoring).
+  previously finalised decision is replayed (no re-scoring).
 - If the same key is retried with a different payload, returns `409 IDEMPOTENCY_CONFLICT`.
 - If the same key is retried while the original evaluation is still `PENDING`, returns
   `409 FRAUD_EVALUATION_IN_PROGRESS`.

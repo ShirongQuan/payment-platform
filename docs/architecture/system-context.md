@@ -60,7 +60,7 @@ As one system, the platform is responsible for:
   ([ADR 0001: Use Kafka + Transactional Outbox](../decisions/0001-use-kafka-outbox.md))
 - maintaining an independent, queryable ledger projection from payment events, including read-only
   authorisation/account-event history
-  ([ADR 0003: Store Both Raw and Normalized Ledger Events](../decisions/0003-ledger-raw-and-normalized-events.md))
+  ([ADR 0003: Store Both Raw and Normalised Ledger Events](../decisions/0003-ledger-raw-and-normalised-events.md))
 - providing end-to-end operational visibility through distributed tracing, metrics, dashboards, and correlated
   logs
 

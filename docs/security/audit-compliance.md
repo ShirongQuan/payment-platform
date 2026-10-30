@@ -11,7 +11,7 @@
 
 > **Reading this document:** every section describes **what's implemented today** and the
 > **next steps** planned to extend it further, per the [roadmap](../roadmap.md). This is a
-> working MVP — a formal audit/compliance program is planned as future scope,
+> working MVP — a formal audit/compliance programme is planned as future scope,
 > and the next-steps lists below reflect deliberate sequencing rather than oversights.
 
 ## Audit Events to Capture
@@ -42,7 +42,7 @@ transition in the `authorisation_event` table (`AuthorisationEventEntity`):
   [Outbox Backlog Recovery](../flows/outbox-backlog-recovery.md)), relying on database change
   history and operator discipline rather than a structured audit event.
 - Once authentication (Spring Security + JWT) lands
-  ([roadmap Next Steps #1](../roadmap.md#5-next-steps-prioritized)), introduce auth-attempt and
+  ([roadmap Next Steps #1](../roadmap.md#5-next-steps-prioritised)), introduce auth-attempt and
   admin-action audit events (login success/failure, role-gated action performed) — every request
   is currently anonymous at the application layer, so there is no login/auth-failure event to
   capture yet.
@@ -55,22 +55,22 @@ transition in the `authorisation_event` table (`AuthorisationEventEntity`):
 
 Every `authorisation_event` row captures:
 
-| Field | Present today | Notes |
-|-------|-----------------|-------|
-| **Action / event type** | ✅ `event_type` (`AUTHORISED`/`DECLINED`/`CAPTURED`/`REVERSED`) | |
-| **Entity** | ✅ `authorisation_id`, `account_id` | |
-| **Timestamp** | ✅ `created_at` | |
-| **Correlation id** | ✅ `correlation_id` | Ties the event back to the originating HTTP request and, via Kafka headers/`traceparent`, to the full distributed trace |
-| **Reason / context** | ✅ `reason_code` (e.g. `INSUFFICIENT_FUNDS`, `FRAUD_DECLINED`, `CUSTOMER_REQUEST`) | |
-| **Amount / currency** | ✅ `amount`, `currency_code` | Financial "before/after" is reconstructable from the sequence of events per authorisation (e.g. `AUTHORISED` → `CAPTURED` implies reserved-balance debited) rather than an explicit before/after snapshot column |
-| **Actor** | ➖ **planned (future scope)** | Authenticated caller identity is planned as part of upcoming auth work — every event is currently attributed to "the system", since the auth layer is planned but not yet built |
-| **Explicit before/after value snapshot** | ➖ **derived, not stored** | The event log is transition-based (event type implies the state change) rather than storing explicit before/after balance snapshots on each row — state is deterministically reconstructable from the full event sequence |
+| Field                                    | Present today                                                                     | Notes                                                                                                                                                                                                                     |
+|------------------------------------------|-----------------------------------------------------------------------------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| **Action / event type**                  | ✅ `event_type` (`AUTHORISED`/`DECLINED`/`CAPTURED`/`REVERSED`)                    |                                                                                                                                                                                                                           |
+| **Entity**                               | ✅ `authorisation_id`, `account_id`                                                |                                                                                                                                                                                                                           |
+| **Timestamp**                            | ✅ `created_at`                                                                    |                                                                                                                                                                                                                           |
+| **Correlation id**                       | ✅ `correlation_id`                                                                | Ties the event back to the originating HTTP request and, via Kafka headers/`traceparent`, to the full distributed trace                                                                                                   |
+| **Reason / context**                     | ✅ `reason_code` (e.g. `INSUFFICIENT_FUNDS`, `FRAUD_DECLINED`, `CUSTOMER_REQUEST`) |                                                                                                                                                                                                                           |
+| **Amount / currency**                    | ✅ `amount`, `currency_code`                                                       | Financial "before/after" is reconstructable from the sequence of events per authorisation (e.g. `AUTHORISED` → `CAPTURED` implies reserved-balance debited) rather than an explicit before/after snapshot column          |
+| **Actor**                                | ➖ **planned (future scope)**                                                      | Authenticated caller identity is planned as part of upcoming auth work — every event is currently attributed to "the system", since the auth layer is planned but not yet built                                           |
+| **Explicit before/after value snapshot** | ➖ **derived, not stored**                                                         | The event log is transition-based (event type implies the state change) rather than storing explicit before/after balance snapshots on each row — state is deterministically reconstructable from the full event sequence |
 
 ### Next step
 
 - Add an `actor` field (populated from the JWT subject/service-account identity once
   authentication lands) to `authorisation_event` and any future admin-action audit table — see
-  [roadmap Next Steps #1](../roadmap.md#5-next-steps-prioritized). This is the top-priority
+  [roadmap Next Steps #1](../roadmap.md#5-next-steps-prioritised). This is the top-priority
   addition for attributing events to a specific authenticated caller.
 - Consider adding explicit before/after balance snapshots to `authorisation_event` if a stricter
   audit/compliance standard requires it (currently deferred since the event-type + amount is
@@ -96,7 +96,7 @@ Every `authorisation_event` row captures:
   could not silently `UPDATE`/`DELETE` rows outside the application code path — tracked under
   [roadmap Production Considerations](../roadmap.md#6-production-considerations) (compliance
   posture item).
-- Introduce centralized/immutable log aggregation (e.g. a SIEM) — logs are currently emitted to
+- Introduce centralised/immutable log aggregation (e.g. a SIEM) — logs are currently emitted to
   each service's stdout console only.
 - Evaluate database-level audit logging (e.g. Postgres `pgaudit`) capturing raw DDL/DML
   independent of the application layer, as part of the compliance-hardening phase.
@@ -123,8 +123,8 @@ SOC 2, ISO 27001). This statement is intentionally explicit rather than left amb
 **Planned controls** (see [Next Steps List](#next-steps--roadmap-milestones) and
 [roadmap](../roadmap.md) for full detail):
 
-- Request authentication/authorization (Spring Security + JWT) — planned as
-  [roadmap Next Steps #1](../roadmap.md#5-next-steps-prioritized).
+- Request authentication/authorisation (Spring Security + JWT) — planned as
+  [roadmap Next Steps #1](../roadmap.md#5-next-steps-prioritised).
 - Transport encryption (TLS, Kafka SASL/mTLS, Redis ACLs) — tracked under
   [roadmap Production Considerations](../roadmap.md#6-production-considerations).
 - Secrets management/rotation — same roadmap section.
@@ -132,24 +132,24 @@ SOC 2, ISO 27001). This statement is intentionally explicit rather than left amb
 
 ## Next Steps + Roadmap Milestones
 
-| Next step | Roadmap reference | Target phase |
-|-----|----------------------|----------------|
-| Add request authentication/authorization | [Next Steps #1](../roadmap.md#5-next-steps-prioritized) | Next phase (highest-priority item in the roadmap's prioritized list) |
-| Add an API gateway / centralized authn/authz + rate limiting | [Next Steps #4](../roadmap.md#5-next-steps-prioritized) | Next phase, after item 1 |
-| Add an actor field to audit events | Depends on item 1 above (this doc, [Required Event Fields](#required-event-fields)) | Follows authentication rollout |
-| Add admin-action / config-change audit events | This doc, [Audit Events to Capture](#audit-events-to-capture) | Follows authentication rollout (no admin surface exists to audit yet) |
-| Add TLS / transport encryption (HTTP, Kafka, Redis) | [Production Considerations](../roadmap.md#6-production-considerations) | Infrastructure hardening phase (deployment-environment-dependent) |
-| Add a secrets vault/rotation | [Production Considerations](../roadmap.md#6-production-considerations) | Infrastructure hardening phase |
-| Add encryption at rest | [Production Considerations](../roadmap.md#6-production-considerations) | Infrastructure hardening phase |
-| Define a formal retention/deletion policy | [Data Protection § Retention](./data-protection.md#retentiondeletion-policy) (marked TBD) | To be defined alongside compliance posture work |
-| Add cryptographic log tamper-evidence / DB-level audit logging | This doc, [Log Integrity](#log-integritytamper-considerations) | Compliance-hardening phase |
-| Pursue formal compliance certification | This doc, [Compliance Posture Statement](#compliance-posture-statement) | Not scheduled — would follow the above controls landing first |
+| Next step                                                      | Roadmap reference                                                                         | Target phase                                                          |
+|----------------------------------------------------------------|-------------------------------------------------------------------------------------------|-----------------------------------------------------------------------|
+| Add request authentication/authorisation                       | [Next Steps #1](../roadmap.md#5-next-steps-prioritised)                                   | Next phase (highest-priority item in the roadmap's prioritised list)  |
+| Add an API gateway / centralised authn/authz + rate limiting   | [Next Steps #4](../roadmap.md#5-next-steps-prioritised)                                   | Next phase, after item 1                                              |
+| Add an actor field to audit events                             | Depends on item 1 above (this doc, [Required Event Fields](#required-event-fields))       | Follows authentication rollout                                        |
+| Add admin-action / config-change audit events                  | This doc, [Audit Events to Capture](#audit-events-to-capture)                             | Follows authentication rollout (no admin surface exists to audit yet) |
+| Add TLS / transport encryption (HTTP, Kafka, Redis)            | [Production Considerations](../roadmap.md#6-production-considerations)                    | Infrastructure hardening phase (deployment-environment-dependent)     |
+| Add a secrets vault/rotation                                   | [Production Considerations](../roadmap.md#6-production-considerations)                    | Infrastructure hardening phase                                        |
+| Add encryption at rest                                         | [Production Considerations](../roadmap.md#6-production-considerations)                    | Infrastructure hardening phase                                        |
+| Define a formal retention/deletion policy                      | [Data Protection § Retention](./data-protection.md#retentiondeletion-policy) (marked TBD) | To be defined alongside compliance posture work                       |
+| Add cryptographic log tamper-evidence / DB-level audit logging | This doc, [Log Integrity](#log-integritytamper-considerations)                            | Compliance-hardening phase                                            |
+| Pursue formal compliance certification                         | This doc, [Compliance Posture Statement](#compliance-posture-statement)                   | Not scheduled — would follow the above controls landing first         |
 
 ## Roadmap
 
 See [Payment Platform MVP Progress](../roadmap.md) for full detail and current sequencing, particularly:
 
-- [§5 Next Steps](../roadmap.md#5-next-steps-prioritized) — authentication/authorization (item 1)
+- [§5 Next Steps](../roadmap.md#5-next-steps-prioritised) — authentication/authorisation (item 1)
   and API gateway (item 4), the two highest-leverage items for advancing the audit/compliance
   next steps above.
 - [§6 Production Considerations](../roadmap.md#6-production-considerations) — transport security,

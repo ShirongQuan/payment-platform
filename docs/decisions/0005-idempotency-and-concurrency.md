@@ -55,7 +55,7 @@ Current DB index in `auth-service` enforces this boundary:
 
 ## 4) Request Replay Semantics
 
-The API behavior is deterministic for retries:
+The API behaviour is deterministic for retries:
 
 - safe retry (same key, same semantic payload): return previous response, no duplicate side effects
 - changed request with same key: reject with idempotency conflict
@@ -105,7 +105,7 @@ For Kafka-driven ledger projection:
 - first insert processes the event; duplicate `eventId` is ignored
 - ledger ingestion is order-tolerant for duplicate delivery (at-least-once)
 
-This gives effectively-once projection behavior per unique `eventId` without distributed transactions.
+This gives effectively-once projection behaviour per unique `eventId` without distributed transactions.
 
 ## 7) Error Handling
 
@@ -158,7 +158,7 @@ for storage/policy (Redis vs DB, TTL, key scope, replay/conflict implementation 
 
 - [ADR 0001: Use Kafka + Transactional Outbox](./0001-use-kafka-outbox.md)
 - [ADR 0002: Support Full Capture and Full Reverse](./0002-full-capture-only.md)
-- [ADR 0003: Store Both Raw and Normalized Ledger Events](./0003-ledger-raw-and-normalized-events.md)
+- [ADR 0003: Store Both Raw and Normalised Ledger Events](./0003-ledger-raw-and-normalised-events.md)
 - [ADR 0004: Use Separate Main Event and DLT Topics](./0004-use-event-and-dlt-topics.md)
 - [ADR 0007: Idempotency Store Strategy and Key Policy (Auth/Fraud)](./0007-idempotency-store-and-key-policy.md)
 - [ADR 0010: Database Concurrency Approach (Optimistic vs Pessimistic Locking)](./0010-database-concurrency-approach.md)

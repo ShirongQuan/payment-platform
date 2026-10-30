@@ -2,7 +2,7 @@
 
 ## Table of Contents
 
-- [Topic Catalog](#topic-catalog)
+- [Topic Catalogue](#topic-catalogue)
 - [Message Keys](#message-keys)
 - [Partitioning Strategy](#partitioning-strategy)
 - [Ordering Contracts](#ordering-contracts)
@@ -14,7 +14,7 @@
 - [Roadmap / Production Considerations](#roadmap--production-considerations)
 - [Related](#related)
 
-## Topic Catalog
+## Topic Catalogue
 
 | Topic                    | Producer                                                                   | Consumer(s)                                                      | Payload schema                                                                                                                                                                                                                                                     | Retention                                                                                                                                         |
 |--------------------------|----------------------------------------------------------------------------|------------------------------------------------------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|---------------------------------------------------------------------------------------------------------------------------------------------------|
@@ -79,11 +79,11 @@ Producer key type is `UUID` (`UUIDSerializer`); consumer key type is correspondi
   `ledger-service` satisfies this today via a `processed_event` table keyed on `event_id`
   (`INSERT ... ON CONFLICT DO NOTHING`), giving effectively-once projection semantics — see
   [Outbox Pattern](./outbox-pattern.md#deduplication) for the full mechanism.
-- **Offset commit behavior**: `enable-auto-commit: false` with `ack-mode: record` — the consumer
+- **Offset commit behaviour**: `enable-auto-commit: false` with `ack-mode: record` — the consumer
   only advances its offset after a record has been fully handled (either successfully projected, or
   routed to the DLT after retry exhaustion), so a mid-processing crash results in redelivery rather
   than silent message loss.
-- **Retry/DLT behavior**: on a processing failure, `ledger-service`'s Kafka error handler retries
+- **Retry/DLT behaviour**: on a processing failure, `ledger-service`'s Kafka error handler retries
   the record **3 times with a fixed 2-second backoff**
   (`ledger-service/src/main/java/org/example/ledger/KafkaConsumerConfig.java`). Non-retryable
   failures (e.g. malformed JSON, missing required headers) are **not retried** and go straight to

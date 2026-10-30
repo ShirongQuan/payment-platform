@@ -20,11 +20,11 @@
 regulated personal PII (name, card number, email, address) is collected or stored anywhere in the
 current schema:
 
-| Class | Fields | Where |
-|-------|--------|-------|
-| **Financial** | `available_balance`, `reserved_balance` (`account`); `amount`, `currency_code`, `merchant_reference` (`authorisation` / `authorisation_event`); `amount`, projected `balance`, raw event payloads (`ledger_entry` / `ledger_event_log`) | `auth_db`, `ledger_db` |
-| **Behavioral / PII-adjacent** | `ip_address`, `risk_score`, `decision` (`fraud_evaluation`) | `fraud_db` only |
-| **Operational / correlation** | `correlation_id`, `event_id`, `idempotency_key`, `traceparent`, timestamps | `auth_db`, `fraud_db`, `ledger_db`, Kafka headers, logs, traces |
+| Class                         | Fields                                                                                                                                                                                                                                  | Where                                                           |
+|-------------------------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|-----------------------------------------------------------------|
+| **Financial**                 | `available_balance`, `reserved_balance` (`account`); `amount`, `currency_code`, `merchant_reference` (`authorisation` / `authorisation_event`); `amount`, projected `balance`, raw event payloads (`ledger_entry` / `ledger_event_log`) | `auth_db`, `ledger_db`                                          |
+| **Behavioral / PII-adjacent** | `ip_address`, `risk_score`, `decision` (`fraud_evaluation`)                                                                                                                                                                             | `fraud_db` only                                                 |
+| **Operational / correlation** | `correlation_id`, `event_id`, `idempotency_key`, `traceparent`, timestamps                                                                                                                                                              | `auth_db`, `fraud_db`, `ledger_db`, Kafka headers, logs, traces |
 
 **Next step**: no customer-identifying fields (name, email, physical address, card/account-holder
 number) exist in the schema today, so there is currently no dedicated "PII" data class requiring
@@ -37,15 +37,15 @@ revisited and a field-level encryption/masking review performed before storage �
 
 **Current:**
 
-| Store | Data |
-|-------|------|
-| **PostgreSQL — `auth_db`** | `account`, `authorisation`, `authorisation_event`, `outbox_event` tables |
-| **PostgreSQL — `fraud_db`** | `fraud_evaluation` table (amount, IP address, risk score, decision) |
-| **PostgreSQL — `ledger_db`** | `ledger_entry`, `ledger_event_log`, `processed_event` tables |
-| **Redis** | `auth-service` idempotent-response cache (TTL-bounded, default 24h); `fraud-service` velocity-rule sliding-window counters (TTL = window + 5s) |
-| **Kafka** | `auth.events` / `auth.events.ledger.dlt` topics — event payloads (amount, currency, merchant reference, event type) plus headers (`eventId`, `correlationId`, `traceparent`, `schemaVersion`) |
-| **Logs** | Structured console logs from all three services, including `traceId`, `spanId`, `correlationId`, and (in DEBUG-level authorisation logs) account ids/amounts |
-| **Traces** | OpenTelemetry spans exported to an otel-collector → Tempo, correlated via W3C `traceparent` across the HTTP → fraud call → Kafka → ledger-consumer hops |
+| Store                        | Data                                                                                                                                                                                          |
+|------------------------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| **PostgreSQL — `auth_db`**   | `account`, `authorisation`, `authorisation_event`, `outbox_event` tables                                                                                                                      |
+| **PostgreSQL — `fraud_db`**  | `fraud_evaluation` table (amount, IP address, risk score, decision)                                                                                                                           |
+| **PostgreSQL — `ledger_db`** | `ledger_entry`, `ledger_event_log`, `processed_event` tables                                                                                                                                  |
+| **Redis**                    | `auth-service` idempotent-response cache (TTL-bounded, default 24h); `fraud-service` velocity-rule sliding-window counters (TTL = window + 5s)                                                |
+| **Kafka**                    | `auth.events` / `auth.events.ledger.dlt` topics — event payloads (amount, currency, merchant reference, event type) plus headers (`eventId`, `correlationId`, `traceparent`, `schemaVersion`) |
+| **Logs**                     | Structured console logs from all three services, including `traceId`, `spanId`, `correlationId`, and (in DEBUG-level authorisation logs) account ids/amounts                                  |
+| **Traces**                   | OpenTelemetry spans exported to an otel-collector → Tempo, correlated via W3C `traceparent` across the HTTP → fraud call → Kafka → ledger-consumer hops                                       |
 
 Each service only ever queries its own database — there is no cross-schema access
 (`auth-service` never reads `fraud_db`/`ledger_db` directly, etc.); see
@@ -79,7 +79,7 @@ Each service only ever queries its own database — there is no cross-schema acc
   (`SPRING_DATASOURCE_USERNAME`/`SPRING_DATASOURCE_PASSWORD`) with local-development fallback
   defaults (`postgres`/`postgres`) inlined in each service's `application.yml`. There is no
   dedicated secrets vault/manager in the stack.
-- **Next**: no rotation or centralized secrets store (e.g. Vault/AWS Secrets Manager) yet; the
+- **Next**: no rotation or centralised secrets store (e.g. Vault/AWS Secrets Manager) yet; the
   fallback defaults are intended for local demo use only.
 - **Next step**: secrets management/rotation is tracked in
   [roadmap Production Considerations](../roadmap.md#6-production-considerations), alongside
@@ -123,7 +123,7 @@ Each service only ever queries its own database — there is no cross-schema acc
 
 ### Current
 
-- **Application-level**: **none**. No authentication or authorization exists on any HTTP endpoint
+- **Application-level**: **none**. No authentication or authorisation exists on any HTTP endpoint
   across `auth-service`, `fraud-service`, or `ledger-service` — every exposed endpoint is equally
   reachable by any caller with network access.
 - **Data-level**: schema isolation only — each service's JPA layer only ever accesses its own
@@ -135,7 +135,7 @@ Each service only ever queries its own database — there is no cross-schema acc
 ### Planned
 
 - **RBAC / role separation**: Spring Security + JWT with customer vs. admin role separation —
-  [roadmap Next Steps #1](../roadmap.md#5-next-steps-prioritized). Admin-only operations (e.g. a
+  [roadmap Next Steps #1](../roadmap.md#5-next-steps-prioritised). Admin-only operations (e.g. a
   future account-unlock endpoint, outbox/DLT replay tooling) would be gated behind the admin role.
 - **Service accounts**: per-service least-privilege database roles/credentials (rather than a
   shared Postgres superuser-style credential across services) —
@@ -148,8 +148,8 @@ Each service only ever queries its own database — there is no cross-schema acc
 Full sequencing and target milestones for the next steps above are tracked in
 [Payment Platform MVP Progress](../roadmap.md), specifically:
 
-- [§5 Next Steps](../roadmap.md#5-next-steps-prioritized) — items 1 (auth + role separation) and 4
-  (API gateway, centralized authn/authz).
+- [§5 Next Steps](../roadmap.md#5-next-steps-prioritised) — items 1 (auth + role separation) and 4
+  (API gateway, centralised authn/authz).
 - [§6 Production Considerations](../roadmap.md#6-production-considerations) — transport security
   and network hardening (TLS, Kafka SASL/mTLS, Redis ACLs), secrets management/rotation, and
   compliance posture (audit logging, PCI-relevant controls).

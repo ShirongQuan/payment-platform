@@ -7,7 +7,7 @@
 - [Fraud DB (fraud-service)](#fraud-db-fraud-service)
 - [End-to-end event reliability](#end-to-end-event-reliability)
 
-This document summarizes the core tables used by `auth-service`, `fraud-service`, and `ledger-service`.
+This document summarises the core tables used by `auth-service`, `fraud-service`, and `ledger-service`.
 
 ## Auth DB (auth-service)
 
@@ -68,7 +68,7 @@ relationships in `ledger_db`.*
 ### Main tables
 
 - `ledger_entry`
-    - Read-optimized projection used by query APIs.
+    - Read-optimised projection used by query APIs.
     - Stores the current immutable accounting entries derived from consumed events.
     - `merchant_reference` supports up to 128 chars; `event_type` supports up to 50 chars.
 
@@ -110,7 +110,7 @@ relationships in `ledger_db`.*
 - `fraud_evaluation`
     - Unique index `uq_authorisation_event_account_idempotency` on `(account_id, idempotency_key)` ensures deduplication
       per account.
-    - The service first claims a request with a `PENDING` row, then finalizes the same row with score/decision to handle
+    - The service first claims a request with a `PENDING` row, then finalises the same row with score/decision to handle
       concurrent duplicates safely.
 
 ## End-to-end event reliability

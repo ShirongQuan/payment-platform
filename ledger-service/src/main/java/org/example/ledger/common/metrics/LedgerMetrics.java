@@ -10,8 +10,8 @@ import org.springframework.stereotype.Component;
  * Custom Kafka consumer / dead-letter-topic (DLT) metrics for ledger-service, exported via
  * Actuator's /actuator/prometheus endpoint.
  *
- * <p>Callers (the Kafka listener and error-handler configuration) depend only on this class, not
- * on {@link MeterRegistry} directly, keeping metric names/tags centralized in one place.
+ * <p>Callers (the Kafka listener and error-handler configuration) depend only on this class, not on
+ * {@link MeterRegistry} directly, keeping metric names/tags centralised in one place.
  */
 @Component
 public class LedgerMetrics {
@@ -26,8 +26,7 @@ public class LedgerMetrics {
 
   // Event processing outcome (routed through LedgerEventProcessor) and dedup metrics.
   public static final String EVENT_PROCESSED_TOTAL = "ledger_event_processed_total";
-  public static final String EVENT_DUPLICATE_SKIPPED_TOTAL =
-      "ledger_event_duplicate_skipped_total";
+  public static final String EVENT_DUPLICATE_SKIPPED_TOTAL = "ledger_event_duplicate_skipped_total";
 
   public static final String TOPIC_TAG = "topic";
   public static final String DLT_TOPIC_TAG = "dltTopic";
@@ -67,9 +66,9 @@ public class LedgerMetrics {
   }
 
   /**
-   * Increments the count of records published to the dead-letter topic, tagged with the
-   * originating topic, destination DLT topic, and the exception that caused recovery. Drives the
-   * "DLT publish rate by exception type" panel/alert.
+   * Increments the count of records published to the dead-letter topic, tagged with the originating
+   * topic, destination DLT topic, and the exception that caused recovery. Drives the "DLT publish
+   * rate by exception type" panel/alert.
    */
   public void incrementDltPublished(String sourceTopic, String dltTopic, String exceptionClass) {
     dltPublishedCounters
@@ -90,10 +89,10 @@ public class LedgerMetrics {
 
   /**
    * Increments the count of events routed through {@link
-   * org.example.ledger.application.command.LedgerEventProcessor}, tagged by event type and
-   * outcome ({@code success}/{@code ignored}/{@code error}). {@code success} includes duplicate
-   * deliveries that were safely skipped (see {@link #incrementDuplicateSkipped}) - it tracks
-   * "handled without error", not "new projection written".
+   * org.example.ledger.application.command.LedgerEventProcessor}, tagged by event type and outcome
+   * ({@code success}/{@code ignored}/{@code error}). {@code success} includes duplicate deliveries
+   * that were safely skipped (see {@link #incrementDuplicateSkipped}) - it tracks "handled without
+   * error", not "new projection written".
    */
   public void incrementEventProcessed(String eventType, String result) {
     eventProcessedCounters
@@ -130,4 +129,3 @@ public class LedgerMetrics {
         .increment();
   }
 }
-

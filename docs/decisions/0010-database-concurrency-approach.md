@@ -12,7 +12,7 @@ Multiple entities across `auth-service` are subject to concurrent updates:
 - `OutboxEventEntity` — marked published by the outbox dispatcher, potentially racing with retries
 
 Contention is expected to be **short-lived and low-frequency per row** (a given account/authorisation is not
-typically hammered by dozens of simultaneous writers), which favors optimistic concurrency over holding
+typically hammered by dozens of simultaneous writers), which favours optimistic concurrency over holding
 row-level locks for the duration of a transaction.
 
 ## Decision
@@ -66,7 +66,7 @@ Trade-offs:
 If load testing (see `load-tests/generate-concurrency-conflicts.sh`) shows unacceptable client-visible conflict
 rates on hot accounts, consider pessimistic locking scoped narrowly to that specific write path rather than
 switching the whole system's concurrency model. A side-by-side pessimistic-locking comparison is already tracked
-on the [roadmap: Next Steps](../roadmap.md#5-next-steps-prioritized) (item 5).
+on the [roadmap: Next Steps](../roadmap.md#5-next-steps-prioritised) (item 5).
 
 ## Related
 

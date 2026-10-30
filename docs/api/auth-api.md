@@ -13,13 +13,13 @@
 
 Base path: `/` (server port `9000`)
 
-This document covers the important auth-service endpoints and the expected behavior for:
+This document covers the important auth-service endpoints and the expected behaviour for:
 
 - request
 - response
 - status transitions
 - error cases
-- idempotency behavior
+- idempotency behaviour
 
 ## Shared Error Format
 
@@ -73,17 +73,18 @@ HTTP `200 OK`
 
 ### Status transitions
 
-- Account lifecycle status is initialized (typically `ACTIVE` on creation).
+- Account lifecycle status is initialised (typically `ACTIVE` on creation).
 - No authorisation status change applies.
 
 ### Error cases
 
 - `400 Bad Request`: invalid currency code (`INVALID_CURRENCY`)
 
-### Idempotency behavior
+### Idempotency behaviour
 
-- No idempotency key support.
-- Repeating the same request creates additional accounts.
+- Each successful account-creation request is processed as a separate operation; no
+  `idempotencyKey` is accepted for this endpoint.
+- Repeating the same request creates an additional account.
 
 ---
 
@@ -121,7 +122,7 @@ HTTP `200 OK`
 
 - `404 Not Found`: account does not exist (`ACCOUNT_NOT_FOUND`)
 
-### Idempotency behavior
+### Idempotency behaviour
 
 - Naturally idempotent read.
 
@@ -173,10 +174,11 @@ HTTP `200 OK` with updated account snapshot:
 - `400 Bad Request`: invalid currency code (`INVALID_CURRENCY`)
 - `404 Not Found`: account does not exist (`ACCOUNT_NOT_FOUND`)
 
-### Idempotency behavior
+### Idempotency behaviour
 
-- No idempotency key support.
-- Retrying the same request applies deposit again.
+- Each successful deposit request is processed as a separate operation; no
+  `idempotencyKey` is accepted for this endpoint.
+- Retrying the same request applies the deposit again.
 
 ---
 
@@ -252,7 +254,7 @@ If available balance is insufficient, or the request is declined by the synchron
 - `404 Not Found`: account does not exist (`ACCOUNT_NOT_FOUND`)
 - `409 Conflict`: idempotency key reused with different request payload (`IDEMPOTENCY_CONFLICT`)
 
-### Idempotency behavior
+### Idempotency behaviour
 
 - Scoped by `(accountId, idempotencyKey)`.
 - If same key is retried with same `amount`, `currencyCode`, and `merchantReference`, existing authorisation is
@@ -300,7 +302,7 @@ Note: current implementation returns `idempotencyKey: null` on lookup by id.
 
 - `404 Not Found`: authorisation does not exist (`AUTHORISATION_NOT_FOUND`)
 
-### Idempotency behavior
+### Idempotency behaviour
 
 - Naturally idempotent read.
 
@@ -349,7 +351,7 @@ HTTP `200 OK`
 - `409 Conflict`: idempotency conflict (`IDEMPOTENCY_CONFLICT`)
 - `409 Conflict`: invalid state of authorisation (`INVALID_AUTHORISATION_STATE`)
 
-### Idempotency behavior
+### Idempotency behaviour
 
 - If already captured and the same capture idempotency key is retried, service returns previous capture response.
 - If already captured but different idempotency key is provided, returns `409 INVALID_AUTHORISATION_STATE`.
@@ -397,8 +399,8 @@ HTTP `200 OK`
 
 ### Status transitions
 
-- `AUTHORISED -> REVERSED`: reserved amount is released, `account.reservedBalance -= amount`
-  (`availableBalance` is unaffected since the funds were never debited from it).
+- `AUTHORISED → REVERSED`: the reserved amount is released, decreasing
+  `account.reservedBalance` and restoring the corresponding amount to `account.availableBalance`.
 - If already `REVERSED`, replay is possible when the idempotency key matches the previous reverse event.
 
 ### Error cases
@@ -410,7 +412,7 @@ HTTP `200 OK`
 - `409 Conflict`: invalid state of authorisation — reverse attempted on an authorisation that is not
   `AUTHORISED` (e.g. `DECLINED` or `CAPTURED`) (`INVALID_AUTHORISATION_STATE`)
 
-### Idempotency behavior
+### Idempotency behaviour
 
 - Scoped by `(authorisationId, idempotencyKey)`, fingerprinted on `(authorisationId, reasonCode)`.
 - If already reversed and the same reverse idempotency key is retried, the service returns the previous

@@ -6,7 +6,7 @@ database migrations, rebuilding images, and troubleshooting local development is
 
 For installation and the different ways to *run* the whole platform, see the
 [Getting Started guide](./README.md). For the detailed *design* of the test suite — the test
-pyramid, scope of each level, and the critical scenario catalog — see [`docs/testing/`](../testing/);
+pyramid, scope of each level, and the critical scenario catalogue — see [`docs/testing/`](../testing/);
 this page only explains how to execute those tests.
 
 ## Table of Contents
@@ -145,9 +145,9 @@ docker compose -f infra/docker/docker-compose.yml up -d
 ## Run Tests
 
 This section covers *how to run* the test suite. For test design — the pyramid, what each level is
-responsible for, mock/stub strategy, and the required-coverage scenario catalog — see
+responsible for, mock/stub strategy, and the required-coverage scenario catalogue — see
 [Testing Strategy](../testing/strategy.md) and
-[Test Scenarios Catalog](../testing/scenarios.md).
+[Test Scenarios Catalogue](../testing/scenarios.md).
 
 Run all unit + integration tests across every module:
 
@@ -234,7 +234,7 @@ A typical inner loop for a code change:
    [Local Development Guide](../development/local-setup.md).
 5. Before pushing, run the full verification build (`mvn -B -ntp clean verify`) to mirror CI.
 6. If the change affects a service that others run as a container (demo/E2E), rebuild its Docker
-   image and re-validate with the containerized run mode before opening a PR.
+   image and re-validate with the containerised run mode before opening a PR.
 
 ## Troubleshooting
 

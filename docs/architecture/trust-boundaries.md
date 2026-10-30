@@ -44,7 +44,7 @@ deployment controls are tracked in the [roadmap](../roadmap.md).
   See [ADR 0005: Idempotency and Concurrency Rules for Authorisation Flows](../decisions/0005-idempotency-and-concurrency.md)
   and [ADR 0007: Idempotency store and key policy](../decisions/0007-idempotency-store-and-key-policy.md).
 - **Planned evolution:** the planned identity and access layer introduces authenticated customer and administrative
-  identities, scoped authorization, and centralized ingress through the API Gateway.
+  identities, scoped authorisation, and centralised ingress through the API Gateway.
 
 ### 2) Internal service boundary (auth-service -> fraud-service)
 
@@ -82,8 +82,8 @@ deployment controls are tracked in the [roadmap](../roadmap.md).
   keeps asynchronous ledger propagation outside the originating database transaction while providing recoverable
   at-least-once delivery.
   See [ADR 0004: Use Separate Main Event and DLT Topics](../decisions/0004-use-event-and-dlt-topics.md)
-  and [ADR 0003: Store Both Raw and Normalized Ledger Events](../decisions/0003-ledger-raw-and-normalized-events.md).
-- **Planned evolution:** broker authentication, transport encryption, and topic-level authorization extend the messaging
+  and [ADR 0003: Store Both Raw and Normalised Ledger Events](../decisions/0003-ledger-raw-and-normalised-events.md).
+- **Planned evolution:** broker authentication, transport encryption, and topic-level authorisation extend the messaging
   boundary at deployment level.
 
 ## Identity and access evolution
@@ -94,8 +94,8 @@ payment-state correctness, fraud evaluation, failure isolation, and reliable eve
 The planned identity and access architecture extends that foundation with:
 
 - authenticated customer and administrative identities through an Identity Provider
-- authorization scopes separating customer and operational capabilities
-- centralized ingress and policy enforcement through the API Gateway
+- authorisation scopes separating customer and operational capabilities
+- centralised ingress and policy enforcement through the API Gateway
 - service-to-service identity for internal communication
 - infrastructure-level access controls for PostgreSQL, Redis, Kafka, and operational tooling
 

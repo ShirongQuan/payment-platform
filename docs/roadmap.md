@@ -1,25 +1,26 @@
-# Payment Platform MVP Progress
+# Payment Platform — Engineering Progress & Roadmap
 
-> Last updated: 2026-09-15  
-> Scope: Personal MVP for demonstration and learning
+> Last updated: 2026-10-30  
+> Scope: Personal engineering project demonstrating payment workflows, distributed-system design, reliability patterns,
+> and observability
 
-Legend: ✅ Implemented for MVP · 🟡 Partial/Basic · 🔵 Planned if time permits
+Legend: ✅ Implemented · 🟡 In progress · 🔵 Planned
 
 ## Table of Contents
 
-- [1) MVP Goal](#1-mvp-goal)
-- [2) What "Done for MVP" Means](#2-what-done-for-mvp-means)
-- [3) Current MVP Progress](#3-current-mvp-progress)
-- [5) Next Steps (Prioritized)](#5-next-steps-prioritized)
-- [6) Production Considerations](#6-production-considerations)
-- [7) Demo Script Checklist](#7-demo-script-checklist)
-- [8) Reviewer Guidance](#8-reviewer-guidance)
+- [1) Engineering Goal](#1-engineering-goal)
+- [2) Implementation Criteria](#2-implementation-criteria)
+- [3) Implemented Capabilities](#3-implemented-capabilities)
+- [4) Next Steps (Prioritised)](#4-next-steps-prioritised)
+- [5) Future Engineering Directions](#5-future-engineering-directions)
+- [6) Demo Script Checklist](#6-demo-script-checklist)
+- [7) Engineering Focus](#7-engineering-focus)
 
-## 1) MVP Goal
+## 1) Engineering Goal
 
-Demonstrate an end-to-end payment flow with realistic architecture patterns:
+Demonstrate an end-to-end payment flow through explicit service boundaries and practical distributed-system patterns:
 
-- authorization, capture, and reversal with realistic state transitions
+- authorisation, capture, and reversal with realistic state transitions
 - balance reservation with concurrency-safe updates
 - ledger update via event projection
 - event publishing (outbox + Kafka), with trace propagation across HTTP and Kafka hops
@@ -30,21 +31,19 @@ Demonstrate an end-to-end payment flow with realistic architecture patterns:
 - observability: OpenTelemetry tracing, Prometheus metrics, Grafana dashboards, and structured
   logging with correlation IDs
 
-## 2) What “Done for MVP” Means
+## 2) Implementation Criteria
 
-A feature is MVP-done if it:
-
-1. works in demo scenarios,
-2. has basic tests or evidence,
-3. is documented clearly with its current scope.
+A capability is considered implemented when its intended behaviour is demonstrated through supported workflows,
+validated through relevant tests or repeatable scenarios, and documented with its design and operational
+characteristics.
 
 ---
 
-## 3) Current MVP Progress
+## 3) Implemented Capabilities
 
 ### Core payment flow
 
-- ✅ Authorization endpoint working — `POST /authorisations` reserves funds against an account after a
+- ✅ authorisation endpoint working — `POST /authorisations` reserves funds against an account after a
   synchronous fraud pre-check, persisting `AUTHORISED` or `DECLINED` (insufficient funds, fraud
   decline, or fraud-service-unavailable-without-fail-open).
 - ✅ Balance reservation demonstrated — `Account.reservedBalance` is incremented and
@@ -53,7 +52,7 @@ A feature is MVP-done if it:
 - ✅ Capture and reverse implemented — `POST /authorisations/{id}/captures` moves
   `AUTHORISED -> CAPTURED` (debits `reservedBalance`, settlement is final);
   `POST /authorisations/{id}/reversals` moves `AUTHORISED -> REVERSED` (releases `reservedBalance`
-  back without ever touching `availableBalance`, since funds were never debited from it).
+  back into `availableBalance`, restoring the funds that were set aside at authorisation time).
 - ✅ Ledger update flow demonstrated — auth-service emits domain events (via the outbox) that
   ledger-service consumes from Kafka topic `auth.events` and exposes as query projections
   (`GET /authorisations/{id}`, `GET /accounts/{id}/events`).
@@ -70,11 +69,11 @@ A feature is MVP-done if it:
       decline, `CUSTOMER_REQUEST`/`MERCHANT_REQUEST` for reversals, etc.) instead of a single
       generic failure code.
 
-### Reliability patterns (demo level)
+### Reliability patterns
 
 - ✅ Outbox pattern implemented and explained — `OutboxScheduler` polls (batch size 10, 10s delay)
-  and publishes via `OutboxKafkaPublisher`, with a claim-lease (30s) to prevent double-publish on
-  reclaim, and Kafka producer configured for `acks=all` + `enable.idempotence=true`.
+  and publishes via `OutboxKafkaPublisher`, with a claim-lease (30s) to coordinate publication claims and reclaim, and
+  Kafka producer configured for `acks=all` + `enable.idempotence=true`.
 - ✅ Kafka event publication demonstrated, with **trace context propagated over Kafka**: the
   producer stores/attaches a `traceparent` header on each record so the ledger-service consumer span
   links back to the originating HTTP request span in Tempo, in addition to `correlationId`,
@@ -88,22 +87,24 @@ A feature is MVP-done if it:
   `processed_event` table via `INSERT ... ON CONFLICT DO NOTHING`: the first delivery processes and
   projects the event, any later redelivery of the same `eventId` is detected and skipped, giving
   effectively-once projection semantics on top of at-least-once Kafka delivery.
-- ✅ Circuit breaker/retry shown for the auth-service → fraud-service call: resilience4j
+- ✅ Circuit breaker shown for the auth-service → fraud-service synchronous call: resilience4j
   `@CircuitBreaker` (count-based 10-call window, opens at ≥50% failure/slow-call rate, slow = >100ms)
     + `@TimeLimiter` (250ms) around a `RestClient` call, executed off a dedicated MDC-preserving
       executor. On timeout/open-circuit/error, auth-service treats the check as `UNAVAILABLE` and either
       declines (default) or applies a narrowly-scoped fail-open allow-list (disabled by default).
+      Kafka consumer retries are handled separately by ledger-service, as described in the dead-letter handling workflow
+      above. The synchronous fraud check uses the circuit breaker and time limiter policy documented
+      in [ADR 0008](./decisions/0008-resilience4j-circuit-breaker-policy.md).
 - ✅ **Application-layer anti-abuse signal** (business-aware, not generic HTTP throttling):
   fraud-service implements Redis-backed sliding-window velocity rules — IP velocity (`>3` requests
   in `5s` from the same IP → `+40` risk score, reason `IP_VELOCITY_EXCEEDED`) and account velocity
   (`>3` requests in `5s` for the same account → `+30` risk score, reason
   `ACCOUNT_VELOCITY_EXCEEDED`) — computed atomically via a Lua script
   (`ZADD`/`ZREMRANGEBYSCORE`/`ZCARD`) in `VelocityServiceRedisImpl`. These feed the fraud risk
-  score rather than rejecting/throttling HTTP traffic directly; see
-  [Production Considerations](#6-production-considerations) for the separate, currently
-  unimplemented concern of generic infra-level rate limiting.
+  score rather than rejecting/throttling HTTP traffic directly. Infrastructure-level request limiting is an
+  independent [roadmap direction](#5-future-engineering-directions).
 
-### Consistency/concurrency (demo level)
+### Consistency and concurrency
 
 - ✅ **Optimistic locking** implemented for the full reserve/capture/reverse path: `AccountEntity`
   carries a Hibernate-managed `@Version` column; a losing concurrent update raises
@@ -128,13 +129,10 @@ A feature is MVP-done if it:
       `auth_idempotency_cache_total{result}`.
     - downstream, ledger-service also deduplicates at-least-once Kafka delivery — see
       "Ledger-side event deduplication" under Reliability patterns above.
-- 🔵 Idempotency intentionally **not** implemented for `POST /accounts` and
-  `POST /accounts/{id}/deposits` — see section 4 below; this is a deliberate scope cut, not an
-  oversight.
-- 🔵 No pessimistic locking (`SELECT ... FOR UPDATE`) implementation exists yet as a comparison
-  point against the optimistic path — see "Next Steps" below.
+      The [next steps](#4-next-steps-prioritised) include extending idempotency to account operations and evaluating
+      pessimistic locking alongside the implemented optimistic-locking strategy.
 
-### Observability (demo level)
+### Observability
 
 - ✅ **Distributed tracing (OpenTelemetry)**: all three services export OTLP traces to an
   otel-collector (`infra/otel/otel-collector-config.yml`, gRPC 4317 / HTTP 4318), which forwards to
@@ -172,33 +170,33 @@ A feature is MVP-done if it:
   `spring-boot-stats.json` and `JVM(Micrometer).json` (Actuator/JVM internals),
   `redis-overview.json` (Redis memory/ops), `kafka-exporter-overview.json` (broker/topic/partition
   health) — all provisioned automatically (`infra/grafana/provisioning`).
-- ✅ **Structured logging with correlation IDs**: every log line includes `traceId`, `spanId`, and
+- ✅ **Structured logging with correlation IDs**: the shared console pattern includes fields for `traceId`, `spanId`, and
   `correlationId` via a shared console pattern
   (`[%X{traceId:-},%X{spanId:-}] [%X{correlationId:-}]`); `CorrelationIdFilter` (shared-spring-lib)
   resolves/generates the correlation id per inbound request and keeps it in MDC across the
   auth-service → fraud-service call and into the outbox/Kafka headers, so a single request can be
   followed across services and async boundaries in logs, traces, and Kafka headers alike.
-- 🟡 Load testing baseline included (non-production scale) — see `load-tests/` scripts for
+- 🟡 Load testing scenarios and baseline tooling included — see `load-tests/` scripts for
   traffic generation, duplicate-event generation, and concurrency-conflict generation.
 
 ---
 
-## 5) Next Steps (Prioritized)
+## 4) Next Steps (Prioritised)
 
-1. 🔵 Implement scoped, realistic authentication with Spring Security + JWT, enforcing user/admin role separation so
+1. 🔵 Introduce scoped authentication with Spring Security + JWT, enforcing user/admin role separation so
    customer payment APIs require auth and operational replay/reconciliation endpoints are admin-only
-2. 🔵 Demonstrate operational correctness by adding a scheduled reconciliation service that cross-checks authorizations,
+2. 🔵 Demonstrate operational correctness by adding a scheduled reconciliation service that cross-checks authorisations,
    outbox events, and ledger entries, flags inconsistencies, and persists reconciliation results (optionally with
    single-run scheduler coordination via Redis/ShedLock).
 3. 🔵 Add a customer-facing UI — a minimal web console (account overview, authorise/capture/reverse actions,
    transaction/event history) so the platform can be demoed and exercised without an API client (Swagger/Postman),
    giving the public API its first real external consumer.
 4. 🔵 Add an API gateway in front of `auth-service` and `ledger-service` — a single ingress point for routing,
-   centralized authentication/authorization enforcement (pairs with item 1), and generic HTTP-level rate limiting;
-   TLS termination and other infrastructure hardening for the gateway itself are tracked under
-   [Production Considerations](#6-production-considerations). This is also the natural point to introduce a
+   centralised authentication/authorisation enforcement (pairs with item 1), and generic HTTP-level rate limiting;
+   Related transport and infrastructure security extensions are outlined under
+   [Future Engineering Directions](#5-future-engineering-directions). This is also the natural point to introduce a
    versioned `/api/v1` context path (today's endpoints are intentionally un-prefixed — see
-   [API docs](./api/README.md#services) — since there are no external consumers yet); the gateway would route
+   [API docs](./api/README.md#services) — as part of the planned external API integration); the gateway would route
    `/api/v1/auth/*`, `/api/v1/fraud/*`, `/api/v1/ledger/*` to each service without requiring the services
    themselves to change their internal paths.
 5. 🔵 Add a pessimistic-locking implementation (`SELECT ... FOR UPDATE` /
@@ -215,58 +213,39 @@ A feature is MVP-done if it:
 
 ---
 
-## 6) Production Considerations
+## 5) Future Engineering Directions
 
-These are deliberate scope boundaries for a personal MVP versus a real production posture — called out
-explicitly as forward-looking infrastructure/platform work, not oversights:
+The implemented payment workflows and distributed-system foundation provide opportunities to explore additional
+architectural patterns and operational scenarios. These directions complement the prioritised next steps above.
 
-- **Full idempotency coverage**: only the payment-critical path (authorise/capture/reverse on
-  auth-service, check on fraud-service) is idempotent today. `POST /accounts` and
-  `POST /accounts/{id}/deposits` are not — see [Next Steps](#5-next-steps-prioritized) item 6; a
-  production system would need idempotency (or at least strict input validation/authz) on every
-  mutating endpoint, not just the ones demonstrated here.
-- **Auth hardening / compliance**: application-level authentication/authorization (Spring Security +
-  JWT, role separation) is planned — see [Next Steps](#5-next-steps-prioritized) item 1. Beyond that,
-  a production deployment would add service-to-service auth (mTLS or signed service tokens),
-  secrets management/rotation, and a compliance posture (audit logging, PCI-relevant controls, etc.)
-  appropriate to a real payments system.
-- **Transport security and network hardening**: TLS termination (public API and internal
-  service-to-service calls), a reverse proxy/WAF in front of public endpoints, authenticated/encrypted
-  transport for Kafka (SASL/mTLS) and Redis (`requirepass`/ACLs), topic-level Kafka ACLs, per-service
-  least-privilege database roles, and network policies restricting database/broker/cache reachability
-  to their owning services — these are standard infrastructure-layer concerns for any deployment
-  environment (e.g. Kubernetes + service mesh, cloud load balancer + WAF) and are intentionally out of
-  scope for this single-host docker-compose MVP.
-- **SLOs/alerts**: metrics and dashboards exist (see Observability above), but there are no defined
-  SLOs or alerting rules (e.g. Prometheus Alertmanager) — thresholds, paging policy, and error
-  budgets would need to be defined for production.
-- **Generic HTTP-level rate limiting**: in production, generic/infra-level rate limiting (e.g. "max
-  N requests/sec per IP or API key across the whole API surface") belongs at the infrastructure
-  layer — an API gateway or reverse proxy (see [Next Steps](#5-next-steps-prioritized) item 4) — not
-  inside each service's application code, so it protects every service uniformly, rejects abusive
-  traffic before it reaches business logic/DB/Redis, and can be tuned without redeploying any
-  service. (The velocity-based anti-abuse signal that *does* exist today is a different,
-  application/business-layer concern — see Reliability patterns above.)
-- **Partial capture / partial reverse / refunds**: MVP scope (see
-  [ADR 0002](./decisions/0002-full-capture-only.md)) supports only full capture and full reverse of an
-  authorised amount; partial capture, partial reverse, and refund/settlement flows are out of scope for now
-  and would require new domain rules, state transitions, API shape, and projection logic to support.
-- **Retry policy for the fraud-service call**: the auth-service → fraud-service call is currently protected
-  by a circuit breaker + time limiter only (see
-  [ADR 0008](./decisions/0008-resilience4j-circuit-breaker-policy.md)); no `@Retry` decorator is layered on
-  top, so a single transient blip is treated the same as a sustained timeout/failure rather than retried
-  once before failing. A bounded retry-once policy is a possible future refinement, deferred to avoid
-  amplifying load on an already-slow downstream during partial outages.
+- **Identity and access management:** Introduce Spring Security, JWT-based authentication and customer/admin role
+  separation. Further exploration could include service-to-service authentication, secrets management, and audit
+  controls appropriate to the deployment context.
+- **Infrastructure and API management:** Extend the architecture with gateway routing, API versioning, generic
+  HTTP-level rate limiting, TLS, and access policies for Kafka, Redis, and service-owned databases. These infrastructure
+  controls are distinct from the implemented fraud-service velocity signals.
+- **Operational monitoring:** Build on existing OpenTelemetry tracing, Prometheus metrics, and Grafana dashboards by
+  exploring SLOs, alerting rules, error budgets, and operational response workflows.
+- **Extended payment workflows:** Explore partial capture, partial reversal, refunds, and settlement-related flows by
+  extending the existing state machine, API contracts, and ledger projections. The current full-capture/full-reversal
+  model is described in [ADR 0002](./decisions/0002-full-capture-only.md).
+- **Concurrency and idempotency:** Extend idempotency semantics to account creation and deposits, and evaluate
+  pessimistic locking (`SELECT ... FOR UPDATE`) against the implemented optimistic-locking and idempotency-race recovery
+  strategy.
+- **Resilience and failure handling:** Compare bounded retry strategies for the synchronous fraud check with the
+  existing circuit-breaker and time-limiter approach, considering the effect of retries on downstream load. The current
+  policy is documented in [ADR 0008](./decisions/0008-resilience4j-circuit-breaker-policy.md). Extend automated timeout,
+  duplicate-event, and DLT-replay scenarios.
 
 ---
 
-## 7) Demo Script Checklist
+## 6) Demo Script Checklist
 
 - ✅ Show architecture diagram (high-level)
-- ✅ Run authorization request
+- ✅ Run authorisation request
 - ✅ Show reservation + ledger impact
 - ✅ Show outbox record and published Kafka event (with propagated `traceparent`)
-- ✅ Re-send same authorization idempotency key and show safe replay (Redis cache hit, no duplicate
+- ✅ Re-send same authorisation idempotency key and show safe replay (Redis cache hit, no duplicate
   reservation)
 - ✅ Re-send with the same key but a different payload and show `409 IDEMPOTENCY_CONFLICT`
 - ✅ Trigger a fraud decline / high-risk score and show the account auto-lock
@@ -278,10 +257,9 @@ explicitly as forward-looking infrastructure/platform work, not oversights:
 
 ---
 
-## 8) Reviewer Guidance
+## 7) Engineering Focus
 
-This project should be assessed as:
-
-- a strong architecture and backend-engineering demo,
-- with selective implementation depth,
-- and clear understanding of what would be required for production.
+The Payment Platform demonstrates backend engineering and distributed-system design through explicit service boundaries,
+payment lifecycle modelling, reliable asynchronous messaging, concurrency and idempotency controls, resilience patterns,
+and end-to-end observability. Its documented implementation and repeatable demonstrations illustrate the engineering
+decisions behind those capabilities.

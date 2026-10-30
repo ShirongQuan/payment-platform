@@ -55,7 +55,7 @@ Trade-offs:
 
 - add `@Retry` on top of `@CircuitBreaker`/`@TimeLimiter` (deferred: automatic retries can amplify load and latency against a degraded synchronous dependency; the policy can be revisited using observed failure characteristics — see [roadmap: Production Considerations](../roadmap.md#6-production-considerations))
 - plain HTTP client timeout only, no circuit breaker (rejected: does not prevent repeated calls to a downstream
-  that is already failing, no fail-fast behavior once failure is sustained)
+  that is already failing, no fail-fast behaviour once failure is sustained)
 - hand-rolled circuit breaker/timeout logic (rejected: reinvents a well-tested library, worse observability)
 
 ## Related
@@ -83,7 +83,7 @@ the goal of a single, deterministic fallback reason for observability (see Decis
 - `fraud.http.connect-timeout` / `fraud.http.read-timeout`: `100ms` / `150ms` → **`150ms` / `150ms`**
 - `@TimeLimiter(name = "fraudService")` `timeoutDuration`: `250ms` → **`500ms`**
 
-Math check:
+Maths check:
 
 - `connect-timeout (150ms) + read-timeout (150ms)` = `300ms` worst-case socket time
 - `@TimeLimiter` budget = `500ms`

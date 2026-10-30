@@ -166,14 +166,14 @@ rather than a post-hoc saga/compensation rollback:
 
 | Pattern                    | Metric(s)                                                                                                                                                                                                            |
 |----------------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| Circuit breaker (fraud)    | `resilience4j_circuitbreaker_calls_seconds_count{name="fraudService", kind="not_permitted"\|"failed"}` — circuit state and call outcomes, visualized in the `Payment Platform Overview` dashboard's Fraud Check row. |
+| Circuit breaker (fraud)    | `resilience4j_circuitbreaker_calls_seconds_count{name="fraudService", kind="not_permitted"\|"failed"}` — circuit state and call outcomes, visualised in the `Payment Platform Overview` dashboard's Fraud Check row. |
 | Fraud call latency/outcome | `auth_fraud_check_duration_seconds` (client-side, `auth-service`); `fraud_check_duration_seconds{outcome}` / `fraud_decisions_total{outcome}` (server-side, `fraud-service`).                                        |
 | Outbox retry/backlog       | `auth_outbox_backlog` (gauge), `auth_outbox_publish_lag_seconds` (histogram), `auth_outbox_publish_attempts_total{result="success"\|"retry"\|"failed"}` (counter).                                                   |
 | Kafka consumer retry/DLT   | `ledger_kafka_dlt_published_total{topic, dltTopic, exceptionClass}`; consumer throughput/lag via `kafka_consumer_fetch_manager_records_lag_max{application, topic}`.                                                 |
 | Idempotency cache          | `auth_idempotency_cache_total{result=hit\|miss\|error}`.                                                                                                                                                             |
 | Concurrency conflicts      | `auth_concurrency_conflict_total{operation=authorise\|capture\|reverse, type=idempotency_race\|optimistic_lock}` — see [Concurrency & Consistency](./concurrency-consistency.md#conflict-handling).                  |
 
-All of these are scraped from each service's `/actuator/prometheus` endpoint and visualized in the
+All of these are scraped from each service's `/actuator/prometheus` endpoint and visualised in the
 `payment-platform-overview.json` Grafana dashboard (`infra/grafana/dashboards/`). Full metric/query
 definitions live
 in [Telemetry Guidelines](../observability/telemetry.md#critical-panels-golden-signals--business-critical).
@@ -187,7 +187,7 @@ in [Telemetry Guidelines](../observability/telemetry.md#critical-panels-golden-s
     3. Outbox backlog / publish lag spike
     4. Kafka consumer lag growth (ledger falling behind)
     5. Duplicate/idempotency conflicts
-- [Failure Scenarios](../flows/failure-scenarios.md) — detailed scenario catalog
+- [Failure Scenarios](../flows/failure-scenarios.md) — detailed scenario catalogue
   (duplicate requests, client timeout after commit, outbox publish transient failure, duplicate
   event delivery, invalid state transition, partial downstream failure, fraud decline + account
   auto-lock), plus a quick triage checklist.
@@ -200,9 +200,9 @@ in [Telemetry Guidelines](../observability/telemetry.md#critical-panels-golden-s
 
 Recommended production improvements are tracked in
 [Payment Platform MVP Progress](../roadmap.md#6-production-considerations) and
-[Next Steps](../roadmap.md#5-next-steps-prioritized), including:
+[Next Steps](../roadmap.md#5-next-steps-prioritised), including:
 
-- Adding jitter to the outbox and Kafka consumer backoff schedules to avoid synchronized retry
+- Adding jitter to the outbox and Kafka consumer backoff schedules to avoid synchronised retry
   storms across multiple instances (both are currently deterministic, non-jittered delays).
 - Evaluating a `@Retry` decorator for the fraud gateway call, deferred for now to avoid amplifying
   load on an already-degraded downstream (
@@ -210,7 +210,7 @@ Recommended production improvements are tracked in
   Alternatives Considered).
 - Generic HTTP-level rate limiting and load shedding at an API gateway layer — currently out of
   scope for the single-host `docker-compose` MVP topology (see
-  [Next Steps item 4](../roadmap.md#5-next-steps-prioritized)).
+  [Next Steps item 4](../roadmap.md#5-next-steps-prioritised)).
 - A fuller operational runbook (detailed commands, trace queries, post-incident template) beyond
   today's lightweight top-5-scenarios runbook.
 - Formal SLOs/alerting rules (Prometheus Alertmanager) — dashboards and metrics exist today, and

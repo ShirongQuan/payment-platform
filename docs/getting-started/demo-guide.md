@@ -2,7 +2,7 @@
 
 A guided, positive-first walkthrough of `payment-platform` for showing off the authorise → capture
 / reverse flow, event-driven ledger projection, and the observability stack (metrics, traces,
-dashboards) — including how to intentionally demonstrate reliability behavior like outbox lag and
+dashboards) — including how to intentionally demonstrate reliability behaviour like outbox lag and
 dead-letter-topic (DLT) routing.
 
 Before starting, make sure the platform is running — see the
@@ -13,7 +13,7 @@ Before starting, make sure the platform is running — see the
 - [Demo Objectives](#demo-objectives)
 - [Start the Platform](#start-the-platform)
 - [Verify Service Health](#verify-service-health)
-- [Authorize a Payment](#authorize-a-payment)
+- [Authorise a Payment](#authorise-a-payment)
 - [Capture a Payment](#capture-a-payment)
 - [Reverse or Refund a Payment](#reverse-or-refund-a-payment)
 - [Inspect Kafka Events](#inspect-kafka-events)
@@ -35,7 +35,7 @@ Before starting, make sure the platform is running — see the
   Kafka, including how to *watch* that pipeline in Grafana (backlog, publish lag)
 - distributed tracing across `auth-service → fraud-service` and the asynchronous
   outbox-to-Kafka-to-ledger hop, in Tempo
-- resilience behavior in action: a fraud-service outage tripping auth-service's circuit breaker,
+- resilience behaviour in action: a fraud-service outage tripping auth-service's circuit breaker,
   and a malformed event being routed to the dead-letter topic
 
 ## Prerequisites
@@ -78,7 +78,7 @@ Each should print `"UP"`. You can also confirm every container is healthy:
 docker compose -f infra/docker/docker-compose.yml -f infra/docker/docker-compose.app.yml ps
 ```
 
-## Authorize a Payment
+## Authorise a Payment
 
 All requests below can also be sent through Swagger UI
 (`http://localhost:9000/swagger-ui.html`) instead of `curl` — useful if you'd rather click through
@@ -352,7 +352,7 @@ request's trace — a good example of how tracing bridges a transactional-outbox
 A nice moment in any demo: show that a single log line, its trace, and its metric data point all
 describe the exact same request.
 
-1. Send an authorise request (see [Authorize a Payment](#authorize-a-payment)), then read
+1. Send an authorise request (see [Authorise a Payment](#authorise-a-payment)), then read
    auth-service's log output. In container mode:
 
    ```bash
@@ -423,7 +423,7 @@ for the full write-up and the note on today's plain-text log format):
 
 ## Demonstrate a Failure Scenario
 
-Two reliability behaviors are easy to demonstrate on demand:
+Two reliability behaviours are easy to demonstrate on demand:
 
 ### Circuit breaker opening on a fraud-service outage
 

@@ -28,7 +28,7 @@ This folder contains sequence diagrams and companion documentation for key runti
   Canonical business flow (`auth -> reserve -> capture -> reverse`), state transitions, and event/data mapping.
 
 - [Failure Scenarios](./failure-scenarios.md)  
-  Expected behavior for duplicates, timeouts, publish/consume failures, and invalid transitions.
+  Expected behaviour for duplicates, timeouts, publish/consume failures, and invalid transitions.
 
 - [Outbox Backlog Recovery](./outbox-backlog-recovery.md)  
   How to detect, triage, and recover a growing auth-service outbox backlog or a terminally `FAILED`
@@ -70,7 +70,7 @@ Covers:
 
 *Figure 2: Authorise sequence.*
 
-Use when working on **initial authorisation** behavior.
+Use when working on **initial authorisation** behaviour.
 
 Covers:
 
@@ -90,12 +90,12 @@ Covers:
 
 *Figure 3: Capture sequence.*
 
-Use when working on **capture** behavior.
+Use when working on **capture** behaviour.
 
 Covers:
 
 - legal-state validation
-- idempotent replay/conflict behavior
+- idempotent replay/conflict behaviour
 - reserved balance capture
 - capture outbox event creation
 
@@ -109,12 +109,12 @@ Covers:
 
 *Figure 4: Reverse sequence.*
 
-Use when working on **reverse** behavior.
+Use when working on **reverse** behaviour.
 
 Covers:
 
 - legal-state validation (`AUTHORISED` required; already-`REVERSED` triggers idempotent replay)
-- idempotent replay/conflict behavior (same pattern as capture)
+- idempotent replay/conflict behaviour (same pattern as capture)
 - reserved-balance release (`reservedBalance` only; `availableBalance` untouched)
 - reverse outbox event creation
 
@@ -128,7 +128,7 @@ Covers:
 
 *Figure 5: Idempotency generic sequence.*
 
-Use when explaining or designing **idempotency behavior generically**, independent of any single
+Use when explaining or designing **idempotency behaviour generically**, independent of any single
 endpoint. Applies to every idempotency-keyed mutating endpoint across the platform (auth-service's
 authorise/capture/reverse and fraud-service's `/fraud/check`).
 

@@ -1,6 +1,6 @@
 # Load Tests
 
-Executable traffic-generation scripts for the payment platform. They produce realistic, labeled
+Executable traffic-generation scripts for the payment platform. They produce realistic, labelled
 traffic (auth → capture/reverse flow, idempotency replay, circuit-breaker transitions, DLT
 publishes, duplicate-event dedup, concurrency conflicts) that shows up across the Grafana
 dashboards, for demos and manual verification.
@@ -84,7 +84,7 @@ export LEDGER_BASE_URL=http://localhost:9020
 
 ## Smoke Test
 
-A shrunk, fast run to confirm connectivity and basic behavior before a full run:
+A shrunk, fast run to confirm connectivity and basic behaviour before a full run:
 
 ```bash
 cd load-tests
@@ -113,7 +113,7 @@ GBP_ACCOUNT_ID=<uuid> USD_ACCOUNT_ID=<uuid> EUR_ACCOUNT_ID=<uuid> \
 ## Failure / Resilience Test
 
 `generate-traffic.sh`'s phase 2 already drives `fraud-service` into `ALWAYS_503` mode to exercise
-`auth-service`'s circuit breaker. To exercise just that behavior on demand:
+`auth-service`'s circuit breaker. To exercise just that behaviour on demand:
 
 ```bash
 # force fraud-service to fail
@@ -128,7 +128,7 @@ curl -X POST http://localhost:9010/internal/test/failure-mode \
   -H "Content-Type: application/json" -d '{"mode":"OFF"}'
 ```
 
-Or run the two focused scripts directly for dedup / concurrency-conflict behavior in isolation:
+Or run the two focused scripts directly for dedup / concurrency-conflict behaviour in isolation:
 
 ```bash
 cd load-tests

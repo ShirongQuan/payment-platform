@@ -146,12 +146,12 @@ The architecture documentation follows a C4 model:
 
 <p>
   <a href="https://raw.githubusercontent.com/ShirongQuan/payment-platform/main/docs/observability/screenshots/dashboard/platform-health.png">
-    <img src="docs/observability/screenshots/dashboard/platform-health.png" alt="Grafana dashboard placeholder" width="100%" />
+    <img src="docs/observability/screenshots/dashboard/platform-health.png" alt="Grafana platform health dashboard" width="100%" />
   </a>
 </p>
 <p>
   <a href="https://raw.githubusercontent.com/ShirongQuan/payment-platform/main/docs/observability/screenshots/dashboard/authorisation-flow.png">
-    <img src="docs/observability/screenshots/dashboard/authorisation-flow.png" alt="Grafana dashboard placeholder" width="100%" />
+    <img src="docs/observability/screenshots/dashboard/authorisation-flow.png" alt="Grafana authorisation flow dashboard" width="100%" />
   </a>
 </p>
 
@@ -181,7 +181,7 @@ The architecture documentation follows a C4 model:
   </a>
 </p>
 
-*Figure 4: Distributed trace of an authorize request across services (Tempo) — span waterfall and
+*Figure 4: Distributed trace of an authorise request across services (Tempo) — span waterfall and
 node graph, both for the same `correlationId`. The full request → log → trace → metric walkthrough,
 including the linked outbox trace, is in
 [Telemetry Guidelines § Correlating Logs, Metrics, and Traces](docs/observability/telemetry.md#6-correlating-logs-metrics-and-traces).*
@@ -194,15 +194,14 @@ including the linked outbox trace, is in
 
 ### Security
 
-- Threat model covers the platform's trust boundaries and abuse vectors, clearly separating what's
-  implemented today from what's planned next
+- Threat modelling documents the platform's trust boundaries, relevant attack scenarios, and security considerations.
 - Data-protection posture (PII handling, masking) and audit/compliance intent documented up front
 
 📄 [Threat Model](docs/security/threat-model.md) · [Data Protection](docs/security/data-protection.md) · [Audit & Compliance](docs/security/audit-compliance.md)
 
 ### Engineering Practices
 
-- `shared-spring-lib` centralizes cross-cutting concerns (correlation ids, RFC 7807 error model,
+- `shared-spring-lib` centralises cross-cutting concerns (correlation ids, RFC 7807 error model,
   idempotency hashing) so all three services stay consistent without copy-paste
 - Unit + integration tests (Testcontainers-backed) run in every module, wired into GitHub Actions CI
 - Scripted traffic generation (`load-tests/`) provides repeatable testing and demonstration of
@@ -233,7 +232,7 @@ the **[Infrastructure Guide](infra/README.md)**.
 
 ## Demo Journey
 
-Follow a guided walkthrough — authorize a payment, capture it, observe the ledger update, and
+Follow a guided walkthrough — authorise a payment, capture it, observe the ledger update, and
 trace the request across services:
 
 ➡️ **[Demo Guide](docs/getting-started/demo-guide.md)**
@@ -246,7 +245,7 @@ Preview of what you'll see:
   </a>
 </p>
 
-*Figure 5: Authorize → Capture → Ledger posting → Event publish (happy path; see
+*Figure 5: Authorise → Capture → Ledger posting → Event publish (happy path; see
 [Payment Lifecycle](docs/flows/payment-lifecycle.md) for the full per-endpoint sequence diagrams
 covering idempotency, concurrency, and failure handling).*
 
@@ -271,14 +270,14 @@ next phase builds on that foundation with additional access, operational, and pa
 
 | Area                                     | Roadmap                                                        |
 |------------------------------------------|----------------------------------------------------------------|
-| Identity, authentication & authorisation | [Roadmap next steps](docs/roadmap.md#5-next-steps-prioritized) |
-| API gateway & infrastructure rate limits | [Roadmap next steps](docs/roadmap.md#5-next-steps-prioritized) |
-| Reconciliation service                   | [Roadmap next steps](docs/roadmap.md#5-next-steps-prioritized) |
-| Customer and admin applications          | [Roadmap next steps](docs/roadmap.md#5-next-steps-prioritized) |
-| Notification service                     | [Roadmap next steps](docs/roadmap.md#5-next-steps-prioritized) |
+| Identity, authentication & authorisation | [Roadmap next steps](docs/roadmap.md#5-next-steps-prioritised) |
+| API gateway & infrastructure rate limits | [Roadmap next steps](docs/roadmap.md#5-next-steps-prioritised) |
+| Reconciliation service                   | [Roadmap next steps](docs/roadmap.md#5-next-steps-prioritised) |
+| Customer and admin applications          | [Roadmap next steps](docs/roadmap.md#5-next-steps-prioritised) |
+| Notification service                     | [Roadmap next steps](docs/roadmap.md#5-next-steps-prioritised) |
 | Broader payment lifecycle capabilities   | [Roadmap](docs/roadmap.md)                                     |
 
-Full detail, rationale, and prioritization live in the [project roadmap](docs/roadmap.md).
+Full detail, rationale, and prioritisation live in the [project roadmap](docs/roadmap.md).
 
 ## Planned Next-Phase Architecture
 
@@ -306,7 +305,7 @@ detailed C4 next-phase container diagram</a>, and
 
 - **API Gateway** — single ingress for routing, authN/authZ scope enforcement, and infra-level rate limiting
   in front of `auth-service`/`ledger-service`
-- **Identity Provider (OIDC)** — centralized authn/authz issuing customer- vs. admin-scoped tokens, validated
+- **Identity Provider (OIDC)** — centralised authn/authz issuing customer- vs. admin-scoped tokens, validated
   by the gateway and `auth-service`
 - **Customer Web App / Admin Operations App** — planned user-facing applications authenticating
   through the identity provider and accessing platform APIs through the gateway
@@ -320,7 +319,7 @@ detailed C4 next-phase container diagram</a>, and
   receipt/statement storage
 
 ➡️ Full detail and rationale: [Containers § Next Phase](docs/architecture/containers.md#next-phase-planned) ·
-[Roadmap § Next Steps](docs/roadmap.md#5-next-steps-prioritized)
+[Roadmap § Next Steps](docs/roadmap.md#5-next-steps-prioritised)
 
 ---
 

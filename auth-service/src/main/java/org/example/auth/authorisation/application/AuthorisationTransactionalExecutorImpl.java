@@ -160,7 +160,8 @@ public class AuthorisationTransactionalExecutorImpl implements AuthorisationTran
         // it via dirty-checking at commit, atomically with the decline written above.
         // Note: publishing an ACCOUNT_LOCKED outbox event for downstream consumers (e.g.
         // ledger-service) is intentionally deferred to a follow-up change.
-        if (fraudDecision.lockAccountRecommended() && accountEntity.getStatus() == AccountStatus.ACTIVE) {
+        if (fraudDecision.lockAccountRecommended()
+            && accountEntity.getStatus() == AccountStatus.ACTIVE) {
           log.warn(
               "Locking account due to fraud signal, accountId={}, reasonCode={}, correlationId={}",
               accountEntity.getId(),
@@ -391,9 +392,9 @@ public class AuthorisationTransactionalExecutorImpl implements AuthorisationTran
         accountEntity.getId(),
         accountEntity.getReservedBalance());
 
-    // update authorization to CAPTURED
+    // update authorisation to CAPTURED
     authorisationEntity.setStatus(AuthorisationStatus.CAPTURED);
-    // write authorization event
+    // write authorisation event
     AuthorisationEventEntity authorisationEventEntity =
         new AuthorisationEventEntity(
             UUID.randomUUID(),

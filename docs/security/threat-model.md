@@ -12,7 +12,7 @@
 
 > **Reading this document:** every section below describes **what exists in the code/config
 > today** and the **next steps** planned to extend it, per the [roadmap](../roadmap.md). No
-> authentication/authorization is implemented yet on any service in this platform — that is called
+> authentication/authorisation is implemented yet on any service in this platform — that is called
 > out explicitly rather than implied, since this is a working MVP rather than a finished production
 > system.
 
@@ -34,7 +34,7 @@
 **Next step**: extend this model to assess the system against a formal production security
 standard (e.g. PCI-DSS control mapping) — see [Audit & Compliance](./audit-compliance.md) for the
 compliance posture statement — and to cover a planned API gateway ingress boundary once
-implemented — see [roadmap Next Steps #4](../roadmap.md#5-next-steps-prioritized).
+implemented — see [roadmap Next Steps #4](../roadmap.md#5-next-steps-prioritised).
 
 ## Assets to Protect
 
@@ -52,7 +52,7 @@ implemented — see [roadmap Next Steps #4](../roadmap.md#5-next-steps-prioritiz
 |---|--------------------------------------------------------------------------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | 1 | **Replay**                                                                     | An attacker or misbehaving client replays a captured HTTP request (e.g. a valid authorise/capture call) to attempt a duplicate financial effect.                                                                | Mitigated for the payment-critical path: `idempotencyKey`-scoped uniqueness + Redis replay cache return the identical prior response rather than re-executing (see [ADR 0005: Idempotency and Concurrency Rules for Authorisation Flows](../decisions/0005-idempotency-and-concurrency.md)). **Not** mitigated for `POST /accounts` / `POST /accounts/{id}/deposits`, which are not idempotent today.                                                                                                                               |
 | 2 | **Tampering**                                                                  | An attacker with network access modifies a request in flight (no TLS today) or forges a request entirely (no request authentication today).                                                                     | Not yet mitigated at the transport or request-authentication layer — see [Planned Next](#mitigations) below. Bean validation rejects malformed payloads but cannot distinguish a legitimate client from an attacker.                                                                                                                                                                                                                                                                                                                |
-| 3 | **Privilege abuse**                                                            | Since there is no authentication/authorization, every caller effectively has the same (full) access to every endpoint on a given service, including operationally sensitive ones (e.g. would-be admin actions). | Currently **no privilege separation exists** — there is no concept of "admin" vs "customer" caller yet. This is the highest-priority item in the roadmap's prioritized next steps.                                                                                                                                                                                                                                                                                                                                                  |
+| 3 | **Privilege abuse**                                                            | Since there is no authentication/authorisation, every caller effectively has the same (full) access to every endpoint on a given service, including operationally sensitive ones (e.g. would-be admin actions). | Currently **no privilege separation exists** — there is no concept of "admin" vs "customer" caller yet. This is the highest-priority item in the roadmap's prioritised next steps.                                                                                                                                                                                                                                                                                                                                                  |
 | 4 | **Fraud automation** (scripted/bot-driven authorise attempts, account probing) | An automated client submits a high rate of authorise requests to probe balances, trigger declines, or abuse the account-lock side effect.                                                                       | Partially mitigated: `fraud-service`'s Redis-backed sliding-window velocity rules flag >3 requests/5s from the same IP or account (`IP_VELOCITY_EXCEEDED`, `ACCOUNT_VELOCITY_EXCEEDED`) and feed the risk score; a high risk score or repeated-decline pattern can auto-`LOCK` the account. This is a business-layer signal, not infrastructure-level rate limiting/blocking (see [ADR 0006: Use Redis for Sliding-Window Rate Limiting (Fraud Service)](../decisions/0006-use-redis-for-sliding-window-fraud-velocity-checks.md)). |
 | 5 | **Data exposure via logs/traces**                                              | Financial fields (amount, account id) and behavioral fields (IP address) appear in plaintext in application logs and trace spans, since none of this data is classified as regulated PII today.                 | No masking/redaction is applied; see [Data Protection § Logging Redaction](./data-protection.md#logging-redactionmasking-rules) for the full assessment.                                                                                                                                                                                                                                                                                                                                                                            |
 | 6 | **Credential/secret leakage**                                                  | Local-dev default DB credentials (`postgres`/`postgres`) are checked into `application.yml` as fallback values.                                                                                                 | Scoped to this demo's single-host `docker-compose` network, and the fallback only applies when the environment variable is unset. Secrets management/rotation is tracked as a roadmap item for any future deployment beyond local demo use — see [Data Protection § Secrets Handling](./data-protection.md#secrets-handling).                                                                                                                                                                                                       |
@@ -91,10 +91,10 @@ implemented — see [roadmap Next Steps #4](../roadmap.md#5-next-steps-prioritiz
 
 ### Planned Next
 
-- **Request authentication/authorization** (Spring Security + JWT, customer vs. admin role
-  separation) — [roadmap Next Steps #1](../roadmap.md#5-next-steps-prioritized).
-- **API gateway** for centralized authn/authz enforcement and generic rate limiting —
-  [roadmap Next Steps #4](../roadmap.md#5-next-steps-prioritized).
+- **Request authentication/authorisation** (Spring Security + JWT, customer vs. admin role
+  separation) — [roadmap Next Steps #1](../roadmap.md#5-next-steps-prioritised).
+- **API gateway** for centralised authn/authz enforcement and generic rate limiting —
+  [roadmap Next Steps #4](../roadmap.md#5-next-steps-prioritised).
 - **Service-to-service authentication** (mTLS or signed internal tokens) between `auth-service` and
   `fraud-service` — [roadmap Production Considerations](../roadmap.md#6-production-considerations).
 - **Transport encryption** (TLS for public API + internal calls, Kafka SASL/mTLS, Redis
@@ -102,7 +102,7 @@ implemented — see [roadmap Next Steps #4](../roadmap.md#5-next-steps-prioritiz
 - **Secrets management/rotation** replacing today's environment-variable-with-default pattern —
   same roadmap section.
 - **Idempotency coverage extension** to `POST /accounts` and `POST /accounts/{id}/deposits** —
-  [roadmap Next Steps #6](../roadmap.md#5-next-steps-prioritized).
+  [roadmap Next Steps #6](../roadmap.md#5-next-steps-prioritised).
 
 ## Residual Risks & Assumptions
 
@@ -124,7 +124,7 @@ implemented — see [roadmap Next Steps #4](../roadmap.md#5-next-steps-prioritiz
 ## Roadmap
 
 See [Payment Platform MVP Progress](../roadmap.md) — in particular
-[§5 Next Steps](../roadmap.md#5-next-steps-prioritized) (items 1 and 4 for authn/authz and API
+[§5 Next Steps](../roadmap.md#5-next-steps-prioritised) (items 1 and 4 for authn/authz and API
 gateway) and [§6 Production Considerations](../roadmap.md#6-production-considerations) (transport
 security, network hardening, secrets management, compliance posture) for full target-state detail
 and sequencing.

@@ -91,18 +91,18 @@ infra/
     └── scripts/
 ```
 
-| File or directory                    | Purpose                                                          |
-|---------------------------------------|-------------------------------------------------------------------|
-| `docker/docker-compose.yml`           | Base infra stack (Postgres, Redis, Kafka, observability)          |
-| `docker/docker-compose.app.yml`       | Overlay adding auth/fraud/ledger-service containers                |
-| `postgres/init/`                      | First-boot SQL run by the official Postgres image entrypoint       |
-| `pdadmin/`                            | pgAdmin auto-registered connection to the `postgres` service        |
-| `kafka/create-topics.sh`              | Idempotent topic creation, run once by the `kafka-topic-init` container |
-| `otel/`                                | Custom OTel Collector image + config (adds a health-check binary)  |
-| `tempo/tempo.yml`                     | Tempo backend configuration (local storage, retention)             |
-| `prometheus/prometheus.yml`           | Scrape configs for app services, exporters, and cAdvisor            |
-| `grafana/dashboards/`                 | Pre-built dashboard JSON, auto-provisioned on Grafana startup       |
-| `grafana/provisioning/`               | Grafana data-source and dashboard auto-provisioning definitions     |
+| File or directory               | Purpose                                                                 |
+|---------------------------------|-------------------------------------------------------------------------|
+| `docker/docker-compose.yml`     | Base infra stack (Postgres, Redis, Kafka, observability)                |
+| `docker/docker-compose.app.yml` | Overlay adding auth/fraud/ledger-service containers                     |
+| `postgres/init/`                | First-boot SQL run by the official Postgres image entrypoint            |
+| `pdadmin/`                      | pgAdmin auto-registered connection to the `postgres` service            |
+| `kafka/create-topics.sh`        | Idempotent topic creation, run once by the `kafka-topic-init` container |
+| `otel/`                         | Custom OTel Collector image + config (adds a health-check binary)       |
+| `tempo/tempo.yml`               | Tempo backend configuration (local storage, retention)                  |
+| `prometheus/prometheus.yml`     | Scrape configs for app services, exporters, and cAdvisor                |
+| `grafana/dashboards/`           | Pre-built dashboard JSON, auto-provisioned on Grafana startup           |
+| `grafana/provisioning/`         | Grafana data-source and dashboard auto-provisioning definitions         |
 
 There is no `docker-compose.local.yml` or `.env`/`.env.example` in this project — see
 [Configuration](#configuration) for how image tags, ports, and credentials are actually
@@ -112,11 +112,11 @@ overridden here (shell environment variables with sane defaults baked into the C
 
 ## Supported Run Modes
 
-| Mode                  | Best for                      | Application services                          | Infrastructure               |
-|------------------------|--------------------------------|------------------------------------------------|-------------------------------|
-| Published images      | Fastest demo setup             | Pulled from Docker Hub (`shirongquan/*:1.0.0`) | `docker-compose.yml` + `docker-compose.app.yml` |
-| Locally built images  | Testing local code changes     | Built from the repo via each service's `Dockerfile` | `docker-compose.yml` + `docker-compose.app.yml` |
-| IDE/local services    | Debugging individual services  | Run via `mvn spring-boot:run` or from the IDE  | `docker-compose.yml` only    |
+| Mode                 | Best for                      | Application services                                | Infrastructure                                  |
+|----------------------|-------------------------------|-----------------------------------------------------|-------------------------------------------------|
+| Published images     | Fastest demo setup            | Pulled from Docker Hub (`shirongquan/*:1.0.0`)      | `docker-compose.yml` + `docker-compose.app.yml` |
+| Locally built images | Testing local code changes    | Built from the repo via each service's `Dockerfile` | `docker-compose.yml` + `docker-compose.app.yml` |
+| IDE/local services   | Debugging individual services | Run via `mvn spring-boot:run` or from the IDE       | `docker-compose.yml` only                       |
 
 ### Published images
 
@@ -169,17 +169,17 @@ Every service in `docker-compose.yml`/`docker-compose.app.yml` has a sensible de
 (credentials, ports, image tags), and the handful of values you'd realistically want to override
 are exposed as **shell environment variables** at `docker compose up` time:
 
-| Variable                 | Default                                | Used for                                    |
-|----------------------------|-----------------------------------------|-----------------------------------------------|
-| `AUTH_SERVICE_IMAGE`       | `shirongquan/auth-service:1.0.0`        | `auth-service` image reference               |
-| `AUTH_SERVICE_PORT`        | `9000`                                  | `auth-service` host port + `SERVER_PORT` + healthcheck URL |
-| `FRAUD_SERVICE_IMAGE`      | `shirongquan/fraud-service:1.0.0`       | `fraud-service` image reference              |
-| `FRAUD_SERVICE_PORT`       | `9010`                                  | `fraud-service` host port + `SERVER_PORT` + healthcheck URL |
-| `FRAUD_SERVICE_PROFILE`    | `dev`                                   | Enables `/internal/test/failure-mode` chaos endpoint used by `load-tests/` |
-| `LEDGER_SERVICE_IMAGE`     | `shirongquan/ledger-service:1.0.0`      | `ledger-service` image reference              |
-| `LEDGER_SERVICE_PORT`      | `9020`                                  | `ledger-service` host port + `SERVER_PORT` + healthcheck URL |
-| `GRAFANA_ADMIN_USER`       | `admin`                                 | Grafana login username                       |
-| `GRAFANA_ADMIN_PASSWORD`   | `password`                              | Grafana login password                       |
+| Variable                 | Default                            | Used for                                                                   |
+|--------------------------|------------------------------------|----------------------------------------------------------------------------|
+| `AUTH_SERVICE_IMAGE`     | `shirongquan/auth-service:1.0.0`   | `auth-service` image reference                                             |
+| `AUTH_SERVICE_PORT`      | `9000`                             | `auth-service` host port + `SERVER_PORT` + healthcheck URL                 |
+| `FRAUD_SERVICE_IMAGE`    | `shirongquan/fraud-service:1.0.0`  | `fraud-service` image reference                                            |
+| `FRAUD_SERVICE_PORT`     | `9010`                             | `fraud-service` host port + `SERVER_PORT` + healthcheck URL                |
+| `FRAUD_SERVICE_PROFILE`  | `dev`                              | Enables `/internal/test/failure-mode` chaos endpoint used by `load-tests/` |
+| `LEDGER_SERVICE_IMAGE`   | `shirongquan/ledger-service:1.0.0` | `ledger-service` image reference                                           |
+| `LEDGER_SERVICE_PORT`    | `9020`                             | `ledger-service` host port + `SERVER_PORT` + healthcheck URL               |
+| `GRAFANA_ADMIN_USER`     | `admin`                            | Grafana login username                                                     |
+| `GRAFANA_ADMIN_PASSWORD` | `password`                         | Grafana login password                                                     |
 
 Example — change ports and disable the fraud-service test-mode endpoint:
 
@@ -451,24 +451,24 @@ docker compose -f infra/docker/docker-compose.yml logs redis prometheus grafana
 
 ## Service Endpoints
 
-| Component               | Local endpoint                     | Purpose                                          |
-|--------------------------|--------------------------------------|----------------------------------------------------|
-| auth-service            | `http://localhost:9000`             | Account, authorise/capture/reverse API             |
-| fraud-service           | `http://localhost:9010`             | Synchronous fraud-check API (internal, called by auth-service) |
-| ledger-service          | `http://localhost:9020`             | Read-only ledger/event-timeline query API           |
-| PostgreSQL              | `localhost:5432`                    | `auth_db` / `fraud_db` / `ledger_db`                |
-| pgAdmin                 | `http://localhost:5050`             | Postgres admin UI (`admin@example.com` / `admin`, pre-registered server) |
-| Redis                   | `localhost:6379`                    | Idempotency response cache, fraud velocity counters |
-| RedisInsight            | `http://localhost:5540`             | Redis admin/inspection UI                           |
-| Kafka (broker 1/2/3)    | `localhost:9092` / `:9094` / `:9095` | 3-broker KRaft cluster external listeners           |
-| Kafka UI                | `http://localhost:9091`             | Topic/consumer-group browser                        |
-| Grafana                 | `http://localhost:3000`             | Metrics dashboards                                  |
-| Prometheus              | `http://localhost:9090`             | Metrics queries/targets                             |
-| OpenTelemetry Collector | `localhost:4317` (gRPC) / `:4318` (HTTP) | OTLP telemetry ingestion                       |
-| Tempo                   | `http://localhost:3200`             | Trace query API (used by Grafana Explore)           |
-| cAdvisor                | `http://localhost:8085`             | Per-container resource metrics                      |
-| kafka-exporter          | `http://localhost:9308`             | Kafka broker/topic/consumer-group metrics for Prometheus |
-| redis_exporter          | `http://localhost:9121`             | Redis metrics for Prometheus                         |
+| Component               | Local endpoint                           | Purpose                                                                  |
+|-------------------------|------------------------------------------|--------------------------------------------------------------------------|
+| auth-service            | `http://localhost:9000`                  | Account, authorise/capture/reverse API                                   |
+| fraud-service           | `http://localhost:9010`                  | Synchronous fraud-check API (internal, called by auth-service)           |
+| ledger-service          | `http://localhost:9020`                  | Read-only ledger/event-timeline query API                                |
+| PostgreSQL              | `localhost:5432`                         | `auth_db` / `fraud_db` / `ledger_db`                                     |
+| pgAdmin                 | `http://localhost:5050`                  | Postgres admin UI (`admin@example.com` / `admin`, pre-registered server) |
+| Redis                   | `localhost:6379`                         | Idempotency response cache, fraud velocity counters                      |
+| RedisInsight            | `http://localhost:5540`                  | Redis admin/inspection UI                                                |
+| Kafka (broker 1/2/3)    | `localhost:9092` / `:9094` / `:9095`     | 3-broker KRaft cluster external listeners                                |
+| Kafka UI                | `http://localhost:9091`                  | Topic/consumer-group browser                                             |
+| Grafana                 | `http://localhost:3000`                  | Metrics dashboards                                                       |
+| Prometheus              | `http://localhost:9090`                  | Metrics queries/targets                                                  |
+| OpenTelemetry Collector | `localhost:4317` (gRPC) / `:4318` (HTTP) | OTLP telemetry ingestion                                                 |
+| Tempo                   | `http://localhost:3200`                  | Trace query API (used by Grafana Explore)                                |
+| cAdvisor                | `http://localhost:8085`                  | Per-container resource metrics                                           |
+| kafka-exporter          | `http://localhost:9308`                  | Kafka broker/topic/consumer-group metrics for Prometheus                 |
+| redis_exporter          | `http://localhost:9121`                  | Redis metrics for Prometheus                                             |
 
 ### Internal versus host addresses
 
@@ -562,11 +562,11 @@ A custom-built `otel-collector-contrib` image (`infra/otel/Dockerfile`, adds a h
 binary) that receives OTLP traces from all three services and forwards them to Tempo, plus exports
 span metrics for Prometheus.
 
-| Protocol / port | Purpose                              |
-|------------------|----------------------------------------|
-| OTLP gRPC `4317` | Trace ingestion (used by containerized services) |
-| OTLP HTTP `4318` | Trace ingestion (used by IDE/host-run services) |
-| `8889`           | Span-metrics endpoint, scraped by Prometheus |
+| Protocol / port  | Purpose                                          |
+|------------------|--------------------------------------------------|
+| OTLP gRPC `4317` | Trace ingestion (used by containerised services) |
+| OTLP HTTP `4318` | Trace ingestion (used by IDE/host-run services)  |
+| `8889`           | Span-metrics endpoint, scraped by Prometheus     |
 | `13133`          | `health_check` extension (container healthcheck) |
 
 ```bash
@@ -580,16 +580,16 @@ for its run mode (container vs. host), network reachability, and Collector start
 
 Scrapes application and infrastructure metrics per `infra/prometheus/prometheus.yml`:
 
-| Job                          | Target                                  |
-|--------------------------------|--------------------------------------------|
-| `prometheus`                  | `prometheus:9090` (self)                    |
-| `otel-collector-spanmetrics`  | `otel-collector:8889`                       |
-| `auth-service`                | `host.docker.internal:9000/actuator/prometheus` |
-| `fraud-service`               | `host.docker.internal:9010/actuator/prometheus` |
-| `ledger-service`               | `host.docker.internal:9020/actuator/prometheus` |
-| `kafka-exporter`               | `kafka-exporter:9308`                       |
-| `cadvisor`                     | `cadvisor:8080`                             |
-| `redis_exporter`                | `redis_exporter:9121`                       |
+| Job                          | Target                                          |
+|------------------------------|-------------------------------------------------|
+| `prometheus`                 | `prometheus:9090` (self)                        |
+| `otel-collector-spanmetrics` | `otel-collector:8889`                           |
+| `auth-service`               | `host.docker.internal:9000/actuator/prometheus` |
+| `fraud-service`              | `host.docker.internal:9010/actuator/prometheus` |
+| `ledger-service`             | `host.docker.internal:9020/actuator/prometheus` |
+| `kafka-exporter`             | `kafka-exporter:9308`                           |
+| `cadvisor`                   | `cadvisor:8080`                                 |
+| `redis_exporter`             | `redis_exporter:9121`                           |
 
 The three app-service jobs target `host.docker.internal` (not the container DNS name) because that
 also works when the services run as containers via `docker-compose.app.yml` — their ports are
@@ -601,13 +601,13 @@ Dashboards and data sources are **fully auto-provisioned** on startup from
 `infra/grafana/provisioning/` and `infra/grafana/dashboards/` — no manual setup required. Dashboard
 JSON files:
 
-| Dashboard                        | Covers                                                        |
-|------------------------------------|------------------------------------------------------------------|
+| Dashboard                        | Covers                                                                                                                                                      |
+|----------------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | `payment-platform-overview.json` | HTTP throughput/errors, auth/capture/reverse rates, outbox lag/backlog, idempotency & concurrency-conflict counters, fraud decisions, circuit-breaker state |
-| `kafka-exporter-overview.json`   | Broker/topic/consumer-group metrics, DLT publish rate            |
-| `redis-overview.json`             | Redis memory, ops/sec, hit rate                                 |
-| `spring-boot-stats.json`          | Per-service Spring Boot/HTTP metrics                             |
-| `JVM(Micrometer).json`            | JVM heap, GC, threads for each service                          |
+| `kafka-exporter-overview.json`   | Broker/topic/consumer-group metrics, DLT publish rate                                                                                                       |
+| `redis-overview.json`            | Redis memory, ops/sec, hit rate                                                                                                                             |
+| `spring-boot-stats.json`         | Per-service Spring Boot/HTTP metrics                                                                                                                        |
+| `JVM(Micrometer).json`           | JVM heap, GC, threads for each service                                                                                                                      |
 
 ```bash
 docker compose -f infra/docker/docker-compose.yml logs -f grafana
@@ -689,11 +689,11 @@ rate(ledger_kafka_dlt_published_total[5m])
 
 ### OpenTelemetry
 
-Containerized services export to the Collector's gRPC endpoint; host/IDE-run services use the HTTP
+Containerised services export to the Collector's gRPC endpoint; host/IDE-run services use the HTTP
 endpoint against the published host port:
 
 ```dotenv
-# containerized (docker-compose.app.yml default)
+# containerised (docker-compose.app.yml default)
 OTEL_EXPORTER_OTLP_TRACES_ENDPOINT=http://otel-collector:4318/v1/traces
 
 # host/IDE-run
@@ -947,14 +947,14 @@ docker compose -f infra/docker/docker-compose.yml -f infra/docker/docker-compose
 
 ### Security
 
-This Compose stack is optimized for **local development and demos**, favoring simplicity and fast
+This Compose stack is optimised for **local development and demos**, favouring simplicity and fast
 iteration:
 
 - Postgres/pgAdmin/Grafana all use fixed, well-known local credentials (`postgres`/`postgres`,
   `admin@example.com`/`admin`, `admin`/`password`).
 - Redis and Kafka run with open, unauthenticated listeners (`PLAINTEXT`) to keep local setup simple.
 - TLS is not configured, since traffic stays on the local Docker network.
-- Application-level authentication/authorization is tracked as a roadmap item — see
+- Application-level authentication/authorisation is tracked as a roadmap item — see
   [Trust Boundaries](../docs/architecture/trust-boundaries.md).
 
 See the security documentation for the platform's current security posture:

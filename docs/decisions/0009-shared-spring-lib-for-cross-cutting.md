@@ -5,7 +5,7 @@
 
 ## Context
 
-`auth-service`, `fraud-service`, and `ledger-service` each need the same cross-cutting behavior:
+`auth-service`, `fraud-service`, and `ledger-service` each need the same cross-cutting behaviour:
 
 - a consistent error/response model for API failures
 - propagation of a correlation/trace identifier across HTTP calls and into logs
@@ -43,7 +43,7 @@ Positive:
   (see [System Context](../architecture/system-context.md), [Containers](../architecture/containers.md))
 - consistent error response shape simplifies client-side and gateway-side error handling
 - shared hashing logic avoids subtly different idempotency-conflict detection per service
-- changes to cross-cutting behavior (e.g. adding a new MDC field) are made once and consumed everywhere
+- changes to cross-cutting behaviour (e.g. adding a new MDC field) are made once and consumed everywhere
 
 Trade-offs:
 - introduces a shared build/versioning dependency between otherwise independently deployable services — a breaking
@@ -57,7 +57,7 @@ Trade-offs:
   higher long-term maintenance cost)
 - push cross-cutting concerns into infrastructure (e.g. API gateway/service mesh header injection) instead of a
   library (deferred: no gateway/mesh currently in the stack — see
-  [roadmap: Next Steps](../roadmap.md#5-next-steps-prioritized) item 4; library approach is simpler for the current
+  [roadmap: Next Steps](../roadmap.md#5-next-steps-prioritised) item 4; library approach is simpler for the current
   three-service scope)
 - separate libraries per concern (error model, correlation, idempotency) instead of one shared module (rejected for
   now: adds packaging/versioning overhead disproportionate to current size; package-level separation inside one

@@ -35,9 +35,9 @@ This report answers three practical questions for the MVP:
 ### Current focus
 
 - This report captures **signal-level, demo-scale evidence**: deterministic, easy-to-read traffic
-  generation that proves the reliability behaviors work, run locally without a fixed, documented
+  generation that proves the reliability behaviours work, run locally without a fixed, documented
   hardware profile.
-- Runs are minutes-long by design today, optimized for fast, repeatable local demos; extending to
+- Runs are minutes-long by design today, optimised for fast, repeatable local demos; extending to
   hours-long sustained/soak runs is a planned next step (see [§13](#13-conclusions-and-follow-up-work)).
 - Percentile-accurate throughput testing with k6/Gatling is the natural next evolution once this
   signal-level evidence is in place (see [§13](#13-conclusions-and-follow-up-work)).
@@ -160,7 +160,7 @@ sum by (eventType) (rate(ledger_event_duplicate_skipped_total{application="ledge
 
 ### `generate-concurrency-conflicts.sh` — how it works
 
-`auth-service` recognizes two distinct concurrency conflicts, both counted on the same metric,
+`auth-service` recognises two distinct concurrency conflicts, both counted on the same metric,
 distinguished by the `type` tag:
 
 - **`type=idempotency_race`** — two (or more) requests share the same idempotency key and race on
@@ -264,7 +264,7 @@ as follow-up work (see [§13](#13-conclusions-and-follow-up-work)).
 | Checkpoint                          | Current status | Evidence source                                             |
 |-------------------------------------|----------------|-------------------------------------------------------------|
 | Mixed traffic generation completes  | Yes            | `load-tests/generate-traffic.sh` scripted phases            |
-| Idempotent replay path exercised    | Yes            | duplicate request behavior + `auth_idempotency_cache_total` |
+| Idempotent replay path exercised    | Yes            | duplicate request behaviour + `auth_idempotency_cache_total` |
 | Circuit breaker transitions visible | Yes            | auth actuator + fraud forced `503` mode                     |
 | DLT publish path visible            | Yes            | `ledger_kafka_dlt_published_total`                          |
 | Ledger duplicate-event skip visible | Yes            | `ledger_event_duplicate_skipped_total`                      |
@@ -274,7 +274,7 @@ as follow-up work (see [§13](#13-conclusions-and-follow-up-work)).
 ### 9.2 Quantitative baseline table
 
 The repository currently proves reliability/business signals qualitatively (§9.1); committing a
-numeric benchmark snapshot for p50/p95/p99 latency, throughput, and resource utilization under a
+numeric benchmark snapshot for p50/p95/p99 latency, throughput, and resource utilisation under a
 fixed hardware profile is the explicit next step, tracked in `docs/roadmap.md`.
 
 ## 10) Resource Measurements
@@ -324,7 +324,7 @@ Observed from existing scripts/docs (qualitative, ahead of a fixed benchmark pro
 - Signal-level reliability evidence (idempotency replay, circuit breaker transitions, DLT routing,
   duplicate-event dedup, and both concurrency-conflict types) is fully captured and reproducible
   today. A committed numeric benchmark snapshot (p50/p95/p99 latency, throughput, resource
-  utilization) under a fixed hardware profile is the natural next addition (see
+  utilisation) under a fixed hardware profile is the natural next addition (see
   [§13](#13-conclusions-and-follow-up-work)).
 - Runs are minutes-long today by design for fast, repeatable local demos; extending to hours-long
   sustained/soak runs is tracked as follow-up work.
@@ -333,7 +333,7 @@ Observed from existing scripts/docs (qualitative, ahead of a fixed benchmark pro
 - `generate-concurrency-conflicts.sh` already reliably demonstrates `type=optimistic_lock` for
   capture/reverse; extending it to also isolate `type=idempotency_race` for those operations is a
   planned enhancement (see [§6](#6-concurrency-assumptions)).
-- These bash scripts intentionally optimize for determinism and readability today; migrating to a
+- These bash scripts intentionally optimise for determinism and readability today; migrating to a
   percentile-accurate framework is the next planned step — see
   [§13](#13-conclusions-and-follow-up-work) for the shortlisted options.
 
@@ -345,7 +345,7 @@ breaker transitions, DLT routing, consumer dedup, and both concurrency-conflict 
 fully reproducible by another engineer with no manual setup beyond three funded accounts.
 
 Follow-up work, in rough priority order (see also
-[Payment Platform MVP Progress](../roadmap.md#5-next-steps-prioritized)):
+[Payment Platform MVP Progress](../roadmap.md#5-next-steps-prioritised)):
 
 1. Tune the outbox scheduler batch size/poll interval for faster publish-lag recovery under load.
 2. Evaluate optimistic vs. pessimistic locking throughput trade-offs under controlled, repeatable
@@ -366,7 +366,7 @@ Follow-up work, in rough priority order (see also
 5. Capture and commit a fixed-hardware-profile numeric baseline (CPU/memory specs, Postgres tuning,
    dataset cardinality) so future runs are directly comparable.
 
-For now, `generate-traffic.sh` is sufficient to produce visible, labeled traffic (auth/capture/
+For now, `generate-traffic.sh` is sufficient to produce visible, labelled traffic (auth/capture/
 reversal counts, idempotency cache hits, fraud declines, circuit-breaker transitions, 5xx errors,
 and DLT publishes) on the existing Grafana dashboards — see
 [Load Tests](../../load-tests/README.md) for exact commands.

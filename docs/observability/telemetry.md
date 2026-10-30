@@ -270,7 +270,7 @@ Every request-scoped log line already carries the two identifiers needed to jump
 ### Worked example
 
 1. Send an authorise request (
-   see [Demo Guide § Authorize a Payment](../getting-started/demo-guide.md#authorize-a-payment)),
+   see [Demo Guide § Authorise a Payment](../getting-started/demo-guide.md#authorise-a-payment)),
    then tail auth-service's logs (container mode) or read its console output (IDE mode):
 
    ```bash

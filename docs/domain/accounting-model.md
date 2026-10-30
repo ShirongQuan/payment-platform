@@ -152,7 +152,7 @@ How ledger projections reconcile with payment state and outbox events:
 - Gaps (an auth-service event with no matching ledger entry after a reasonable delay) indicate either outbox publish
   lag/backlog or a stuck/failed consumer — see [Observability Runbook (Lightweight)](../observability/runbook.md) for
   detection and mitigation.
-- Unrecognized event types are routed to the dead-letter topic (`auth.events.ledger.dlt`) rather than silently dropped,
+- Unrecognised event types are routed to the dead-letter topic (`auth.events.ledger.dlt`) rather than silently dropped,
   so a reconciliation gap is always traceable to either a backlog, a DLT entry, or a genuine bug — never a silent loss (
   see [ADR 0004: Use Separate Main Event and DLT Topics](../decisions/0004-use-event-and-dlt-topics.md)).
 
@@ -164,8 +164,8 @@ How ledger projections reconcile with payment state and outbox events:
   event/state consistency
 - [ADR 0002: Support Full Capture and Full Reverse Only (MVP)](../decisions/0002-full-capture-only.md) —
   full-capture-only MVP scope decision
-- [ADR 0003: Store Both Raw and Normalized Ledger Events](../decisions/0003-ledger-raw-and-normalized-events.md) — raw
-  event log vs. normalized projection
+- [ADR 0003: Store Both Raw and Normalised Ledger Events](../decisions/0003-ledger-raw-and-normalised-events.md) — raw
+  event log vs. normalised projection
 - <p>
     <a href="https://raw.githubusercontent.com/ShirongQuan/payment-platform/main/docs/data/diagrams/ledger-er-diagram.svg">
   Ledger ER Diagram

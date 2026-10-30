@@ -9,7 +9,7 @@
 - [Idempotency](#idempotency)
     - [Global policy](#global-policy)
     - [Request lifecycle (auth-service)](#request-lifecycle-auth-service)
-    - [Response behavior](#response-behavior)
+    - [Response behaviour](#response-behaviour)
     - [Service notes](#service-notes)
     - [Failure cases](#failure-cases)
 - [Service docs](#service-docs)
@@ -29,11 +29,10 @@ Cross-service API conventions for the payment platform.
   auth-service's Kafka events and exposes them as authorisation and account-event timelines; it does
   not accept any posting/write requests itself.
 
-None of the services are mounted behind a `context-path` — all endpoints are relative to the service
-root (e.g. `http://localhost:9000/accounts`), not `/api/v1/...`. This is a deliberate simplification for
-today's single-team, no-external-consumer MVP; a versioned `/api/v1` prefix is planned to be introduced
-at the API gateway layer rather than in each service — see
-[roadmap Next Steps #4](../roadmap.md#5-next-steps-prioritized).
+Service endpoints are exposed relative to their respective application roots (for example,
+`http://localhost:9000/accounts`), without a shared `context-path` or `/api/v1` prefix. The
+[roadmap](../roadmap.md#4-next-steps-prioritised) explores introducing versioned routing through an
+API gateway while preserving the existing service-level endpoint paths.
 
 ## Common conventions
 
@@ -48,20 +47,20 @@ at the API gateway layer rather than in each service — see
   `errorCode` field and, where relevant, additional context fields (e.g. `accountId`,
   `authorisationId`, `currencyCode`). See each service's exception handler
   (`AuthExceptionHandler`, `FraudExceptionHandler`, and ledger-service's equivalent).
-- No pagination/sorting/filtering is implemented anywhere; all list-returning endpoints
-  (e.g. ledger's authorisation-events lookup) return the full result set.
+- Collection endpoints currently return complete result sets without pagination, sorting, or
+  filtering parameters (for example, the ledger authorisation-events lookup).
 - Standard HTTP status usage: `200` success, `400` validation, `404` not found, `409` conflict
   (idempotency/state conflicts), `500` unexpected errors.
 
 ## Security
 
-- Application-level authentication/authorization (Spring Security + JWT, customer vs. admin role separation)
-  is planned — see [roadmap Next Steps #1](../roadmap.md#5-next-steps-prioritized). Today, each service is
-  reachable directly on its configured port with no gateway in front of them; an API gateway is also planned
-  (see [roadmap Next Steps #4](../roadmap.md#5-next-steps-prioritized)). See
-  [Trust Boundaries](../architecture/trust-boundaries.md) for the full picture.
-- Services call each other over plain HTTP (e.g. auth-service → fraud-service via
-  `fraud.base-url`, default `http://localhost:9010`).
+- The current service interfaces are directly accessible on their configured ports; application-level
+  authentication and authorisation are not enforced by these endpoints. See
+  [Trust Boundaries](../architecture/trust-boundaries.md) for the documented security boundaries.
+- Services communicate over HTTP (for example, auth-service → fraud-service via `fraud.base-url`,
+  default `http://localhost:9010`).
+- The [roadmap](../roadmap.md#4-next-steps-prioritised) explores Spring Security, JWT-based customer/admin
+  role separation, and gateway-based API routing as future architectural extensions.
 
 ## Idempotency
 
@@ -85,7 +84,7 @@ for the full design rationale.
 - Payload binding: the request's semantic fields are hashed into a fingerprint (SHA-256 of a
   canonical join of the relevant fields, e.g. `accountId+amount+currencyCode+merchantReference` for
   authorise). Same key + different fingerprint => `409 IDEMPOTENCY_CONFLICT`.
-- Response cache: auth-service caches the finalized response per `(operationType, scopeId,
+- Response cache: auth-service caches the finalised response per `(operationType, scopeId,
   idempotencyKey)` in Redis with a **24 hour TTL** (`idempotency.ttl-hours`), in addition to the
   durable uniqueness constraint on the `authorisation_event` table.
 
@@ -101,7 +100,7 @@ for the full design rationale.
    with the same key won the race), re-read the committed event/entity and resolve the response from
    it instead of failing the request — matching key ⇒ replay; non-matching key ⇒ conflict/state error.
 
-### Response behavior
+### Response behaviour
 
 - Same key + same payload + already completed ⇒ replay original response with `200 OK` (no new side
   effect).
@@ -117,9 +116,9 @@ for the full design rationale.
 
 ### Service notes
 
-- **Auth API**: `idempotencyKey` required on authorise/capture/reverse (see
-  [Auth API](./auth-api.md)). No idempotency support on `POST /accounts` or
-  `POST /accounts/{id}/deposits` today — retrying those creates/applies the operation again.
+- **Auth API**: `idempotencyKey` is required on authorise/capture/reverse (see
+  [Auth API](./auth-api.md)). Account creation and deposit requests are processed as separate operations
+  on each successful submission; replaying either POST can create another account or apply another deposit.
 - **Fraud API**: `idempotencyKey` required on `POST /fraud/check` (see [Fraud API](./fraud-api.md)),
   scoped by `accountId`; reads have no idempotency concept since there are none.
 - **Ledger API**: fully read-only; no posting endpoints exist, so there is nothing to key on the
@@ -134,10 +133,11 @@ for the full design rationale.
   consumed `eventId` in a `processed_event` table using `INSERT ... ON CONFLICT DO NOTHING`; the first
   insert processes the event, duplicate `eventId` deliveries are silently ignored. This gives
   effectively-once projection without distributed transactions.
-- Partial downstream failure (e.g. DB commit succeeds but outbox publish to Kafka fails/retries):
-  the auth-service Kafka producer is configured with `acks=all`, `enable.idempotence=true`, and
-  bounded retry/timeout budgets kept below the outbox claim lease (30s), so a publish is never
-  silently duplicated or lost across a reclaim cycle.
+- Partial downstream failure (e.g. the database commit succeeds but Kafka publication fails):
+  the committed outbox record remains available for publication retries. The auth-service Kafka
+  producer uses `acks=all` and `enable.idempotence=true`; the outbox claim lease coordinates
+  publication attempts. Because delivery is at least once, repeated publications remain possible,
+  and ledger-service deduplicates by `eventId` during projection.
 
 ## Service docs
 

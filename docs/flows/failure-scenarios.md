@@ -4,7 +4,7 @@
 
 - [Purpose](#purpose)
 - [Scope](#scope)
-- [Failure scenario catalog](#failure-scenario-catalog)
+- [Failure scenario catalogue](#failure-scenario-catalogue)
     - [1) Duplicate API request (same idempotency key)](#1-duplicate-api-request-same-idempotency-key)
     - [2) Client timeout after server commit](#2-client-timeout-after-server-commit)
     - [3) Outbox publish transient failure (producer side)](#3-outbox-publish-transient-failure-producer-side)
@@ -18,7 +18,7 @@
 
 ## Purpose
 
-Document expected behavior when key runtime failures occur, and how to diagnose/recover during demo and development.
+Document expected behaviour when key runtime failures occur, and how to diagnose/recover during demo and development.
 
 ## Scope
 
@@ -30,7 +30,7 @@ Document expected behavior when key runtime failures occur, and how to diagnose/
 
 ---
 
-## Failure scenario catalog
+## Failure scenario catalogue
 
 ## 1) Duplicate API request (same idempotency key)
 
@@ -38,7 +38,7 @@ Document expected behavior when key runtime failures occur, and how to diagnose/
 
 Client retries the same mutating request due to timeout/network uncertainty.
 
-### Expected behavior
+### Expected behaviour
 
 - Same key + same payload: return stored prior result (safe replay).
 - Same key + different payload: return conflict according to idempotency policy.
@@ -62,7 +62,7 @@ Client retries the same mutating request due to timeout/network uncertainty.
 
 Server commits DB transaction, but client never receives response (connection timeout/reset).
 
-### Expected behavior
+### Expected behaviour
 
 - Client retry with same idempotency key returns committed result.
 - No additional writes/effects on retry.
@@ -81,7 +81,7 @@ Server commits DB transaction, but client never receives response (connection ti
 
 Kafka temporarily unavailable or publish attempt fails.
 
-### Expected behavior
+### Expected behaviour
 
 - Outbox row remains/retries according to publisher policy.
 - Event is retried and eventually published.
@@ -113,7 +113,7 @@ requeue a terminally `FAILED` outbox row.
 
 At-least-once delivery causes re-delivery of same message.
 
-### Expected behavior
+### Expected behaviour
 
 - Consumer deduplicates by event/message key.
 - Projection/ledger writes remain idempotent.
@@ -134,7 +134,7 @@ Capture/reverse requested from an illegal current state (e.g. capturing an alrea
 `DECLINED` authorisation with a *different* idempotency key than the one that completed it; reverse
 requested on a `CAPTURED` or `DECLINED` authorisation).
 
-### Expected behavior
+### Expected behaviour
 
 - Request rejected with `409 Conflict` (`AuthorisationIllegalStateException`,
   `errorCode=INVALID_AUTHORISATION_STATE`).
@@ -163,7 +163,7 @@ requested on a `CAPTURED` or `DECLINED` authorisation).
 
 One component succeeds but follow-on action fails (e.g., event publish deferred).
 
-### Expected behavior
+### Expected behaviour
 
 - Atomic boundary respected for core DB changes (authorisation/account/event rows commit together
   in one transaction; the outbox row is written in that same transaction).
@@ -183,7 +183,7 @@ One component succeeds but follow-on action fails (e.g., event publish deferred)
 `DECLINE`, either because the computed risk score crossed the decline threshold, or because
 fraud-service was unreachable/timed out and no fail-open policy applied.
 
-### Expected behavior
+### Expected behaviour
 
 - Authorisation is persisted as `DECLINED` with `reasonCode=FRAUD_DECLINED` (or
   `FRAUD_SERVICE_UNAVAILABLE` reasoning surfaced via fraud-service's own reasons list when the

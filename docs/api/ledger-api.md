@@ -7,12 +7,12 @@
 
 Base path: `/` (server port `9020`)
 
-This document covers the important ledger-service endpoints and the expected behavior for:
+This document covers the important ledger-service endpoints and the expected behaviour for:
 - request
 - response
 - status transitions
 - error cases
-- idempotency behavior
+- idempotency behaviour
 
 The ledger service endpoints are read-only projection queries.
 
@@ -55,7 +55,7 @@ Notes:
 - `400 Bad Request`: malformed UUID path variable
 - `500 Internal Server Error`: unexpected server/database errors
 
-### Idempotency behavior
+### Idempotency behaviour
 - Naturally idempotent read.
 
 ---
@@ -97,6 +97,6 @@ Notes:
 - `400 Bad Request`: malformed UUID path variable
 - `500 Internal Server Error`: unexpected server/database errors
 
-### Idempotency behavior
+### Idempotency behaviour
 - Naturally idempotent read.
 
