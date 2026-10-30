@@ -130,4 +130,23 @@ public class AuthExceptionHandler {
         e.getErrorCode().name(),
         request);
   }
+
+  /**
+   * Returns 409 when a mutating operation (deposit/reserve/capture/reverse) is attempted on an
+   * account that is not ACTIVE (e.g. LOCKED).
+   */
+  @ExceptionHandler(AccountNotActiveException.class)
+  public ProblemDetail handleAccountNotActiveException(
+      AccountNotActiveException e, WebRequest request) {
+    return ProblemDetails.from(
+        HttpStatus.CONFLICT,
+        e.getErrorCode().getDefaultMessage(),
+        e.getMessage(),
+        e.getErrorCode().name(),
+        request,
+        "accountId",
+        e.getAccountId(),
+        "status",
+        e.getStatus());
+  }
 }

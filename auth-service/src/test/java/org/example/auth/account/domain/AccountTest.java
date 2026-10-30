@@ -6,6 +6,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import java.math.BigDecimal;
 import java.time.OffsetDateTime;
 import java.util.UUID;
+import org.example.auth.common.exception.AccountNotActiveException;
 import org.example.auth.common.exception.CurrencyMismatchException;
 import org.example.auth.common.exception.ErrorCode;
 import org.example.auth.common.exception.InsufficientFundException;
@@ -347,5 +348,51 @@ class AccountTest {
             ex ->
                 assertThat(((InsufficientFundException) ex).getErrorCode())
                     .isEqualTo(ErrorCode.INSUFFICIENT_FUNDS));
+  }
+
+  @Test
+  void shouldRejectMutatingOperationsOnLockedAccount() {
+    UUID id = UUID.randomUUID();
+    OffsetDateTime now = OffsetDateTime.now();
+    Account account =
+        new Account(
+            id,
+            "USD",
+            AccountStatus.LOCKED,
+            BigDecimal.valueOf(20),
+            BigDecimal.valueOf(10),
+            now,
+            now);
+
+    assertThatThrownBy(() -> account.deposit(BigDecimal.TEN, "USD"))
+        .isInstanceOf(AccountNotActiveException.class)
+        .satisfies(
+            ex -> {
+              AccountNotActiveException e = (AccountNotActiveException) ex;
+              assertThat(e.getErrorCode()).isEqualTo(ErrorCode.ACCOUNT_NOT_ACTIVE);
+              assertThat(e.getAccountId()).isEqualTo(id);
+              assertThat(e.getStatus()).isEqualTo(AccountStatus.LOCKED);
+            });
+
+    assertThatThrownBy(() -> account.reserve(BigDecimal.TEN, "USD"))
+        .isInstanceOf(AccountNotActiveException.class)
+        .satisfies(
+            ex ->
+                assertThat(((AccountNotActiveException) ex).getErrorCode())
+                    .isEqualTo(ErrorCode.ACCOUNT_NOT_ACTIVE));
+
+    assertThatThrownBy(() -> account.capture(BigDecimal.TEN, "USD"))
+        .isInstanceOf(AccountNotActiveException.class)
+        .satisfies(
+            ex ->
+                assertThat(((AccountNotActiveException) ex).getErrorCode())
+                    .isEqualTo(ErrorCode.ACCOUNT_NOT_ACTIVE));
+
+    assertThatThrownBy(() -> account.reverse(BigDecimal.TEN, "USD"))
+        .isInstanceOf(AccountNotActiveException.class)
+        .satisfies(
+            ex ->
+                assertThat(((AccountNotActiveException) ex).getErrorCode())
+                    .isEqualTo(ErrorCode.ACCOUNT_NOT_ACTIVE));
   }
 }

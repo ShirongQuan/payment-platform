@@ -49,6 +49,13 @@ public final class ProblemDetails {
     return pd;
   }
 
+  /**
+   * Applies {@code keyValuePairs} (alternating {@code String} key, value) as extra properties on
+   * {@code pd}.
+   *
+   * @throws IllegalArgumentException if {@code keyValuePairs} has an odd length or a non-{@code
+   *     String} key
+   */
   private static void addProperties(ProblemDetail pd, Object... keyValuePairs) {
     if (keyValuePairs.length % 2 != 0) {
       throw new IllegalArgumentException("ProblemDetail property pairs must be key/value");

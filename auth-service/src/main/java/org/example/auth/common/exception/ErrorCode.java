@@ -10,7 +10,8 @@ public enum ErrorCode {
   IDEMPOTENCY_CONFLICT("Idempotency key conflict"),
   INVALID_AUTHORISATION_STATE("Authorisation is in an invalid state for this operation"),
   ACCOUNT_CONCURRENCY_CONFLICT(
-      "Concurrent request on the same account conflicted; please retry");
+      "Concurrent request on the same account conflicted; please retry"),
+  ACCOUNT_NOT_ACTIVE("Account is not active");
 
   private final String defaultMessage;
 

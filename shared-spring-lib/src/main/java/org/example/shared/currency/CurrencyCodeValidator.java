@@ -13,6 +13,15 @@ import java.util.Locale;
  * "usd" and " USD " are both accepted.
  */
 public class CurrencyCodeValidator implements ConstraintValidator<ValidCurrencyCode, String> {
+  /**
+   * Checks whether {@code value} is a non-blank string that resolves to a valid ISO 4217 currency
+   * code, ignoring leading/trailing whitespace and case.
+   *
+   * @param value the candidate currency code
+   * @param constraintValidatorContext unused; required by the {@link ConstraintValidator} contract
+   * @return {@code true} if {@code value} is a recognized ISO 4217 currency code, {@code false}
+   *     otherwise (including {@code null}/blank input)
+   */
   @Override
   public boolean isValid(String value, ConstraintValidatorContext constraintValidatorContext) {
     if (value == null || value.isBlank()) {

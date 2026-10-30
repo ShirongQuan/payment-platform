@@ -17,15 +17,17 @@
 # step entirely (no Return-key pause before the first step that actually runs). Steps:
 #   1 = Phase 1 (bulk authorisations)
 #   2 = Phase 2 (concurrency conflicts)
-#   3 = Phase 3 (circuit breaker open -> circuit breaker recovery -> fail-open demo)
-#   4 = Phase 4 (dedup events)
-#   5 = Phase 5 (dead-letter-topic publish)
-#   6 = Phase 6 (fraud-service latency/TimeLimiter demo: baseline auth, then DELAY_2S timeout)
-#   7 = Phase 7 (fraud-service recovery: reset to OFF, confirm breaker CLOSED, real fraud checks, final step)
+#   3 = Phase 3 (circuit breaker open -> circuit breaker recovery)
+#   4 = Phase 4 (fail-open policy demo)
+#   5 = Phase 5 (dedup events)
+#   6 = Phase 6 (dead-letter-topic publish)
+#   7 = Phase 7 (fraud-service latency/TimeLimiter demo: baseline auth, then DELAY_2S timeout)
+#   8 = Phase 8 (fraud-service recovery: reset to OFF, confirm breaker CLOSED, real fraud checks, final step)
 # Every step from START_STEP onward still runs in order, each still followed by the usual
 # Return-key pause (or REST_BETWEEN_STEPS_SECONDS sleep in non-interactive mode) before the next
 # one. e.g. `./generate-traffic.sh 2` skips Phase 1 and starts immediately at Phase 2
-# (concurrency conflicts), then still pauses for Return before Phase 3, 4, 5, 6, and 7.
+# (concurrency conflicts), then still pauses for Return before Phase 3, 4, 5, 6, 7, and 8.
+# e.g. `./generate-traffic.sh 4` jumps straight to the fail-open policy demo.
 #
 # Every idempotency key embeds a run-scoped timestamp tag (RUN_TAG, derived from `date +%s`), so
 # the whole script can be re-run at any time without idempotency-key collisions against previous
@@ -33,7 +35,7 @@
 #
 # Accounts: GBP_ACCOUNT_ID (11111111-1111-1111-1111-111111111111) is the only UUID configured in
 # fraud-service's fraud.fail-open.trusted-account-ids, so it is used EXCLUSIVELY by the fail-open
-# demo (phase 3c-b) and never appears in the general round-robin traffic below. By default the
+# demo (phase 4b) and never appears in the general round-robin traffic below. By default the
 # script auto-provisions 3 brand-new, dedicated accounts (one per currency: GBP/USD/EUR) via
 # POST /accounts + POST /accounts/{id}/deposits at startup, and uses those for every other phase
 # (bulk, circuit breaker open/recovery). Set AUTO_PROVISION_ROUND_ROBIN_ACCOUNTS=false plus
@@ -51,7 +53,7 @@
 #      (same directory) to generate auth_concurrency_conflict_total{operation, type} samples
 #      (type=idempotency_race and type=optimistic_lock) via truly concurrent (backgrounded + wait)
 #      authorise/capture/reverse requests.
-#   3. Circuit breaker + HTTP 5xx errors, split into three sub-steps with a Return-key pause
+#   3. Circuit breaker + HTTP 5xx errors, split into two sub-steps with a Return-key pause
 #      in between:
 #        3a. Set fraud-service to ALWAYS_503 (every /fraud/check call fails with HTTP 503 - both
 #            accumulates failures fast enough to trip auth-service's circuit breaker open, and
@@ -64,36 +66,39 @@
 #            CB_RECOVERY_INTERVAL_SECONDS (2s) apart - no active polling/confirmation beforehand,
 #            just real traffic - and observe resilience4j's own half-open -> closed recovery play
 #            out naturally as the requests succeed.
-#        3c. Fail-open policy demo, starting from the confirmed CLOSED breaker left by 3b: set
-#            fraud-service to ALWAYS_503 again, then send two deterministic requests with fresh
-#            idempotency keys, so FraudOrchestrator's fail-open policy (trusted account + amount <=
-#            fraud.fail-open.max-amount) is the only thing that can distinguish their outcomes:
-#              i.  An ineligible request from an untrusted account (USD) -> expect DECLINE
-#                  (fail-open does not apply).
-#              ii. An eligible request from a trusted account (GBP), within the configured
-#                  fail-open amount limit (£2, <= 5.00) -> expect APPROVE via the fail-open policy.
-#            A Return-key pause follows step ii (outage still active) so the approved result can be
-#            explained while fraud-service is still down, before fraud-service is reset to OFF.
-#   4. Dedup events: delegates to the sibling generate-dedup-events.sh script (same directory) to
+#   4. Fail-open policy demo (its own top-level step, so it can be started independently via
+#      `./generate-traffic.sh 4`): first actively confirms/drives the fraudService circuit breaker
+#      to a confirmed CLOSED state (reusing wait_for_fraud_circuit_breaker_closed - this matters
+#      most when phase 3 was skipped, so the breaker isn't left mid-trial), then sets fraud-service
+#      to ALWAYS_503 and sends two deterministic requests with fresh idempotency keys, so
+#      FraudOrchestrator's fail-open policy (trusted account + amount <= fraud.fail-open.max-amount)
+#      is the only thing that can distinguish their outcomes:
+#        a. An ineligible request from an untrusted account (USD) -> expect DECLINE (fail-open
+#           does not apply).
+#        b. An eligible request from a trusted account (GBP), within the configured fail-open
+#           amount limit (£2, <= 5.00) -> expect APPROVE via the fail-open policy.
+#      A Return-key pause follows step b (outage still active) so the approved result can be
+#      explained while fraud-service is still down, before fraud-service is reset to OFF.
+#   5. Dedup events: delegates to the sibling generate-dedup-events.sh script (same directory) to
 #      generate ledger_event_duplicate_skipped_total samples across all event types.
-#   5. DLT publish: use kcat to publish records with an invalid eventType directly onto the
+#   6. DLT publish: use kcat to publish records with an invalid eventType directly onto the
 #      auth.events topic, per docs/development/runbook.md, so ledger-service routes them straight to
 #      the auth.events.ledger.dlt dead-letter topic (non-retryable path).
-#   6. Fraud-service latency/TimeLimiter demo, split into two sub-steps with a Return-key pause
+#   7. Fraud-service latency/TimeLimiter demo, split into two sub-steps with a Return-key pause
 #      in between:
-#        6a. Baseline: send one fresh authorisation with fraud-service healthy (mode OFF), to show
+#        7a. Baseline: send one fresh authorisation with fraud-service healthy (mode OFF), to show
 #            a normal, fast, real fraud-service check succeeding.
-#        6b. Set fraud-service mode to DELAY_2S (every /fraud/check call now sleeps 2s before
+#        7b. Set fraud-service mode to DELAY_2S (every /fraud/check call now sleeps 2s before
 #            responding), then send a comparable authorisation (same account/currency/amount as
-#            6a) using a different fresh idempotency key. auth-service's fraudService TimeLimiter
+#            7a) using a different fresh idempotency key. auth-service's fraudService TimeLimiter
 #            is 250ms, so this call times out and is treated as UNAVAILABLE -> DECLINE (this
-#            account is not in fraud.fail-open.trusted-account-ids, unlike phase 3c's dedicated
+#            account is not in fraud.fail-open.trusted-account-ids, unlike phase 4's dedicated
 #            fail-open demo). fraud-service is deliberately left in DELAY_2S mode afterwards -
-#            phase 7 below is responsible for resetting it.
-#   7. Fraud-service recovery: reset fraud-service mode to OFF, actively drive the fraudService
-#      circuit breaker to a confirmed CLOSED state (reusing the same wait_for_fraud_circuit_breaker_closed
-#      helper as phase 3c), then send a few fresh authorisations that each perform a real,
-#      successful fraud-service check end to end.
+#            phase 8 below is responsible for resetting it.
+#   8. Fraud-service recovery: reset fraud-service mode to OFF, then send a few fresh
+#      authorisations with fraud-service healthy, letting resilience4j's own half-open -> closed
+#      transition play out naturally as the requests succeed (same approach as phase 3b - no
+#      active wait_for_fraud_circuit_breaker_closed polling, so there's no risk of a 15s+ pause).
 #
 # Between top-level steps, the script can pause for keyboard Return (interactive mode), or fall
 # back to a REST_BETWEEN_STEPS_SECONDS (default 2s) sleep when non-interactive.
@@ -139,7 +144,7 @@ USD_ACCOUNT_ID="${USD_ACCOUNT_ID:-22222222-2222-2222-2222-222222222222}"
 EUR_ACCOUNT_ID="${EUR_ACCOUNT_ID:-33333333-3333-3333-3333-333333333333}"
 
 # GBP_ACCOUNT_ID above is the only entry in fraud-service's fraud.fail-open.trusted-account-ids
-# config - it is reserved EXCLUSIVELY for the fail-open demo's "eligible" sub-step (phase 3c-b).
+# config - it is reserved EXCLUSIVELY for the fail-open demo's "eligible" sub-step (phase 4b).
 # It must never appear in the general round-robin ACCOUNTS list below: whenever fraud-service is
 # forced unavailable (circuit-breaker-open phase, fail-open demo), the fail-open policy would
 # silently convert that account's expected DECLINE into an AUTHORISED response for small amounts -
@@ -167,12 +172,12 @@ for cmd in jq curl kcat uuidgen; do
   fi
 done
 
-# Optional first positional arg: top-level step number (1-7) to start from - see the Usage/START_STEP
+# Optional first positional arg: top-level step number (1-8) to start from - see the Usage/START_STEP
 # comment near the top of this file for the full step list.
 START_STEP="${1:-1}"
-if ! [[ "$START_STEP" =~ ^[0-9]+$ ]] || [ "$START_STEP" -lt 1 ] || [ "$START_STEP" -gt 7 ]; then
-  echo "ERROR: START_STEP must be an integer between 1 and 7 (got: '${START_STEP}')" >&2
-  echo "Usage: $0 [START_STEP]   (1=Phase 1, 2=Phase 2, 3=Phase 3, 4=Phase 4, 5=Phase 5, 6=Phase 6, 7=Phase 7)" >&2
+if ! [[ "$START_STEP" =~ ^[0-9]+$ ]] || [ "$START_STEP" -lt 1 ] || [ "$START_STEP" -gt 8 ]; then
+  echo "ERROR: START_STEP must be an integer between 1 and 8 (got: '${START_STEP}')" >&2
+  echo "Usage: $0 [START_STEP]   (1=Phase 1, 2=Phase 2, 3=Phase 3, 4=Phase 4 [fail-open demo], 5=Phase 5, 6=Phase 6, 7=Phase 7, 8=Phase 8)" >&2
   exit 1
 fi
 
@@ -229,7 +234,7 @@ ACCOUNTS=(
 )
 NUM_ACCOUNTS=${#ACCOUNTS[@]}
 
-# Untrusted account used for the fail-open demo's "ineligible" sub-step (phase 3c-a) - any account
+# Untrusted account used for the fail-open demo's "ineligible" sub-step (phase 4a) - any account
 # other than GBP_ACCOUNT_ID works (fraud-service only trusts that one UUID), so we simply reuse the
 # round-robin USD account rather than provisioning yet another dedicated one.
 UNTRUSTED_ACCOUNT_ID="${UNTRUSTED_ACCOUNT_ID:-$ROUND_ROBIN_USD_ACCOUNT_ID}"
@@ -382,9 +387,9 @@ fraud_circuit_breaker_closed_value() {
 # pending partial trial batch on its own; only firing actual calls does. If a warm-up call flips it
 # back OPEN, we wait poll_interval_seconds (> the 15s waitDurationInOpenState) before the next
 # warm-up attempt, so that attempt is guaranteed to land after the wait duration has elapsed. Used
-# by the fail-open demo phase (3c, to confirm the breaker is CLOSED before deliberately forcing
-# fraud-service unavailable again) and by the recovery phase (7, after fraud-service's DELAY_2S
-# timeout demo).
+# by the fail-open demo phase (4, to confirm the breaker is CLOSED before deliberately forcing
+# fraud-service unavailable again). Phase 8 (fraud-service recovery) deliberately does NOT use this
+# helper, to avoid its potential 15s+ warm-up pause - it just fires real traffic directly instead.
 wait_for_fraud_circuit_breaker_closed() {
   local max_attempts="${1:-3}" poll_interval_seconds="${2:-16}"
 
@@ -508,7 +513,7 @@ run_circuit_breaker_open_phase() {
 #
 # This phase runs directly after 3a's forced ALWAYS_503 hold, so the fraudService circuit breaker
 # should simply be OPEN (no stray partial trial batches to worry about yet). We don't actively poll
-# /probe for a confirmed CLOSED state here (that's only needed by phase 3c, which deliberately
+# /probe for a confirmed CLOSED state here (that's only needed by phase 4, which deliberately
 # forces fraud-service unavailable again and needs a clean starting point) - here we just fire a
 # steady stream of real traffic and let resilience4j's own half-open -> closed transition play out
 # naturally as the requests succeed.
@@ -538,8 +543,10 @@ run_circuit_breaker_recovery_phase() {
 }
 
 # ---------------------------------------------------------------------------
-# Phase 3c: fail-open policy demo. Starts from the confirmed CLOSED breaker that phase 3b leaves
-# behind, then forces fraud-service to ALWAYS_503 (unavailable) again for both requests below, so
+# Phase 4: fail-open policy demo. Its own top-level step (so it can be started independently via
+# `./generate-traffic.sh 4`). Starts by actively confirming/driving the fraudService circuit
+# breaker to CLOSED (matters most when phase 3 was skipped and the breaker wasn't already settled
+# by 3b), then forces fraud-service to ALWAYS_503 (unavailable) for both requests below, so
 # FraudOrchestrator's fail-open policy is the only thing that can distinguish their outcomes:
 #   a. ineligible: untrusted account, fraud-service unavailable -> fail-open does NOT apply -> DECLINE
 #   b. eligible: trusted account + amount within the fail-open max-amount (5.00) -> fail-open DOES
@@ -559,7 +566,7 @@ run_fail_open_demo_phase() {
   set_fraud_mode "ALWAYS_503"
 
   echo
-  echo "--- Step 3c-a: ineligible - untrusted account (USD ${UNTRUSTED_ACCOUNT_ID}), fraud-service unavailable ---"
+  echo "--- Step 4a: ineligible - untrusted account (USD ${UNTRUSTED_ACCOUNT_ID}), fraud-service unavailable ---"
   echo "    (expect DECLINE: account is not in fraud.fail-open.trusted-account-ids, so the"
   echo "     fail-open policy does not apply)"
   local ikey
@@ -571,7 +578,7 @@ run_fail_open_demo_phase() {
   wait_for_next_step
 
   echo
-  echo "--- Step 3c-b: eligible - trusted account (GBP ${GBP_ACCOUNT_ID}), amount=2.00, fraud-service unavailable ---"
+  echo "--- Step 4b: eligible - trusted account (GBP ${GBP_ACCOUNT_ID}), amount=2.00, fraud-service unavailable ---"
   echo "    (expect APPROVE: trusted account + amount <= fraud.fail-open.max-amount (5.00) ->"
   echo "     fail-open policy applies)"
   next_ikey
@@ -586,11 +593,11 @@ run_fail_open_demo_phase() {
   set_fraud_mode "OFF"
 
   echo
-  echo ">>> Phase 3c complete: 2 fail-open-policy-demo auths sent (1 declined untrusted-account, 1 approved trusted-account)."
+  echo ">>> Phase 4 complete: 2 fail-open-policy-demo auths sent (1 declined untrusted-account, 1 approved trusted-account)."
 }
 
 # ---------------------------------------------------------------------------
-# Phase 5: DLT publish, per docs/development/runbook.md
+# Phase 6: DLT publish, per docs/development/runbook.md
 # ---------------------------------------------------------------------------
 run_dlt_phase() {
   echo
@@ -620,11 +627,11 @@ run_dlt_phase() {
   echo "  -> verify via: curl -s ${LEDGER_BASE_URL}/actuator/prometheus | grep ledger_kafka"
 
   echo
-  echo ">>> Phase 5 complete: sent ${DLT_MESSAGE_COUNT} DLT-bound Kafka records."
+  echo ">>> Phase 6 complete: sent ${DLT_MESSAGE_COUNT} DLT-bound Kafka records."
 }
 
 # ---------------------------------------------------------------------------
-# Phase 4: dedup events, delegates to the sibling generate-dedup-events.sh script.
+# Phase 5: dedup events, delegates to the sibling generate-dedup-events.sh script.
 # ---------------------------------------------------------------------------
 run_dedup_events_phase() {
   echo
@@ -640,7 +647,7 @@ run_dedup_events_phase() {
     "${SCRIPT_DIR}/generate-dedup-events.sh"
 
   echo
-  echo ">>> Phase 4 complete: ${DEDUP_ROUNDS} rounds of dedup-event traffic sent (via generate-dedup-events.sh)."
+  echo ">>> Phase 5 complete: ${DEDUP_ROUNDS} rounds of dedup-event traffic sent (via generate-dedup-events.sh)."
 }
 
 # ---------------------------------------------------------------------------
@@ -663,17 +670,17 @@ run_concurrency_conflicts_phase() {
 }
 
 # ---------------------------------------------------------------------------
-# Phase 6: fraud-service latency/TimeLimiter demo.
-#   6a. Baseline - one fresh authorisation with fraud-service healthy (fast, real fraud check).
-#   6b. Set fraud-service mode to DELAY_2S, then send a *comparable* authorisation (same
-#       account/currency/amount as 6a) with a different fresh idempotency key. auth-service's
+# Phase 7: fraud-service latency/TimeLimiter demo.
+#   7a. Baseline - one fresh authorisation with fraud-service healthy (fast, real fraud check).
+#   7b. Set fraud-service mode to DELAY_2S, then send a *comparable* authorisation (same
+#       account/currency/amount as 7a) with a different fresh idempotency key. auth-service's
 #       fraudService TimeLimiter is 250ms, so the 2s delay times out and is treated as
 #       UNAVAILABLE -> DECLINE (this account is not in fraud.fail-open.trusted-account-ids).
-#       fraud-service is deliberately left in DELAY_2S mode afterwards - phase 7 resets it.
+#       fraud-service is deliberately left in DELAY_2S mode afterwards - phase 8 resets it.
 # ---------------------------------------------------------------------------
 run_fraud_latency_baseline_step() {
   echo
-  echo "### Phase 6a: baseline - fresh authorisation with fraud-service healthy (fast, real fraud check) ###"
+  echo "### Phase 7a: baseline - fresh authorisation with fraud-service healthy (fast, real fraud check) ###"
   local pair="${ACCOUNTS[0]}"
   FRAUD_LATENCY_DEMO_CURRENCY="${pair%%:*}"
   FRAUD_LATENCY_DEMO_ACCOUNT_ID="${pair##*:}"
@@ -685,12 +692,12 @@ run_fraud_latency_baseline_step() {
   echo "[$ikey]   ^-- expect status=AUTHORISED via a fast, real fraud-service check"
 
   echo
-  echo ">>> Phase 6a complete: 1 fraud-latency-demo baseline auth sent (fast, real fraud check)."
+  echo ">>> Phase 7a complete: 1 fraud-latency-demo baseline auth sent (fast, real fraud check)."
 }
 
 run_fraud_latency_timeout_step() {
   echo
-  echo "### Phase 6b: setting fraud-service mode to DELAY_2S (every /fraud/check call now sleeps 2s) ###"
+  echo "### Phase 7b: setting fraud-service mode to DELAY_2S (every /fraud/check call now sleeps 2s) ###"
   echo "    (auth-service's fraudService TimeLimiter is 250ms, so this call times out and is"
   echo "     treated as UNAVAILABLE - expect DECLINE, since this account is not in"
   echo "     fraud.fail-open.trusted-account-ids)"
@@ -704,26 +711,26 @@ run_fraud_latency_timeout_step() {
   send_authorisation "$ikey" "$account_id" "$currency"
   echo "[$ikey]   ^-- expect status=DECLINED (reason includes FRAUD_SERVICE_UNAVAILABLE, via DELAY_2S timeout)"
   echo
-  echo "    (fraud-service intentionally left in DELAY_2S mode here - phase 7 resets it to OFF)"
+  echo "    (fraud-service intentionally left in DELAY_2S mode here - phase 8 resets it to OFF)"
 
   echo
-  echo ">>> Phase 6b complete: 1 fraud-latency-demo DELAY_2S timeout auth sent (DECLINE expected); fraud-service left in DELAY_2S mode."
+  echo ">>> Phase 7b complete: 1 fraud-latency-demo DELAY_2S timeout auth sent (DECLINE expected); fraud-service left in DELAY_2S mode."
 }
 
 # ---------------------------------------------------------------------------
-# Phase 7: fraud-service recovery. Resets fraud-service mode to OFF, actively drives the
-# fraudService circuit breaker to a confirmed CLOSED state (reusing the same
-# wait_for_fraud_circuit_breaker_closed helper as phase 3c), then sends a few fresh
-# authorisations that each perform a real, successful fraud-service check end to end.
+# Phase 8: fraud-service recovery. Resets fraud-service mode to OFF, then simply fires a few fresh
+# authorisations with fraud-service healthy - no active wait_for_fraud_circuit_breaker_closed
+# polling here (that helper's warm-up retry sleeps CB_RECOVERY_SETTLE_SECONDS, deliberately >
+# the 15s waitDurationInOpenState, which adds a highly visible 15s+ pause if the breaker happens to
+# still be OPEN/HALF_OPEN from an earlier phase). Instead, mirroring phase 3b's approach, we just
+# send real traffic and let resilience4j's own half-open -> closed transition play out naturally;
+# any requests sent while still recovering will simply show as non-AUTHORISED.
 # ---------------------------------------------------------------------------
 run_fraud_recovery_phase() {
   echo
   echo "### Resetting fraud-service mode to OFF after the latency demo ###"
   set_fraud_mode "OFF"
 
-  echo "    (driving the fraudService circuit breaker to a confirmed CLOSED state before the"
-  echo "     final verification requests below)"
-  wait_for_fraud_circuit_breaker_closed "$CB_RECOVERY_SETTLE_MAX_ATTEMPTS" "$CB_RECOVERY_SETTLE_SECONDS"
 
   echo
   echo "### Sending ${FRAUD_RECOVERY_REQUEST_COUNT} fresh authorisations with fraud-service healthy ###"
@@ -741,7 +748,7 @@ run_fraud_recovery_phase() {
   done
 
   echo
-  echo ">>> Phase 7 complete: ${FRAUD_RECOVERY_REQUEST_COUNT} fraud-recovery auths sent (real, successful fraud checks); fraud-service failure-mode reset to OFF."
+  echo ">>> Phase 8 complete: ${FRAUD_RECOVERY_REQUEST_COUNT} fraud-recovery auths sent (real, successful fraud checks); fraud-service failure-mode reset to OFF."
 }
 
 # ---------------------------------------------------------------------------
@@ -777,22 +784,24 @@ if [ "$START_STEP" -le 3 ]; then
 
   run_circuit_breaker_recovery_phase
   wait_for_next_step
+fi
 
+if [ "$START_STEP" -le 4 ]; then
   run_fail_open_demo_phase
   wait_for_next_step
 fi
 
-if [ "$START_STEP" -le 4 ]; then
+if [ "$START_STEP" -le 5 ]; then
   run_dedup_events_phase
   wait_for_next_step
 fi
 
-if [ "$START_STEP" -le 5 ]; then
+if [ "$START_STEP" -le 6 ]; then
   run_dlt_phase
   wait_for_next_step
 fi
 
-if [ "$START_STEP" -le 6 ]; then
+if [ "$START_STEP" -le 7 ]; then
   run_fraud_latency_baseline_step
   wait_for_next_step
 
@@ -800,7 +809,7 @@ if [ "$START_STEP" -le 6 ]; then
   wait_for_next_step
 fi
 
-if [ "$START_STEP" -le 7 ]; then
+if [ "$START_STEP" -le 8 ]; then
   run_fraud_recovery_phase
 fi
 
@@ -808,4 +817,3 @@ echo
 echo "==========================================="
 echo "All requested steps (starting from step ${START_STEP}) are complete - see the \">>>\" summary line"
 echo "printed after each step above for exactly what that step did."
-

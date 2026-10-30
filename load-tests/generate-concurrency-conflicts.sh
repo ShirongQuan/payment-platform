@@ -2,8 +2,9 @@
 #
 # generate-concurrency-conflicts.sh
 #
-# Generates test data for the Grafana metric:
-#   sum by (operation, type) (rate(auth_concurrency_conflict_total{application="auth-service"}[5m]) * 60)
+# Generates test data for the Grafana "Concurrency conflicts/min by operation and conflict type"
+# panel (Payment Platform Overview dashboard), backed by the auth_concurrency_conflict_total
+# counter.
 #
 # This script exercises the type=idempotency_race concurrency conflict: two (or more) requests
 # share the same idempotency key and race on the unique DB constraint
@@ -213,8 +214,8 @@ echo
 echo "Verify with:"
 echo "  curl -s ${BASE_URL}/actuator/prometheus | grep auth_concurrency_conflict_total"
 echo
-echo "Grafana/Prometheus query:"
-echo "  sum by (operation, type) (rate(auth_concurrency_conflict_total{application=\"auth-service\"}[5m]) * 60)"
+echo "Or view the \"Concurrency conflicts/min by operation and conflict type\" panel in the"
+echo "Payment Platform Overview Grafana dashboard."
 
 
 

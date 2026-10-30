@@ -17,6 +17,7 @@ gateway, reconciliation, notifications, and user-facing applications.
 
 ## Table of Contents
 
+- [Video Walkthrough](#video-walkthrough)
 - [What the Platform Implements](#what-the-platform-implements)
 - [Architecture at a Glance](#architecture-at-a-glance)
 - [Key Design Highlights](#key-design-highlights)
@@ -30,9 +31,25 @@ gateway, reconciliation, notifications, and user-facing applications.
 - [Quick Start](#quick-start)
 - [Demo Journey](#demo-journey)
 - [Implementation Status & Roadmap](#implementation-status--roadmap)
+- [Planned Next-Phase Architecture](#planned-next-phase-architecture)
 - [Documentation Map](#documentation-map)
 
 ---
+
+## Video Walkthrough
+
+Watch a three-part walkthrough of the platform, from architectural decisions to the running
+payment flow and controlled failure demonstrations.
+
+**[Watch the complete Payment Platform series on YouTube](https://www.youtube.com/playlist?list=PLVAJpLTO0170)**
+
+| Video                                                                            | Focus                                                                                                                                                                              |
+|----------------------------------------------------------------------------------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| **[Part 1 — Architecture & Design Decisions](https://youtu.be/84txg_brRh0)**     | Service boundaries, data ownership, synchronous and asynchronous coordination, and a repository walkthrough                                                                        |
+| **[Part 2 — Service Interactions & Payment Flow](https://youtu.be/5QawP-dBzLg)** | Follow a payment through authorisation, the local transaction, transactional outbox, Kafka, and ledger processing; demonstrate safe request replay                                 |
+| **[Part 3 — Testing, Resilience & Observability](https://youtu.be/wtCteqRImJg)** | Live demonstrations of idempotency, concurrency, circuit-breaker failure and recovery, controlled fail-open, consumer deduplication, dead-letter handling, and distributed tracing |
+
+Each video includes chapters so you can jump directly to a topic or demonstration.
 
 ## What the Platform Implements
 
@@ -112,7 +129,6 @@ The architecture documentation follows a C4 model:
   policy for explicitly eligible requests
 - Kafka consumers use retry and dead-letter handling so downstream processing failures remain
   isolated from the originating payment transaction
--
 
 📄 [Concurrency & Consistency](docs/reliability/concurrency-consistency.md) · [Resilience Patterns](docs/reliability/resilience-patterns.md)
 
@@ -287,7 +303,7 @@ For the full container-level view, see
 the <a href="https://raw.githubusercontent.com/ShirongQuan/payment-platform/main/docs/architecture/diagrams/containers-next-phase.svg">
 detailed C4 next-phase container diagram</a>, and
 **[Containers — Next Phase](docs/architecture/containers.md#next-phase-planned)**.
-  
+
 - **API Gateway** — single ingress for routing, authN/authZ scope enforcement, and infra-level rate limiting
   in front of `auth-service`/`ledger-service`
 - **Identity Provider (OIDC)** — centralized authn/authz issuing customer- vs. admin-scoped tokens, validated

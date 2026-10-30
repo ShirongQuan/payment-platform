@@ -40,6 +40,14 @@ public final class RequestHashing {
     return builder.toString();
   }
 
+  /**
+   * Computes the SHA-256 digest of {@code value} (UTF-8 encoded) and returns it as a lowercase hex
+   * string.
+   *
+   * @param value the input to hash, typically the output of {@link #canonicalJoin(String...)}
+   * @return the lowercase hex-encoded SHA-256 digest
+   * @throws IllegalStateException if the SHA-256 algorithm is unavailable
+   */
   public static String sha256Hex(String value) {
     try {
       byte[] digest =

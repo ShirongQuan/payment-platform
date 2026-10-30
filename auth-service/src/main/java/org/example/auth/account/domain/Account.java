@@ -10,6 +10,7 @@ import java.util.Objects;
 import java.util.UUID;
 import lombok.Getter;
 import org.example.auth.common.OperationType;
+import org.example.auth.common.exception.AccountNotActiveException;
 import org.example.auth.common.exception.CurrencyMismatchException;
 import org.example.auth.common.exception.InsufficientFundException;
 import org.example.auth.common.exception.InvalidCurrencyException;
@@ -79,7 +80,7 @@ public class Account {
    * @throws IllegalArgumentException if amount is zero or negative
    */
   public void deposit(BigDecimal amount, String currencyCode) {
-    // TODO: validate account status (e.g. reject deposits into LOCKED/INACTIVE accounts)
+    validateActiveStatus();
     validateCurrency(currencyCode);
     validateAmount(amount);
     this.availableBalance = this.availableBalance.add(amount);
@@ -93,7 +94,7 @@ public class Account {
    * @throws InsufficientFundException if available balance is less than the requested amount
    */
   public void reserve(BigDecimal amount, String currencyCode) {
-    // TODO: validate account status
+    validateActiveStatus();
     validateCurrency(currencyCode);
     validateAmount(amount);
     if (availableBalance.compareTo(amount) < 0) {
@@ -112,7 +113,7 @@ public class Account {
    * @throws InsufficientFundException if reserved balance is less than the requested amount
    */
   public void capture(BigDecimal amount, String currencyCode) {
-    // TODO: validate account status
+    validateActiveStatus();
     validateCurrency(currencyCode);
     validateAmount(amount);
     if (reservedBalance.compareTo(amount) < 0) {
@@ -130,7 +131,7 @@ public class Account {
    * @throws InsufficientFundException if reserved balance is less than the requested amount
    */
   public void reverse(BigDecimal amount, String currencyCode) {
-    // TODO: validate account status
+    validateActiveStatus();
     validateCurrency(currencyCode);
     validateAmount(amount);
     if (reservedBalance.compareTo(amount) < 0) {
@@ -145,6 +146,18 @@ public class Account {
     String normalizedCurrency = normalizeAndValidateCurrency(currencyCode);
     if (!(this.currencyCode.equals(normalizedCurrency))) {
       throw new CurrencyMismatchException(this.currencyCode, currencyCode);
+    }
+  }
+
+  /**
+   * Asserts this account is {@link AccountStatus#ACTIVE}, rejecting mutating operations on
+   * LOCKED (or any other non-ACTIVE) accounts.
+   *
+   * @throws AccountNotActiveException if the account's status is not ACTIVE
+   */
+  private void validateActiveStatus() {
+    if (status != AccountStatus.ACTIVE) {
+      throw new AccountNotActiveException(id, status);
     }
   }
 }

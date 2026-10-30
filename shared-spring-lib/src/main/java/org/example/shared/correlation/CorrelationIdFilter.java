@@ -21,6 +21,15 @@ import org.springframework.web.filter.OncePerRequestFilter;
 @Slf4j
 public class CorrelationIdFilter extends OncePerRequestFilter {
 
+  /**
+   * Resolves (or generates) the correlation ID for the current request, stores it in the MDC and
+   * on the response header for the duration of the request, then restores the prior MDC value
+   * once the downstream filter chain completes.
+   *
+   * @param request the inbound HTTP request, inspected for the correlation ID header
+   * @param response the outbound HTTP response, echoed with the resolved correlation ID header
+   * @param filterChain the remaining filter chain to invoke
+   */
   @Override
   protected void doFilterInternal(
       HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
