@@ -53,6 +53,11 @@ Current DB index in `auth-service` enforces this boundary:
 - `uq_authorisation_event_account_eventtype_idempotency` on
   `authorisation_event(account_id, event_type, idempotency_key)`
 
+Note: this DB boundary always scopes on `account_id`, including for capture/reverse. ADR 0007's Redis
+fast-path cache additionally scopes capture/reverse on `authorisationId` (finer-grained than the DB tuple) —
+see [ADR 0007: Key scope](./0007-idempotency-store-and-key-policy.md#key-scope) for why that divergence exists
+and why it does not weaken the correctness boundary described here.
+
 ## 4) Request Replay Semantics
 
 The API behaviour is deterministic for retries:
@@ -84,17 +89,41 @@ The API behaviour is deterministic for retries:
 
 ## 5) Concurrency Handling
 
-When two requests race at the same time:
+Two distinct race scenarios exist under concurrent requests, resolved by two different mechanisms. They
+must not be conflated: only one of them can legitimately resolve to a replayed response.
 
-- both may pass early checks, but DB constraints/version checks decide the winner
-- unique constraints prevent duplicate idempotency tuples from committing twice
-- optimistic locking/version updates protect state transitions on shared rows
-- loser path is recovered by re-reading persisted state/event:
-    - if equivalent request already won, return replayed success
-    - if conflicting request won, return conflict/error
+**A. Same-key race (idempotency race)** — two requests carrying the *same* idempotency key for the same
+operation (and same scope: `account_id`/`event_type`, or additionally `authorisation_id` at the Redis
+fast-path layer) race to commit:
 
-`auth-service` wraps persistence races (for example, `DataIntegrityViolationException`) into explicit idempotency race
-handling and resolves the final API response from committed records.
+- both may pass earlier checks (cache miss, DB pre-check), but the unique constraint
+  (`uq_authorisation_event_account_eventtype_idempotency`) allows only one insert to succeed
+- the loser's insert fails the unique constraint; `auth-service` wraps this persistence failure (for
+  example, `DataIntegrityViolationException`) into an explicit `ConcurrentIdempotencyRaceException`
+- recovery: re-read the now-committed row for that key
+    - if the winning request's payload is equivalent (same semantic request) -> return the replayed
+      success response, no duplicate side effect
+    - if it is not equivalent -> return `IdempotencyConflictException` (`409 Conflict`)
+
+**B. Different-key race on the same account (optimistic-lock conflict)** — two *different*, legitimately-keyed
+requests race to mutate the same account's balance (for example, two concurrent authorise calls with different
+idempotency keys, or an authorise racing a reverse on the same account):
+
+- the `@Version` column on `AccountEntity` detects the lost update as an
+  `ObjectOptimisticLockingFailureException`
+- `auth-service` translates this into `AccountConcurrencyConflictException` -> `409 Conflict`
+- there is **no replay** here: the two requests are semantically different (different idempotency keys), so
+  the loser is simply told to retry/conflict, never handed someone else's result
+
+Only scenario A can legitimately resolve to "return replayed success" — because only a same-key race
+means the two racing requests might represent the identical logical operation. Scenario B's losing request
+is, by definition, a different operation (different key) than the winner, so re-reading committed state and
+replaying would silently return the wrong response; it must always surface as a conflict for the caller to
+retry.
+
+For same-key races, `auth-service` translates persistence uniqueness failures into explicit idempotency-race handling
+and resolves replay or conflict from committed records. Different-key optimistic-lock failures return a concurrency
+conflict rather than replaying another operation's response.
 
 ## 6) Downstream Event Idempotency
 
@@ -113,6 +142,9 @@ Auth API maps failures to stable HTTP semantics:
 
 - `IdempotencyConflictException` -> `409 Conflict`
 - `AuthorisationIllegalStateException` -> `409 Conflict`
+- `AccountConcurrencyConflictException` -> `409 Conflict` (different-key optimistic-lock race on the same
+  account, see [5) Concurrency Handling](#5-concurrency-handling) scenario B — distinct from
+  `IdempotencyConflictException`, which is a same-key/different-payload conflict)
 - `AccountNotFoundException` / `AuthorisationNotFoundException` -> `404 Not Found`
 - request validation failures (bean validation / malformed payload) -> `400 Bad Request`
 
@@ -120,13 +152,16 @@ Auth API maps failures to stable HTTP semantics:
 
 The design places correctness controls at the boundary where each concern is owned:
 
-- `auth-service` uses operation-scoped request idempotency, database uniqueness, and optimistic locking for payment commands
+- `auth-service` uses operation-scoped request idempotency, database uniqueness, and optimistic locking for payment
+  commands
 - `ledger-service` uses `eventId` deduplication at the asynchronous consumer boundary
 - concurrency is resolved through service-owned database state rather than a distributed lock shared across services
-- the platform targets recoverable at-least-once event delivery with consumer deduplication rather than requiring an end-to-end distributed exactly-once transaction
-- idempotency rules remain explicit per operation flow, keeping replay and conflict semantics aligned with each payment command
+- the platform targets recoverable at-least-once event delivery with consumer deduplication rather than requiring an
+  end-to-end distributed exactly-once transaction
+- idempotency rules remain explicit per operation flow, keeping replay and conflict semantics aligned with each payment
+  command
 - partial capture and partial reverse are planned lifecycle extensions; see
-  [roadmap: Production Considerations](../roadmap.md#6-production-considerations)
+  [roadmap: Production Considerations](../roadmap.md#5-future-engineering-directions)
 
 ## 9) Alternatives Considered
 

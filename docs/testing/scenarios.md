@@ -19,9 +19,9 @@
 
 ## 1) How to use this catalogue
 
-- each scenario below is a required proof point, not just an example
+- each scenario below is a required proof point in the **target coverage policy**, not automatically evidence of an existing passing test
 - "expected DB changes" refer to `auth-service` tables unless noted; ledger projections are in `ledger-service`
-- map each scenario to one or more test types: `unit`, `integration`, `e2e`
+- map each scenario to one or more test types: `unit`, `integration`, `e2e`; verify implementation and passing results separately against test classes, scripts and CI artefacts
 
 ## 2) Business-critical scenarios
 
@@ -70,7 +70,7 @@
 ### S4) Duplicate idempotency key with different payload
 
 - **Preconditions:** first request committed for `(accountId, idempotencyKey)`
-- **Input/API:** send same key but different amount/currency/account payload
+- **Input/API:** send the same key and operation within the same account scope, but change a relevant payload field (for example, amount). A different account may represent a different idempotency scope and must not automatically be treated as a conflict.
 - **Expected DB changes:**
     - no second mutation on `account`
     - no second business event accepted for the conflicting payload
@@ -92,9 +92,9 @@
 - **Expected API response/status:** `200 OK`, body includes `status=CAPTURED`
 - **Test types:** `unit`, `integration`, `e2e`
 
-### S6) Refund/reversal flow (MVP = reversal)
+### S6) Reversal of an uncaptured authorisation
 
-- **Preconditions:** authorisation exists in `AUTHORISED`
+- **Preconditions:** authorisation exists in `AUTHORISED` (not yet captured). The MVP releases an existing reservation; it does **not** implement a post-capture refund.
 - **Input/API:** `POST /authorisations/{authorisationId}/reversals` with reversal `idempotencyKey`
 - **Expected DB changes:**
     - `authorisation.status` transitions `AUTHORISED -> REVERSED`
@@ -106,23 +106,49 @@
 - **Expected API response/status:** `200 OK`, body includes `status=REVERSED`
 - **Test types:** `unit`, `integration`, `e2e`
 
-### S7) Timeout/retry and eventual consistency
+### S7) Fraud timeout and idempotent retry
 
-- **Preconditions:** fraud-service slow/error mode or temporary dependency issue; outbox scheduler active
+- **Preconditions:** fraud-service slow/error mode; authorisation request uses a stable idempotency key
 - **Input/API:** `POST /authorisations` during timeout window; optionally retry same request idempotently
 - **Expected DB changes:**
     - auth result follows policy (`DECLINED` by default when fraud unavailable, unless fail-open allow-list applies)
     - exactly one committed business outcome for same idempotency key
-    - outbox rows retry until publish succeeds or failure path is visible
-    - downstream ledger eventually converges once event is consumed (or failure appears in DLT path)
+    - the committed authorisation outcome and corresponding outbox row are not duplicated by a retry
 - **Expected events:**
-    - normal event on success path, or
-    - DLT event evidence when consumer retries are exhausted for malformed/non-retryable records
+    - an authorisation outcome event is enqueued for publication according to the normal outbox policy; fraud timeouts do not themselves produce ledger DLT records
 - **Expected API response/status:** deterministic status per policy (`200` decline/approve, or mapped errors for invalid
   requests)
 - **Test types:** `integration`, `e2e`
 
+### S8) Outbox publication delayed or exhausted
+
+- **Preconditions:** PostgreSQL available; Kafka unavailable or publishing deliberately failing.
+- **Input/API:** commit a payment operation while publication is disrupted.
+- **Expected DB changes:** the domain mutation and outbox row commit atomically; no duplicate
+  financial side effect occurs. Pending rows follow the configured backoff; after the configured
+  five-attempt limit, a row may become terminally `FAILED`.
+- **Expected events:** on recoverable failure, publication resumes and the ledger can catch up.
+  Terminal `FAILED` rows require operator investigation and controlled requeue; recovery is not
+  automatic merely because Kafka returns.
+- **Expected API response/status:** the synchronous payment response follows the committed domain
+  outcome, independently of subsequent Kafka publication.
+- **Test types:** `integration`, `e2e` (fault-injection verification).
+
+### S9) Ledger consumer failure and DLT routing
+
+- **Preconditions:** a malformed/non-retryable event or a retry-exhausting consumer failure.
+- **Input/API:** inject a controlled record into `auth.events` in an isolated test environment.
+- **Expected DB changes:** no successful ledger projection for the failed event; a DLT publication
+  is evidence of abandoned normal processing, not a completed business projection.
+- **Expected events:** retryable errors receive the configured consumer retries (three retries
+  after the initial attempt); non-retryable records go directly to `auth.events.ledger.dlt`.
+- **Expected API response/status:** not applicable to the asynchronous consumer operation.
+- **Test types:** `integration`, `e2e`.
+
 ## 3) Scenario-to-test-type matrix
+
+The matrix below specifies **required coverage (target policy)**, not confirmed implemented
+coverage. Record concrete test names and passing CI or execution evidence separately.
 
 | Scenario                              | Unit                       | Integration | E2E      |
 |---------------------------------------|----------------------------|-------------|----------|
@@ -132,12 +158,14 @@
 | S4 Duplicate different payload        | Required                   | Required    | Required |
 | S5 Capture after authorisation        | Required                   | Required    | Required |
 | S6 Reversal flow                      | Required                   | Required    | Required |
-| S7 Timeout/retry/eventual consistency | Optional helper unit tests | Required    | Required |
+| S7 Fraud timeout/idempotent retry     | Optional helper unit tests | Required    | Required |
+| S8 Outbox delayed/terminal failure    | Optional helper unit tests | Required    | Required |
+| S9 Consumer retry/DLT                 | Optional helper unit tests | Required    | Required |
 
 ## 4) Exit criteria for scenario coverage
 
-- every `Required` cell above has at least one automated test in the corresponding level
+- target: every `Required` cell above has at least one automated test in the corresponding level; record test class/script and a passing result before marking it verified
 - scenario assertions include API contract + state mutation + event/outbox verification
-- failing scenario tests block merge once CI gates are enabled (see `docs/testing/strategy.md`)
+- failing scenario tests block merge only when the corresponding CI jobs and required branch-protection checks are enabled (see `docs/testing/strategy.md`)
 
 

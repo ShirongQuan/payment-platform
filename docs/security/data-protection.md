@@ -16,22 +16,23 @@
 
 ## Data Classification
 
-**Current**: this platform's data model, as implemented, holds three classes of data — no
-regulated personal PII (name, card number, email, address) is collected or stored anywhere in the
-current schema:
+**Current**: the MVP does not intentionally collect cardholder data (such as PAN/CVV) or
+customer-identifying fields such as names and email addresses. However, it processes IP addresses
+and identifiers that may be linkable to individuals. These may constitute **personal data** under
+applicable data-protection law (including UK GDPR), depending on context and the information
+reasonably available to identify a person. The current data model groups information as follows:
 
 | Class                         | Fields                                                                                                                                                                                                                                  | Where                                                           |
 |-------------------------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|-----------------------------------------------------------------|
 | **Financial**                 | `available_balance`, `reserved_balance` (`account`); `amount`, `currency_code`, `merchant_reference` (`authorisation` / `authorisation_event`); `amount`, projected `balance`, raw event payloads (`ledger_entry` / `ledger_event_log`) | `auth_db`, `ledger_db`                                          |
-| **Behavioral / PII-adjacent** | `ip_address`, `risk_score`, `decision` (`fraud_evaluation`)                                                                                                                                                                             | `fraud_db` only                                                 |
+| **Behavioural / potentially personal** | `ip_address`, `risk_score`, `decision` (`fraud_evaluation`)                                                                                                                                                                             | `fraud_db` only                                                 |
 | **Operational / correlation** | `correlation_id`, `event_id`, `idempotency_key`, `traceparent`, timestamps                                                                                                                                                              | `auth_db`, `fraud_db`, `ledger_db`, Kafka headers, logs, traces |
 
-**Next step**: no customer-identifying fields (name, email, physical address, card/account-holder
-number) exist in the schema today, so there is currently no dedicated "PII" data class requiring
-field-level masking/encryption beyond the IP address noted above. If customer-identifying fields
-are introduced (e.g. alongside the planned authentication work), this classification table will be
-revisited and a field-level encryption/masking review performed before storage — see
-[Roadmap](#roadmap).
+**Next step**: assess IP addresses, account identifiers, merchant references and correlation
+identifiers for linkability and data-minimisation needs now, not only when new customer fields are
+introduced. Review the classification and field-level protection requirements before introducing
+new identifying fields alongside authentication work — see [Roadmap](#roadmap). This document does
+not establish that the platform is outside data-protection obligations.
 
 ## Where Data Lives
 
@@ -44,7 +45,7 @@ revisited and a field-level encryption/masking review performed before storage �
 | **PostgreSQL — `ledger_db`** | `ledger_entry`, `ledger_event_log`, `processed_event` tables                                                                                                                                  |
 | **Redis**                    | `auth-service` idempotent-response cache (TTL-bounded, default 24h); `fraud-service` velocity-rule sliding-window counters (TTL = window + 5s)                                                |
 | **Kafka**                    | `auth.events` / `auth.events.ledger.dlt` topics — event payloads (amount, currency, merchant reference, event type) plus headers (`eventId`, `correlationId`, `traceparent`, `schemaVersion`) |
-| **Logs**                     | Structured console logs from all three services, including `traceId`, `spanId`, `correlationId`, and (in DEBUG-level authorisation logs) account ids/amounts                                  |
+| **Logs**                     | Plain-text console logs from all three services, including `traceId`, `spanId`, `correlationId`, and (in DEBUG-level authorisation logs) account ids/amounts                                  |
 | **Traces**                   | OpenTelemetry spans exported to an otel-collector → Tempo, correlated via W3C `traceparent` across the HTTP → fraud call → Kafka → ledger-consumer hops                                       |
 
 Each service only ever queries its own database — there is no cross-schema access
@@ -55,9 +56,10 @@ Each service only ever queries its own database — there is no cross-schema acc
 
 ### At rest
 
-- **Current scope**: at-rest encryption is planned for a future iteration. PostgreSQL and Redis run
-  without any at-rest encryption configuration in `infra/docker`/`infra/postgres` — data is stored
-  in plain form on the container volumes.
+- **Current scope**: application and Docker Compose configuration do not explicitly enable
+  storage encryption for PostgreSQL or Redis. Whether the host filesystem, disk or underlying
+  infrastructure encrypts the container volumes is deployment-dependent and has not been verified
+  as part of this MVP.
 - **Next step**: add transparent data encryption (TDE), volume-level encryption, or field-level
   encryption as infrastructure-layer hardening appropriate to the target deployment environment
   (e.g. cloud-managed encrypted volumes/KMS) — see
@@ -87,19 +89,22 @@ Each service only ever queries its own database — there is no cross-schema acc
 
 ## Logging Redaction/Masking Rules
 
-- **Current scope**: redaction/masking is planned as part of future compliance-hardening work and is
-  not yet applied. Structured logs (pattern:
-  `[traceId,spanId] [correlationId] ... message`, shared across all three services) can include
-  account ids and amounts at `DEBUG` level (e.g. `org.example.auth.authorisation: DEBUG` in
-  `auth-service`'s `application.yml`); `fraud_evaluation`-related IP addresses are not specifically
-  redacted in `fraud-service` logs either.
-- **Rationale for current state**: none of the fields currently logged are classified as regulated
-  PII (see [Data Classification](#data-classification)) — they are financial/operational
-  identifiers (account id, amount, currency) rather than customer-identifying data.
-- **Next step**: introduce a masking framework (e.g. Logback pattern converters that redact
-  specific fields) and a redaction rule set (e.g. mask IP address octets, mask any future
-  customer-identifying fields) as part of the compliance-hardening work, so that if
-  customer-identifying fields are added in future they are redacted by default — see
+- **Current scope**: services emit plain-text console logs with a pattern including
+  `[traceId,spanId] [correlationId]`; structured JSON logging is a target standard, not the
+  current format. Redaction/masking is not consistently implemented. At `DEBUG` level, logs may
+  include raw account identifiers and amounts (for example, `org.example.auth.authorisation` in
+  `auth-service`); fraud-related IP addresses are not consistently redacted either.
+- **Risk**: account identifiers, IP addresses and financial details can be sensitive even without
+  names or card numbers. Traces and telemetry exports require the same data-minimisation review.
+- **Target minimum-necessary policy (not yet enforced)**:
+    - Do not log PAN, CVV, passwords, tokens or secrets.
+    - Avoid raw account identifiers and IP addresses unless essential; mask or pseudonymise them
+      where practical, with access controls appropriate to the residual linkability.
+    - Restrict detailed payment-request logging to controlled development and test environments.
+    - Apply equivalent redaction rules to span attributes, events and exported telemetry.
+    - Review access, retention and incident handling for logs and traces.
+- **Next step**: implement and test redaction rules (for example, Logback converters or structured
+  logging filters) and review existing DEBUG statements before using real customer data — see
   [Audit & Compliance § Log Integrity](./audit-compliance.md#log-integritytamper-considerations)
   and [Roadmap](#roadmap).
 
@@ -112,10 +117,12 @@ Each service only ever queries its own database — there is no cross-schema acc
   expires after `idempotency.ttl-hours` (default 24h), and velocity-rule sliding-window counters
   expire after `window + 5s`. This is an operational/performance TTL, not a compliance-driven
   retention policy.
-- **Next step**: define a retention policy (how long financial/audit records must be kept vs. when
-  they can be archived or purged), a right-to-erasure/deletion workflow, and an archival policy for
-  the append-only `authorisation_event`/`ledger_event_log` audit tables, as part of the compliance
-  posture work — see
+- **Next step**: define a documented retention schedule for PostgreSQL records, Kafka topics,
+  Redis, application logs, Tempo traces, backups and exported datasets. Set appropriate archival,
+  access and deletion controls for the append-only `authorisation_event`/`ledger_event_log` tables.
+  Design data-subject request handling to assess applicable legal retention obligations and choose
+  deletion, anonymisation or restriction as appropriate; do not assume financial audit records can
+  always be erased immediately. This remains compliance-posture work — see
   [Audit & Compliance § Compliance Posture Statement](./audit-compliance.md#compliance-posture-statement)
   and [Roadmap](#roadmap). Marked explicitly as **TBD** rather than silently omitted.
 

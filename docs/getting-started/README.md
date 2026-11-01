@@ -5,8 +5,8 @@ prerequisites, the fastest way to get the platform running, and every supported 
 locally, along with configuration, verification, and troubleshooting.
 
 For a guided walkthrough of the payment flows once everything is running, see the
-[Demo Guide](./demo-guide.md). For day-to-day development workflows (IDE setup, building,
-testing, rebuilding images), see the [Development Guide](./development.md).
+[Demo Guide](demo-guide.md). For day-to-day development workflows (IDE setup, building,
+testing, rebuilding images), see the [Development Guide](development.md).
 
 ## Table of Contents
 
@@ -28,26 +28,27 @@ Required for every run mode:
   Prometheus, Grafana, Tempo, and (in two of the three run modes) the application services
   themselves.
 - **`curl`** — used throughout this guide and the demo for API checks.
+- **`jq`** — optional for this guide, but recommended for formatting JSON output and used by the demo commands.
 
 Additional tools, depending on run mode:
 
-| Tool                                                           | Needed for                                                                                                                                               |
-|----------------------------------------------------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------|
-| Java 21                                                        | Locally built images, IDE development                                                                                                                    |
-| Maven 3.9+                                                     | Locally built images, IDE development (the Docker build stage brings its own Maven, so host Maven is only required when building/running outside Docker) |
-| An IDE with Spring Boot support (IntelliJ IDEA, VS Code, etc.) | IDE development                                                                                                                                          |
+| Tool                                                           | Needed for                                                                                               |
+|----------------------------------------------------------------|----------------------------------------------------------------------------------------------------------|
+| Java 21                                                        | IDE/local JVM development; not needed on the host for Docker-only image builds                           |
+| Maven 3.9+                                                     | Local Maven builds, tests and service execution; Docker image builds supply Maven inside the build stage |
+| An IDE with Spring Boot support (IntelliJ IDEA, VS Code, etc.) | IDE development                                                                                          |
 
 Included at no extra setup cost — these web UIs are started automatically as part of the infra
 Docker Compose stack, so there is nothing to install; just open the URL once the stack is up:
 
-| UI                          | URL                                                                    | Purpose                                                        |
-|-----------------------------|------------------------------------------------------------------------|----------------------------------------------------------------|
-| pgAdmin                     | `http://localhost:5050` (login `admin@example.com` / `admin`)          | Browse Postgres schemas/tables without a CLI                   |
-| Kafka UI                    | `http://localhost:9091`                                                | Browse topics, partitions, and messages                        |
-| RedisInsight                | `http://localhost:5540`                                                | Browse Redis keys (idempotency cache, fraud velocity counters) |
-| Grafana                     | `http://localhost:3000` (login `admin` / `password` unless overridden) | Dashboards for metrics and traces                              |
-| Prometheus                  | `http://localhost:9090`                                                | Raw metrics/queries                                            |
-| Tempo (via Grafana Explore) | `http://localhost:3000` → Explore → Tempo datasource                   | Distributed traces                                             |
+| UI                          | URL                                                                    | Purpose                                                           |
+|-----------------------------|------------------------------------------------------------------------|-------------------------------------------------------------------|
+| pgAdmin                     | `http://localhost:5050` (login `admin@example.com` / `admin`)          | Browse Postgres schemas/tables; local-only example credentials    |
+| Kafka UI                    | `http://localhost:9091`                                                | Browse topics, partitions, and messages                           |
+| RedisInsight                | `http://localhost:5540`                                                | Browse Redis keys (idempotency cache, fraud velocity counters)    |
+| Grafana                     | `http://localhost:3000` (login `admin` / `password` unless overridden) | Dashboards for metrics and traces; local-only example credentials |
+| Prometheus                  | `http://localhost:9090`                                                | Raw metrics/queries                                               |
+| Tempo (via Grafana Explore) | `http://localhost:3000` → Explore → Tempo datasource                   | Distributed traces                                                |
 
 Optional local tools you may want to install yourself:
 
@@ -72,11 +73,18 @@ verification, cleanup) is documented once, further down this page.
 
 ## Quick Start with Pre-Published Images
 
-The fastest way to see the whole platform running, using published `shirongquan/*` images from
-Docker Hub — no build step required.
+From a fresh checkout, clone the repository and enter its root directory:
 
 ```bash
-cd /Users/shirongquan/Documents/Shirong/Projects/payment-platform
+git clone https://github.com/ShirongQuan/payment-platform.git
+cd payment-platform
+```
+
+All subsequent commands in these guides assume you are at the repository root unless noted otherwise.
+The fastest way to see the whole platform running uses published `shirongquan/*` images from
+Docker Hub — no local Java/Maven build step required.
+
+```bash
 docker compose -f infra/docker/docker-compose.yml -f infra/docker/docker-compose.app.yml up -d
 ```
 
@@ -91,7 +99,7 @@ AUTH_SERVICE_IMAGE=shirongquan/auth-service:1.0.0 \
 ```
 
 Once containers report healthy (see [Verify the Platform](#verify-the-platform)), jump straight to
-the [Demo Guide](./demo-guide.md).
+the [Demo Guide](demo-guide.md).
 
 ## Run with Locally Built Images
 
@@ -102,8 +110,7 @@ in the pre-published-image mode, but built from your working copy.
    that builds `shared-spring-lib` first, then the service itself):
 
    ```bash
-   cd /Users/shirongquan/Documents/Shirong/Projects/payment-platform
-   docker build -f auth-service/Dockerfile -t local/auth-service:dev .
+      docker build -f auth-service/Dockerfile -t local/auth-service:dev .
    docker build -f fraud-service/Dockerfile -t local/fraud-service:dev .
    docker build -f ledger-service/Dockerfile -t local/ledger-service:dev .
    ```
@@ -129,7 +136,7 @@ in the pre-published-image mode, but built from your working copy.
      docker compose -f infra/docker/docker-compose.yml -f infra/docker/docker-compose.app.yml up -d --no-deps auth-service
    ```
 
-See [Development Guide § Build Docker Images](./development.md#build-docker-images) for a
+See [Development Guide § Build Docker Images](development.md#build-docker-images) for a
 build-loop oriented walkthrough of this same mode.
 
 ## Run Services from an IDE
@@ -140,8 +147,7 @@ Spring Boot services run as local JVM processes you can attach a debugger to.
 1. Start only the infra stack (no application containers):
 
    ```bash
-   cd /Users/shirongquan/Documents/Shirong/Projects/payment-platform
-   docker compose -f infra/docker/docker-compose.yml up -d
+      docker compose -f infra/docker/docker-compose.yml up -d
    ```
 
 2. Run each service from the repository root, in its own terminal (or as an IDE run/debug
@@ -158,7 +164,7 @@ Spring Boot services run as local JVM processes you can attach a debugger to.
    properties to `localhost`, matching the ports the infra Compose file publishes to the host — no
    extra configuration is needed for this mode.
 
-See [Development Guide § IDE Setup](./development.md#ide-setup) for IDE-specific run/debug
+See [Development Guide § IDE Setup](development.md#ide-setup) for IDE-specific run/debug
 configuration tips.
 
 ## Configuration
@@ -205,7 +211,11 @@ curl -s http://localhost:9010/actuator/health | jq
 curl -s http://localhost:9020/actuator/health | jq
 ```
 
-Each should report `"status":"UP"`. Then confirm the platform accepts a request end-to-end:
+Each should report `"status":"UP"`. This checks individual application readiness, not end-to-end event delivery. To
+verify the full event pipeline, authorise a payment using the [Demo Guide](demo-guide.md), then confirm the event
+appears in Kafka and the ledger projection.
+
+Next, confirm the platform accepts a request:
 
 ```bash
 curl -sS -X POST "http://localhost:9000/accounts" \
@@ -215,7 +225,7 @@ curl -sS -X POST "http://localhost:9000/accounts" \
 
 A `200 OK` with a new `accountId` confirms auth-service, Postgres, and (implicitly) migrations are
 all working. For the full authorise/capture/reverse walkthrough, continue to the
-[Demo Guide](./demo-guide.md).
+[Demo Guide](demo-guide.md).
 
 Also useful:
 
@@ -232,9 +242,12 @@ Want to see what "working" looks like before you dig in yourself? See
 dashboard panels, and
 [Telemetry Guidelines § Correlating Logs, Metrics, and Traces](../observability/telemetry.md#6-correlating-logs-metrics-and-traces)
 for a worked example matching a log line to its trace and metric data point — also demonstrated live
-in the [Demo Guide § Correlate a Log Line to a Trace](./demo-guide.md#correlate-a-log-line-to-a-trace).
+in the [Demo Guide § Correlate a Log Line to a Trace](demo-guide.md#correlate-a-log-line-to-a-trace).
 
 ## Stop and Clean Up
+
+**Warning:** Commands using `down -v` remove persistent Compose-managed volumes, potentially including PostgreSQL, Kafka
+and Grafana state. Use them only when a complete local reset is intended.
 
 Stop containers but keep data volumes (Postgres data, Grafana state, etc.):
 

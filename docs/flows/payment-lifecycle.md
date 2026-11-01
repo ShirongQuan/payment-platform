@@ -34,7 +34,7 @@ authentication/authorisation, account-unlock flow).
 
 ## Lifecycle at a glance
 
-Source: [Payment Lifecycle State / Account Lock State](./README.md#payment-lifecycle-state--account-lock-state)
+Source: [Payment Lifecycle State / Account Lock State](README.md#payment-lifecycle-state--account-lock-state)
 
 This matches `AuthorisationStatus` exactly (`auth-service`): `AUTHORISED`, `CAPTURED`, `REVERSED`,
 `DECLINED`. Once `CAPTURED`, the authorisation is terminal. `DECLINED` is a terminal state reached
@@ -43,7 +43,7 @@ later.
 
 A second, account-level state machine runs alongside this one:
 
-Source: [Account Lock State](./README.md#payment-lifecycle-state--account-lock-state)
+Source: [Account Lock State](README.md#payment-lifecycle-state--account-lock-state)
 
 `AccountStatus` is `ACTIVE`/`LOCKED`. A `LOCKED` account rejects new authorisations
 (`reason=ACCOUNT_LOCKED`) before fraud-service is even called. Unlocking an account back to
@@ -54,24 +54,24 @@ on the roadmap.
 
 ## Sequence diagrams
 
-See the [Diagram Index](./README.md#diagram-index) for the embedded diagrams and what each one
+See the [Diagram Index](README.md#diagram-index) for the embedded diagrams and what each one
 covers:
 
 - Simplified happy-path overview (used in the root
-  README): [Payment Lifecycle Happy Path](./README.md#payment-lifecycle-happy-path)
-- Authorise (incl. fraud pre-check + account-lock gate): [Authorise Sequence](./README.md#authorise-sequence)
-- Capture: [Capture Sequence](./README.md#capture-sequence)
-- Reverse: [Reverse Sequence](./README.md#reverse-sequence)
-- Generic idempotency replay/conflict rules: [Idempotency Generic Sequence](./README.md#idempotency-generic-sequence)
-- Event publishing (auth-service outbox → Kafka): [Event Publishing Sequence](./README.md#event-publishing-sequence)
-- Event consuming (ledger-service projection): [Event Consuming Sequence](./README.md#event-consuming-sequence)
-- Outbox backlog detection/triage/recovery: [Outbox Backlog Recovery Flow](./README.md#outbox-backlog-recovery-flow)
+  README): [Payment Lifecycle Happy Path](README.md#payment-lifecycle-happy-path)
+- Authorise (incl. fraud pre-check + account-lock gate): [Authorise Sequence](README.md#authorise-sequence)
+- Capture: [Capture Sequence](README.md#capture-sequence)
+- Reverse: [Reverse Sequence](README.md#reverse-sequence)
+- Generic idempotency replay/conflict rules: [Idempotency Generic Sequence](README.md#idempotency-generic-sequence)
+- Event publishing (auth-service outbox → Kafka): [Event Publishing Sequence](README.md#event-publishing-sequence)
+- Event consuming (ledger-service projection): [Event Consuming Sequence](README.md#event-consuming-sequence)
+- Outbox backlog detection/triage/recovery: [Outbox Backlog Recovery Flow](README.md#outbox-backlog-recovery-flow)
 
 ---
 
 ## 1) Authorisation flow
 
-**Reference diagram:** [Authorise Sequence](./README.md#authorise-sequence)
+**Reference diagram:** [Authorise Sequence](README.md#authorise-sequence)
 
 ### Preconditions
 
@@ -89,7 +89,9 @@ covers:
 3. If the account is not `ACTIVE` (`LOCKED`/inactive), fraud-service is **not** called at all — the
    request is declined immediately (`ACCOUNT_LOCKED`/`ACCOUNT_INACTIVE`).
 4. Otherwise, auth-service calls fraud-service's `POST /fraud/check` synchronously (circuit
-   breaker + 250ms time limiter). An `APPROVE` proceeds to reserve funds; a `DECLINE` (including
+   breaker + 500ms time limiter, see
+   [ADR 0008: Resilience4j circuit breaker policy](../decisions/0008-resilience4j-circuit-breaker-policy.md)).
+   An `APPROVE` proceeds to reserve funds; a `DECLINE` (including
    fraud-service being unavailable, unless a fail-open policy applies) short-circuits to `DECLINED`
    without touching the account balance.
 5. If fraud approved: reserve the requested amount (`availableBalance -= amount`,
@@ -118,12 +120,13 @@ covers:
 
 ## 2) Capture flow
 
-**Reference diagram:** [Capture Sequence](./README.md#capture-sequence)
+**Reference diagram:** [Capture Sequence](README.md#capture-sequence)
 
 ### Preconditions
 
 - Authorisation exists and is currently `AUTHORISED` (capture from any other status is rejected).
-- Capture request provides `idempotencyKey`, scoped to `(authorisationId, idempotencyKey)`.
+- Capture request provides `idempotencyKey`; the request/cache scope includes `authorisationId`, while durable event
+  uniqueness uses `(account_id, event_type, idempotency_key)`.
 
 ### Expected behaviour
 
@@ -146,7 +149,7 @@ covers:
 
 ## 3) Reverse flow
 
-**Reference diagram:** [Reverse Sequence](./README.md#reverse-sequence)
+**Reference diagram:** [Reverse Sequence](README.md#reverse-sequence)
 
 ### Current status
 
@@ -159,7 +162,8 @@ to the available balance.
   except a replay of an already-`REVERSED` authorisation with the same `idempotencyKey`).
 - Reverse request provides `idempotencyKey` and `reasonCode`
   (`AuthorisationEventReason`, e.g. `CUSTOMER_REQUEST`/`MERCHANT_REQUEST`), scoped to
-  `(authorisationId, idempotencyKey)`.
+  `(authorisationId, idempotencyKey)` for request/cache lookup; durable event uniqueness uses
+  `(account_id, event_type, idempotency_key)`.
 
 ### Expected behaviour
 
@@ -182,17 +186,17 @@ to the available balance.
 
 ## 4) Ledger projection (consume side)
 
-**Reference diagram:** [Event Consuming Sequence](./README.md#event-consuming-sequence)
+**Reference diagram:** [Event Consuming Sequence](README.md#event-consuming-sequence)
 
-ledger-service consumes `auth.events` and projects three of the four event types into
-ledger entries + an event log:
+ledger-service consumes `auth.events`. Three of the four event types produce normalised
+ledger entries; raw event-log retention is a separate concern:
 
-| Event type                 | Ledger-side handling                                                             |
-|----------------------------|----------------------------------------------------------------------------------|
-| `AUTHORISATION_AUTHORISED` | Projected (`AuthorisationAuthorisedHandler`)                                     |
-| `AUTHORISATION_CAPTURED`   | Projected (`AuthorisationCapturedHandler`)                                       |
-| `AUTHORISATION_REVERSED`   | Projected (`AuthorisationReversedHandler`)                                       |
-| `AUTHORISATION_DECLINED`   | Intentionally skipped — no ledger entry needed since balances were never touched |
+| Event type                 | Ledger-side handling                                                                                                            |
+|----------------------------|---------------------------------------------------------------------------------------------------------------------------------|
+| `AUTHORISATION_AUTHORISED` | Projected (`AuthorisationAuthorisedHandler`)                                                                                    |
+| `AUTHORISATION_CAPTURED`   | Projected (`AuthorisationCapturedHandler`)                                                                                      |
+| `AUTHORISATION_REVERSED`   | Projected (`AuthorisationReversedHandler`)                                                                                      |
+| `AUTHORISATION_DECLINED`   | No normalised `ledger_entry` is created because no funds moved. Raw audit-log retention depends on the consumer implementation. |
 
 Every projected event is deduplicated by `eventId` via `processed_event` (`INSERT ... ON CONFLICT
 DO NOTHING`), giving effectively-once projection over Kafka's at-least-once delivery. A genuinely
@@ -204,12 +208,12 @@ backoff before falling back to the DLT.
 
 ## Step-to-data/event mapping
 
-| Flow step                  | Primary write(s)                                                | Outbox event               | Ledger-side expectation                          |
-|----------------------------|-----------------------------------------------------------------|----------------------------|--------------------------------------------------|
-| Authorise → funds reserved | authorisation (`AUTHORISED`) + account reservation              | `AUTHORISATION_AUTHORISED` | Ledger entry + event log projected               |
-| Authorise → declined       | authorisation (`DECLINED`) only (+ account lock, if applicable) | `AUTHORISATION_DECLINED`   | Skipped — no ledger entry needed (see section 4) |
-| Capture accepted           | authorisation (`CAPTURED`) + reserved-balance debit             | `AUTHORISATION_CAPTURED`   | Ledger entry + event log projected               |
-| Reverse accepted           | authorisation (`REVERSED`) + reserved→available release         | `AUTHORISATION_REVERSED`   | Ledger entry + event log projected               |
+| Flow step                  | Primary write(s)                                                | Outbox event               | Ledger-side expectation                                                    |
+|----------------------------|-----------------------------------------------------------------|----------------------------|----------------------------------------------------------------------------|
+| Authorise → funds reserved | authorisation (`AUTHORISED`) + account reservation              | `AUTHORISATION_AUTHORISED` | Ledger entry + event log projected                                         |
+| Authorise → declined       | authorisation (`DECLINED`) only (+ account lock, if applicable) | `AUTHORISATION_DECLINED`   | No normalised ledger entry; audit-log handling is separate (see section 4) |
+| Capture accepted           | authorisation (`CAPTURED`) + reserved-balance debit             | `AUTHORISATION_CAPTURED`   | Ledger entry + event log projected                                         |
+| Reverse accepted           | authorisation (`REVERSED`) + reserved→available release         | `AUTHORISATION_REVERSED`   | Ledger entry + event log projected                                         |
 
 ---
 
@@ -222,7 +226,7 @@ backoff before falling back to the DLT.
   payment-critical path); extending idempotency to them is tracked on the roadmap.
 
 See also: [`../api/README.md#idempotency`](../api/README.md#idempotency) and
-[Idempotency Generic Sequence](./README.md#idempotency-generic-sequence) for the generic replay/conflict decision
+[Idempotency Generic Sequence](README.md#idempotency-generic-sequence) for the generic replay/conflict decision
 logic shared by every idempotent endpoint.
 
 ---
@@ -231,9 +235,10 @@ logic shared by every idempotent endpoint.
 
 For each lifecycle step, verify:
 
-- Trace span continuity across request → fraud-service call → persistence → outbox publish
-  (OpenTelemetry traces exported to Tempo; `traceparent` is persisted on the outbox row and
-  re-attached as a Kafka header so the ledger consumer span links back to the original request).
+- Trace correlation across the HTTP request, synchronous fraud-service call, persistence,
+  asynchronous outbox publishing and ledger consumption. The originating `traceparent` is
+  persisted on the outbox row and propagated with the Kafka record; asynchronous work may use
+  separate traces linked or correlated to the original request rather than one continuous trace.
 - Counters for success/failure/decline-reason/replay/conflict — see `auth_requests_total`,
   `auth_authorisations_total{status,reason}`, `auth_concurrency_conflict_total{operation,type}`,
   `auth_idempotency_cache_total{result}` (`auth-service`), and `fraud_decisions_total{outcome}` /

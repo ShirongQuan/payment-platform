@@ -102,9 +102,10 @@ Constraints/indexes:
    failure, the row is either rescheduled (`NEW`, with backoff applied) or marked `FAILED` once
    retries are exhausted.
 
-The claim lease (`outbox.publisher.claim-lease`, default `30s`) is kept comfortably above the
-producer's `delivery.timeout.ms` (`20s`), so a legitimately in-flight send is never reclaimed and
-re-published concurrently by another instance.
+The default claim lease (`outbox.publisher.claim-lease`, `30s`) exceeds the producer's
+`delivery.timeout.ms` (`20s`), providing a margin for normal publishing. This reduces the risk
+of premature claim recovery but cannot rule out overlapping attempts under all failure or
+scheduling conditions. Consumer deduplication remains necessary.
 
 ## Delivery Semantics
 
@@ -137,8 +138,14 @@ Defined in `OutboxBackoffPolicy`:
 **Producer side:**
 
 - `event_id` (UUID) uniquely identifies each event and is sent as a Kafka header on every record.
-- The Kafka producer is configured with `enable.idempotence: true` and `acks: all`, preventing the
-  producer itself from creating duplicate broker-side writes on retry.
+- The outbox `event_type` examples (`AUTHORISED`, `CAPTURED`, `REVERSED`) and the published
+  `eventType` header values (such as `AUTHORISATION_CAPTURED`) use different naming forms in
+  these documents. Verify and document the actual conversion in `OutboxKafkaPublisher` before
+  relying on these examples as a wire-format contract.
+- The Kafka producer uses `enable.idempotence=true` and `acks=all` to avoid duplicate broker
+  writes for eligible producer-level retries within a producer session. These settings do not
+  deduplicate a logical outbox event sent again after a crash, claim recovery or application-level
+  retry. Consumer-side deduplication by `eventId` remains necessary.
 - The unique DB index on `(aggregate_id, event_type, idempotency_key)` prevents a duplicate outbox
   row from ever being created for the same logical domain event in the first place.
 
@@ -148,17 +155,21 @@ Defined in `OutboxBackoffPolicy`:
   processed via `tryInsertProcessedEvent(...)`, an atomic `INSERT ... ON CONFLICT DO NOTHING`: the
   first delivery inserts the row and proceeds to project the event; any later redelivery of the
   same `event_id` fails the insert (no-op) and is skipped without reprocessing.
+- **Required atomicity:** the deduplication marker and the corresponding raw event log / ledger
+  projection must commit in the same ledger database transaction. If projection fails, the marker
+  must roll back too so the event remains retryable. Confirm this boundary in the consumer's
+  transactional service implementation before treating effectively-once projection as verified.
 - Combined with manual offset commits (`enable-auto-commit: false`, `ack-mode: record`) and
   `isolation.level: read_committed` on the consumer, this gives effectively-once ledger
   projections despite at-least-once Kafka delivery.
 
 ## Failure Modes
 
-| Scenario                                                                                      | Behaviour today                                                                                                                                                                                                                                                                                                                                                                           |
-|-----------------------------------------------------------------------------------------------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| **Broker down / unreachable**                                                                 | Publish attempts fail; `retry_count` increments and `next_attempt_at` is pushed out per the backoff schedule. Once the broker recovers, the next scheduler cycle picks the row up again.                                                                                                                                                                                                 |
-| **Partial publish** (send succeeds, ack lost, or instance crashes before marking `PUBLISHED`) | The claim lease (`claim_until`) bounds how long a row can sit `PUBLISHING` before being reclaimed to `NEW` and retried. Producer idempotence (`enable.idempotence: true`) means a retried send for the same logical record does not create a duplicate broker-side write; downstream consumer dedup (`processed_event`) is the final safety net against any residual duplicate delivery. |
-| **Stuck / terminally failing rows**                                                           | After 5 failed attempts a row is marked `FAILED` and stops being retried automatically. It remains visible in the table (not silently dropped) for operator triage via `last_error`, `retry_count`, and correlation id.                                                                                                                                                                  |
+| Scenario                                                                                      | Behaviour today                                                                                                                                                                                                                                                                                      |
+|-----------------------------------------------------------------------------------------------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| **Broker down / unreachable**                                                                 | Publish attempts fail; `retry_count` increments and `next_attempt_at` follows the backoff schedule. Recovery is automatic only while attempts remain available; after the fifth failed attempt the row becomes `FAILED` and requires operator intervention.                                          |
+| **Partial publish** (send succeeds, ack lost, or instance crashes before marking `PUBLISHED`) | After the claim lease expires, the row can be reclaimed and republished. The same logical event may appear more than once in Kafka because producer idempotence does not cover separate application-level sends. `ledger-service` deduplicates by `eventId` to prevent duplicate ledger projections. |
+| **Stuck / terminally failing rows**                                                           | After 5 failed attempts a row is marked `FAILED` and stops being retried automatically. It remains visible in the table (not silently dropped) for operator triage via `last_error`, `retry_count`, and correlation id.                                                                              |
 
 ## Operational Metrics
 
@@ -207,6 +218,7 @@ Steps sections), including:
 - A genuine dead-letter table/topic for producer-side failures that preserves full context
   (payload, complete error/attempt history) rather than overwriting `retry_count`/`status` in
   place.
-- Authenticated/encrypted transport for Kafka (SASL/mTLS) and topic-level ACLs — see the Security
+- Authenticated/encrypted transport for Kafka (SASL/mTLS) and topic-level ACLs, including
+  producer write, consumer read and DLT recovery permissions.
 
 

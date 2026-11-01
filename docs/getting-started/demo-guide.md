@@ -6,7 +6,7 @@ dashboards) — including how to intentionally demonstrate reliability behaviour
 dead-letter-topic (DLT) routing.
 
 Before starting, make sure the platform is running — see the
-[Getting Started guide](./README.md), any of the three run modes work for this demo.
+[Getting Started guide](README.md), any of the three run modes work for this demo.
 
 ## Table of Contents
 
@@ -15,7 +15,7 @@ Before starting, make sure the platform is running — see the
 - [Verify Service Health](#verify-service-health)
 - [Authorise a Payment](#authorise-a-payment)
 - [Capture a Payment](#capture-a-payment)
-- [Reverse or Refund a Payment](#reverse-or-refund-a-payment)
+- [Reverse a Payment (Refunds Not Yet Supported)](#reverse-a-payment-refunds-not-yet-supported)
 - [Inspect Kafka Events](#inspect-kafka-events)
 - [View Metrics and Dashboards](#view-metrics-and-dashboards)
 - [Inspect Distributed Traces](#inspect-distributed-traces)
@@ -25,8 +25,7 @@ Before starting, make sure the platform is running — see the
 
 ## Demo Objectives
 
-`By the end of this walkthrough you will have shown:
-`
+By the end of this walkthrough, you will have demonstrated:
 
 - a complete authorise → capture and authorise → reverse payment journey, with real balance
   movement in Postgres
@@ -40,9 +39,12 @@ Before starting, make sure the platform is running — see the
 
 ## Prerequisites
 
-- The platform running via any run mode from the [Getting Started guide](./README.md) (pre-published
+- The platform running via any run mode from the [Getting Started guide](README.md) (pre-published
   images are the fastest for a live demo).
 - `curl` and `jq` for readable request/response output.
+- Run all Compose commands from the repository root (see [Getting Started](README.md)); no machine-specific directory is
+  required.
+- The default Grafana and pgAdmin credentials in these guides are for local development only.
 - Optional: `kcat` (`brew install kcat`) if you want to manually inject a DLT-bound Kafka record
   instead of using the scripted version in [Demonstrate a Failure Scenario](#demonstrate-a-failure-scenario).
 
@@ -57,7 +59,6 @@ Before starting, make sure the platform is running — see the
 Fastest path — pre-published images plus infra, all in one command:
 
 ```bash
-cd /Users/shirongquan/Documents/Shirong/Projects/payment-platform
 docker compose -f infra/docker/docker-compose.yml -f infra/docker/docker-compose.app.yml up -d
 ```
 
@@ -118,7 +119,7 @@ curl -sS -X POST "http://localhost:9000/authorisations" \
   }' | jq
 ```
 
-Expected response (`200 OK`):
+Example successful response (verify the exact HTTP status and fields against the running API):
 
 ```json
 {
@@ -188,7 +189,7 @@ Expected response:
 The authorisation transitions `AUTHORISED → CAPTURED`, `reservedBalance` decreases by the captured
 amount, and another outbox event (`AUTHORISATION_CAPTURED`) is queued for publishing.
 
-## Reverse or Refund a Payment
+## Reverse a Payment (Refunds Not Yet Supported)
 
 The MVP scope supports full **reversal** (releasing a reservation), not a partial refund — see
 [README § Domain Scope](../../README.md#domain-scope) for what's in/out of scope today. To
@@ -349,8 +350,9 @@ request's trace — a good example of how tracing bridges a transactional-outbox
 
 ## Correlate a Log Line to a Trace
 
-A nice moment in any demo: show that a single log line, its trace, and its metric data point all
-describe the exact same request.
+A useful demo is to correlate a specific log line with its request trace, then inspect aggregate
+metrics for the same time window. Prometheus counters and p95 latency panels do not identify
+a particular request.
 
 1. Send an authorise request (see [Authorise a Payment](#authorise-a-payment)), then read
    auth-service's log output. In container mode:
@@ -443,7 +445,9 @@ curl -sS -X POST "http://localhost:9010/internal/test/failure-mode" \
   -d '{"mode":"OFF"}'
 ```
 
-Send a few more authorise requests to show the breaker recovering `HALF_OPEN → CLOSED`.
+After restoring fraud-service, wait for the configured open-state duration to elapse, then send
+permitted probe requests. Successful probes can move the breaker `HALF_OPEN → CLOSED`, subject to
+its configured thresholds. The dependency returning to normal does not close the breaker immediately.
 
 <p>
   <a href="https://raw.githubusercontent.com/ShirongQuan/payment-platform/main/docs/observability/screenshots/dashboard/fraud-check.png">
@@ -453,10 +457,16 @@ Send a few more authorise requests to show the breaker recovering `HALF_OPEN →
 
 ### Outbox lag and dead-letter-topic (DLT) routing
 
-To *see* outbox lag build and drain: stop `auth-service`'s outbox scheduler from doing its job by
-pausing the service briefly, fire a few authorisations while it's down, then start it back up and
-watch `auth_outbox_backlog` and `auth_outbox_publish_lag_seconds` spike then recover in Grafana —
-or simply narrate the metric while running the scripted load below.
+To *see* outbox lag build and drain, keep `auth-service` available to accept authorisations while
+**temporarily interrupting only the Kafka publishing path**, using a verified development-only
+mechanism (for example, a supported publisher pause hook or a controlled broker/network interruption).
+Submit several authorisations and watch `auth_outbox_backlog` rise; restore publishing and watch
+the backlog drain and `auth_outbox_publish_lag_seconds` reflect delayed delivery. **Do not pause
+`auth-service` itself**: it would then be unable to accept the requests that create outbox rows.
+The outbox has a finite retry budget (five failed attempts); prolonged interruptions can leave
+rows terminally `FAILED`, requiring manual recovery. No specific publisher-pause command is
+claimed here because its availability has not been verified. See
+[Outbox Backlog Recovery](../flows/outbox-backlog-recovery.md).
 
 To trigger a real DLT record (a non-retryable, malformed event that `ledger-service` cannot
 process), publish directly onto `auth.events` with `kcat` (per
@@ -510,8 +520,9 @@ curl -sS -X POST "http://localhost:9010/internal/test/failure-mode" \
   -d '{"mode":"OFF"}'
 ```
 
-For a completely clean slate before the next run (drops all data — Postgres, Kafka, Redis, Grafana
-state):
+For a completely clean slate before the next run (**destructive**: `down -v` removes Compose-managed
+persistent volumes, potentially including PostgreSQL, Kafka and Grafana state; Redis data may also
+be lost depending on its persistence configuration):
 
 ```bash
 docker compose -f infra/docker/docker-compose.yml -f infra/docker/docker-compose.app.yml down -v

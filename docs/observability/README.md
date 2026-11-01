@@ -1,6 +1,6 @@
 # Observability Docs
 
-This section contains operating guidance for telemetry, alerting targets, and incident handling.
+This section contains operating guidance for telemetry, proposed alerting targets, and incident handling. **Current MVP:** application metrics, dashboards, plain-text correlated logs and distributed traces. **Proposed/next phase:** structured JSON logging, ratified SLOs, verified paging rules and production incident processes.
 
 For capabilities that are still planned, capture follow-up work in [Payment Platform MVP Progress](../roadmap.md).
 

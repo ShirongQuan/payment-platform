@@ -3,9 +3,9 @@
 ## Table of Contents
 
 - [Documents in this folder](#documents-in-this-folder)
-    - [Payment Lifecycle](./payment-lifecycle.md)
-    - [Failure Scenarios](./failure-scenarios.md)
-    - [Outbox Backlog Recovery](./outbox-backlog-recovery.md)
+    - [Payment Lifecycle](payment-lifecycle.md)
+    - [Failure Scenarios](failure-scenarios.md)
+    - [Outbox Backlog Recovery](outbox-backlog-recovery.md)
 - [Diagram Index](#diagram-index)
     - [Payment Lifecycle Happy Path](#payment-lifecycle-happy-path)
     - [Authorise Sequence](#authorise-sequence)
@@ -24,13 +24,13 @@ This folder contains sequence diagrams and companion documentation for key runti
 
 ## Documents in this folder
 
-- [Payment Lifecycle](./payment-lifecycle.md)  
-  Canonical business flow (`auth -> reserve -> capture -> reverse`), state transitions, and event/data mapping.
+- [Payment Lifecycle](payment-lifecycle.md)  
+  Canonical business flows (authorise → capture **or** reverse), state transitions, and event/data mapping.
 
-- [Failure Scenarios](./failure-scenarios.md)  
+- [Failure Scenarios](failure-scenarios.md)  
   Expected behaviour for duplicates, timeouts, publish/consume failures, and invalid transitions.
 
-- [Outbox Backlog Recovery](./outbox-backlog-recovery.md)  
+- [Outbox Backlog Recovery](outbox-backlog-recovery.md)  
   How to detect, triage, and recover a growing auth-service outbox backlog or a terminally `FAILED`
   outbox row, including the manual replay procedure.
 
@@ -115,7 +115,7 @@ Covers:
 
 - legal-state validation (`AUTHORISED` required; already-`REVERSED` triggers idempotent replay)
 - idempotent replay/conflict behaviour (same pattern as capture)
-- reserved-balance release (`reservedBalance` only; `availableBalance` untouched)
+- reserved-balance release (`reservedBalance -= amount`, `availableBalance += amount`)
 - reverse outbox event creation
 
 ### Idempotency Generic Sequence
@@ -137,8 +137,9 @@ Covers:
 - first request for a given `(scopeId, idempotencyKey)`
 - retry with the same key + same payload -> safe cached/durable replay (no duplicate side effect)
 - retry with the same key + a different payload -> `409 IDEMPOTENCY_CONFLICT`
-- concurrent first-time requests racing on the same key -> loser recovers the winner's committed
-  response instead of failing or duplicating the operation
+- concurrent first-time requests racing on the same key -> the losing request attempts to recover
+  the winner's committed response when the semantic payload matches; a mismatched payload
+  produces an idempotency conflict, and recovery is not guaranteed for an uncommitted result
 
 ### Event Publishing Sequence
 
@@ -186,7 +187,7 @@ Covers:
 
 Use when an outbox backlog is growing or rows are landing in `FAILED`, and you need the
 decision logic for how to respond. Companion flowchart for
-[Outbox Backlog Recovery](./outbox-backlog-recovery.md).
+[Outbox Backlog Recovery](outbox-backlog-recovery.md).
 
 Covers:
 
@@ -214,7 +215,7 @@ Covers:
 
 *Figure 10: Account Lock State — account-level `ACTIVE`/`LOCKED` transitions.*
 
-Use alongside [Payment Lifecycle](./payment-lifecycle.md#lifecycle-at-a-glance) for the
+Use alongside [Payment Lifecycle](payment-lifecycle.md#lifecycle-at-a-glance) for the
 authorisation and account-level state diagrams at a glance (a closely related, slightly more
 detailed pair of the same two diagrams also lives in
 [Payment State Machine](../domain/state-machine.md#diagram)).

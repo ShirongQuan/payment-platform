@@ -34,11 +34,14 @@ Introduce `shared-spring-lib`, a common library included by all three services, 
 - **Validation** (`org.example.shared.currency`): `ValidCurrencyCode` / `CurrencyCodeValidator` — shared bean
   validation for currency code fields.
 
-Each service depends on `shared-spring-lib` as a regular Maven module dependency; auto-configuration wires the filter/interceptor beans without per-service boilerplate. The library is limited to reusable cross-cutting plumbing: domain models, business rules, and persistence remain owned by the individual services.
+Each service depends on `shared-spring-lib` as a regular Maven module dependency; auto-configuration wires the
+filter/interceptor beans without per-service boilerplate. The library is limited to reusable cross-cutting plumbing:
+domain models, business rules, and persistence remain owned by the individual services.
 
 ## Consequences
 
 Positive:
+
 - one correlation id header/MDC convention across all services, so traces/logs can be joined end-to-end
   (see [System Context](../architecture/system-context.md), [Containers](../architecture/containers.md))
 - consistent error response shape simplifies client-side and gateway-side error handling
@@ -46,10 +49,13 @@ Positive:
 - changes to cross-cutting behaviour (e.g. adding a new MDC field) are made once and consumed everywhere
 
 Trade-offs:
+
 - introduces a shared build/versioning dependency between otherwise independently deployable services — a breaking
   change in `shared-spring-lib` can require coordinated upgrades across services
-- the shared library needs explicit testing and versioning discipline because changes can affect multiple independently deployable services
-- its scope must remain limited to genuinely cross-cutting behaviour so reuse does not blur service-level domain or data ownership
+- the shared library needs explicit testing and versioning discipline because changes can affect multiple independently
+  deployable services
+- its scope must remain limited to genuinely cross-cutting behaviour so reuse does not blur service-level domain or data
+  ownership
 
 ## Alternatives Considered
 
@@ -57,7 +63,7 @@ Trade-offs:
   higher long-term maintenance cost)
 - push cross-cutting concerns into infrastructure (e.g. API gateway/service mesh header injection) instead of a
   library (deferred: no gateway/mesh currently in the stack — see
-  [roadmap: Next Steps](../roadmap.md#5-next-steps-prioritised) item 4; library approach is simpler for the current
+  [roadmap: Next Steps](../roadmap.md#4-next-steps-prioritised) item 4; library approach is simpler for the current
   three-service scope)
 - separate libraries per concern (error model, correlation, idempotency) instead of one shared module (rejected for
   now: adds packaging/versioning overhead disproportionate to current size; package-level separation inside one

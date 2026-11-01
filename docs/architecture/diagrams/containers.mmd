@@ -33,7 +33,7 @@ flowchart TB
     Ops -->|"dashboards / traces"| Grafana
     Ops -->|"manual recovery<br/>(Kafka UI / pgAdmin)"| Infra
 
-    Auth -->|"POST /fraud/check<br/>(circuit breaker + 250ms timeout)"| Fraud
+    Auth -->|"POST /fraud/check<br/>(circuit breaker + 500ms timeout)"| Fraud
     Auth -->|"publish outbox events"| KafkaTopic
     KafkaTopic -->|"consume + dedupe"| Ledger
 

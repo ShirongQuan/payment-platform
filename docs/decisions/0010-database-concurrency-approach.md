@@ -37,11 +37,14 @@ within each service-owned data boundary:
 ## Consequences
 
 Positive:
-- no long-held row locks — better throughput and no lock-wait/deadlock exposure under normal load
+
+- avoids explicit pessimistic row locking during application processing, reducing lock contention for the expected
+  low-contention workload; database writes still acquire locks, and deadlocks are not categorically eliminated
 - conflict detection is cheap (a version column check) compared to holding locks across a transaction
 - fits the existing idempotency/replay model: a losing writer doesn't need to block, it re-reads and resolves
 
 Trade-offs:
+
 - under genuinely high contention on the *same* row (e.g. many concurrent operations against one account), optimistic
   locking causes retries/aborts rather than serializing writers, which could increase client-visible conflict rates
   if traffic patterns change
@@ -66,7 +69,7 @@ Trade-offs:
 If load testing (see `load-tests/generate-concurrency-conflicts.sh`) shows unacceptable client-visible conflict
 rates on hot accounts, consider pessimistic locking scoped narrowly to that specific write path rather than
 switching the whole system's concurrency model. A side-by-side pessimistic-locking comparison is already tracked
-on the [roadmap: Next Steps](../roadmap.md#5-next-steps-prioritised) (item 5).
+on the [roadmap: Next Steps](../roadmap.md#4-next-steps-prioritised) (item 5).
 
 ## Related
 

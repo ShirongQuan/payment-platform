@@ -32,7 +32,7 @@ sequenceDiagram
                 AS ->> AS: PreAuthDecision.AccountNotActive(status)
             else account.status == ACTIVE
                 AS ->> FO: evaluate(request,<br/>normalizedCurrency, clientIpAddress)
-                FO ->> FS: POST /fraud/check<br/>(circuit breaker +<br/>250ms time limiter)
+                FO ->> FS: POST /fraud/check<br/>(circuit breaker +<br/>500ms time limiter)
                 alt fraud-service reachable
                     FS -->> FO: decision APPROVE / DECLINE<br/>(+ riskScore, lockAccountRecommended)
                 else timeout / circuit open / error

@@ -18,7 +18,7 @@ flowchart TD
 	H -->|"Transient infra\n(Kafka outage, network blip)"| I["Confirm Kafka / infra healthy again"]
 	H -->|"Bad data / non-retryable payload"| J["Requires code or data fix first"]
 
-	I --> K["Manual replay:\nUPDATE outbox_event\nSET status=NEW, retry_count=0,\nnext_attempt_at=now, last_error=null\nWHERE id=:eventId"]
+	I --> K["Manual replay:\nUPDATE outbox_event\nSET status=NEW, retry_count=0,\nnext_attempt_at=now, last_error=null\nWHERE event_id=:eventId AND status=FAILED"]
 	J -->|"Fixed"| K
 	J -->|"Not fixed"| L["Leave FAILED for audit/escalation\n(no automatic requeue exists today)"]
 

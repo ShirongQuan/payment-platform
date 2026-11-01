@@ -5,7 +5,7 @@ structure, IDE setup, running individual services, building the project, executi
 database migrations, rebuilding images, and troubleshooting local development issues.
 
 For installation and the different ways to *run* the whole platform, see the
-[Getting Started guide](./README.md). For the detailed *design* of the test suite — the test
+[Getting Started guide](README.md). For the detailed *design* of the test suite — the test
 pyramid, scope of each level, and the critical scenario catalogue — see [`docs/testing/`](../testing/);
 this page only explains how to execute those tests.
 
@@ -54,11 +54,17 @@ for the rationale.
 
 ## Build the Project
 
+Run these commands from the repository root. For a fresh checkout, first install the reactor dependencies locally (
+including `shared-spring-lib`) before launching individual services:
+
+```bash
+mvn -DskipTests install
+```
+
 Build every module (compiles, runs tests by default, installs `shared-spring-lib` locally so the
 other modules can depend on it):
 
 ```bash
-cd /Users/shirongquan/Documents/Shirong/Projects/payment-platform
 mvn clean install
 ```
 
@@ -95,14 +101,15 @@ first.
 5. Create a Run/Debug configuration per service using the Spring Boot main class (or the
    equivalent `mvn -pl <service> spring-boot:run` Maven goal), so you can set breakpoints and
    inspect state while the infra dependencies run in Docker. See
-   [Getting Started § Run Services from an IDE](./README.md#run-services-from-an-ide) for the
+   [Getting Started § Run Services from an IDE](README.md#run-services-from-an-ide) for the
    corresponding run-mode overview.
 6. Recommended: enable annotation processing for MapStruct (used in `ledger-service`) and Lombok
    if the IDE doesn't already do so automatically for Maven-based projects.
 
 ## Run Services Locally
 
-Open a separate terminal (or IDE run configuration) per service, from the repository root:
+After the initial reactor install above, open a separate terminal (or IDE run configuration) per service, from the
+repository root:
 
 ```bash
 mvn -pl auth-service spring-boot:run
@@ -117,7 +124,7 @@ mvn -pl ledger-service spring-boot:run
 | ledger-service | `http://localhost:9020` | `http://localhost:9020/swagger-ui.html` |
 
 The infra stack (`docker compose -f infra/docker/docker-compose.yml up -d`) must already be
-running — see [Getting Started § Run Services from an IDE](./README.md#run-services-from-an-ide).
+running — see [Getting Started § Run Services from an IDE](README.md#run-services-from-an-ide).
 
 ## Database Migrations
 
@@ -135,7 +142,9 @@ migration folder and restart the service (or re-run its tests) — Flyway detect
 unapplied versions automatically. Never edit an already-applied migration file; add a new one
 instead, so Flyway's checksum validation doesn't fail for anyone who already ran the old version.
 
-To reset a database from scratch locally, stop the stack and drop its volume:
+To reset local infrastructure data from scratch, stop the stack and remove its Compose-managed volumes. **Warning:**
+`down -v` can remove PostgreSQL, Kafka and Grafana persistent state, not only one database; use it only for a deliberate
+full reset:
 
 ```bash
 docker compose -f infra/docker/docker-compose.yml down -v
@@ -170,7 +179,8 @@ mvn -pl auth-service -Dtest=AuthorisationServiceImplTest test
 ```
 
 Run the full verification lifecycle (what CI runs — see `.github/workflows/ci.yml`), including any
-Testcontainers-backed integration tests bound to `verify`:
+Testcontainers-backed integration tests bound to `verify`. Maven `test` runs the test phase; `verify` also executes
+subsequent lifecycle phases and any integration-test goals configured there:
 
 ```bash
 mvn -B -ntp clean verify
@@ -185,7 +195,7 @@ Docker Engine) first if those tests fail to start containers.
 End-to-end journeys and reliability signals (idempotency replay, circuit breaker transitions, DLT
 routing, concurrency conflicts) are exercised against a fully running stack using the scripts in
 `load-tests/`, documented in [Load Testing Report](../testing/load-testing.md) and used
-directly in the [Demo Guide](./demo-guide.md).
+directly in the [Demo Guide](demo-guide.md).
 
 ```bash
 cd load-tests
@@ -205,13 +215,13 @@ Checkstyle/Spotless/PMD plugin is configured in any `pom.xml` today). Until one 
 
 ## Build Docker Images
 
-Each service has its own multi-stage `Dockerfile` (Maven build stage → `eclipse-temurin:21-jre`
+Docker-only image builds do not require host Java or Maven: the multi-stage Dockerfiles supply their own build
+toolchain. Each service has its own multi-stage `Dockerfile` (Maven build stage → `eclipse-temurin:21-jre`
 runtime stage) that first installs `shared-spring-lib` into the build container's local Maven
 repository, then builds the service itself. Build from the **repository root** so the Dockerfile
 can see both the parent POM and `shared-spring-lib`'s sources:
 
 ```bash
-cd /Users/shirongquan/Documents/Shirong/Projects/payment-platform
 docker build -f auth-service/Dockerfile -t local/auth-service:dev .
 docker build -f fraud-service/Dockerfile -t local/fraud-service:dev .
 docker build -f ledger-service/Dockerfile -t local/ledger-service:dev .
@@ -219,7 +229,7 @@ docker build -f ledger-service/Dockerfile -t local/ledger-service:dev .
 
 Run the freshly built image(s) alongside the infra stack by pointing the app overlay at your local
 tags — see
-[Getting Started § Run with Locally Built Images](./README.md#run-with-locally-built-images) for
+[Getting Started § Run with Locally Built Images](README.md#run-with-locally-built-images) for
 the full up/rebuild/recreate loop.
 
 ## Development Workflow
@@ -269,7 +279,7 @@ Run `mvn -pl shared-spring-lib install` once, then re-import/refresh the Maven p
 Confirm the infra stack is up (`docker compose -f infra/docker/docker-compose.yml ps`) and that you
 haven't set container-network environment variables (e.g. `SPRING_DATASOURCE_URL` pointing at
 `postgres` instead of `localhost`) meant for the Docker Compose app overlay — see
-[Getting Started § Troubleshooting](./README.md#troubleshooting).
+[Getting Started § Troubleshooting](README.md#troubleshooting).
 
 **More operational/debugging commands**
 

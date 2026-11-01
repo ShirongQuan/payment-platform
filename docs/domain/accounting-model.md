@@ -19,7 +19,7 @@ This document defines the business rules for how payment lifecycle events are re
 platform. It is business-rule focused, not an implementation guide — for code, see the file references at the end of
 each section.
 
-The ledger is an **event-sourced, single-entry projection**: every state-changing payment event (authorise, capture,
+The ledger is an **event-driven, single-entry projection**: every state-changing payment event (authorise, capture,
 release) produces exactly one durable ledger row, keyed to the authorisation and account it belongs to. This model is a
 deliberate fit for this project's goal — demonstrating correct distributed transaction handling (outbox pattern,
 at-least-once Kafka delivery, idempotent event consumption) across cooperating services. Evolving it toward full
@@ -40,7 +40,8 @@ rest of this document describes what is built and working today.
 
 ### Accounts
 
-Each customer/merchant `account` (in `auth-service`) tracks two balances that together represent its ledger position:
+Each customer/merchant `account` in `auth-service` maintains two operational balances used to manage authorisation holds
+and settlement:
 
 | Balance            | Meaning                                                                     |
 |--------------------|-----------------------------------------------------------------------------|
@@ -68,16 +69,18 @@ Each ledger entry (`ledger_entry` row, `ledger-service`) carries:
 | `occurredAt`                    | When the underlying business event occurred                                                             |
 | `createdAt`                     | When the ledger row was written                                                                         |
 
-A companion `ledger_event_log` table stores the raw event payload for every event received (including declines), giving
-a complete audit trail independent of the business projection.
+A companion `ledger_event_log` table retains the raw payload of processed business events, including declines,
+independently of the normalised ledger projection. Duplicate deliveries are handled through `processed_event` and
+do not necessarily create additional audit rows.
 
 ## 2) Core Invariants
 
 These are the business rules every posting satisfies:
 
-1. **Total reserved + available balance is conserved per account.** Authorise moves value from `availableBalance` to
-   `reservedBalance`; reverse moves it back; capture settles it out of `reservedBalance` permanently. No event silently
-   creates or destroys value on an account.
+1. **Balance movements follow the payment lifecycle.** Authorisation transfers funds from `availableBalance` to
+   `reservedBalance` without changing their sum. Reversal transfers reserved funds back to available balance, also
+   preserving the sum. Capture removes the captured amount from reserved balance, reducing the account's combined
+   available and reserved balance by the settled amount.
 
 2. **No posting on invalid state transitions.** A ledger entry is only created for an event that represents a legal
    transition of the authorisation state machine (see [Payment State Machine](./state-machine.md)). This is guaranteed
@@ -137,24 +140,25 @@ A decline is reached directly instead of `AUTHORISED`, so there is no reservatio
 
 ## 5) Reconciliation Notes
 
-How ledger projections reconcile with payment state and outbox events:
+The following describes the expected reconciliation rules for how ledger projections should line up with payment
+state and outbox events. Automated reconciliation tooling that checks these rules is not yet implemented; today this
+is a manual/aspirational process, not an existing operation.
 
 - Every state-changing authorisation event (`AUTHORISATION_AUTHORISED`, `AUTHORISATION_CAPTURED`,
-  `AUTHORISATION_REVERSED`) is written to the `auth-service` outbox in the same DB transaction as the state change
-  itself, guaranteeing the event exists if and only if the state transition committed (
-  see [ADR 0001: Use Kafka + Transactional Outbox](../decisions/0001-use-kafka-outbox.md)).
+  `AUTHORISATION_REVERSED`) has a corresponding entry written to the `auth-service` outbox. The transactional outbox
+  records the event in the same database transaction as the authorisation state change, so both changes commit or
+  roll back together (see [ADR 0001: Use Kafka + Transactional Outbox](../decisions/0001-use-kafka-outbox.md)).
 - `ledger-service` consumes these events from `auth.events` and writes two things per event: a raw audit copy (
   `ledger_event_log`) and a business projection (`ledger_entry`). Reconciliation between "what auth-service says
-  happened" and "what the ledger recorded" is done by comparing `authorisation_event` rows in `auth-service` against
-  `ledger_entry` rows keyed by `eventId`/`authorisationId` in `ledger-service`.
+  happened" and "what the ledger recorded" would be done by comparing `authorisation_event` rows in `auth-service`
+  against `ledger_entry` rows keyed by `eventId`/`authorisationId` in `ledger-service`.
 - A one-to-one match is expected for every `AUTHORISED`/`CAPTURED`/`REVERSED` event; `DECLINED` events are expected to
   have **no** corresponding `ledger_entry` row by design (see section 3 above).
-- Gaps (an auth-service event with no matching ledger entry after a reasonable delay) indicate either outbox publish
-  lag/backlog or a stuck/failed consumer — see [Observability Runbook (Lightweight)](../observability/runbook.md) for
-  detection and mitigation.
-- Unrecognised event types are routed to the dead-letter topic (`auth.events.ledger.dlt`) rather than silently dropped,
-  so a reconciliation gap is always traceable to either a backlog, a DLT entry, or a genuine bug — never a silent loss (
-  see [ADR 0004: Use Separate Main Event and DLT Topics](../decisions/0004-use-event-and-dlt-topics.md)).
+- A reconciliation gap (an auth-service event with no matching ledger entry after a reasonable delay) may indicate
+  publication delay, consumer lag, dead-letter routing, processing failure, or a defect requiring investigation — see
+  [Observability Runbook (Lightweight)](../observability/runbook.md) for detection and mitigation.
+- Unrecognised event types are routed to the dead-letter topic (`auth.events.ledger.dlt`) rather than silently dropped
+  (see [ADR 0004: Use Separate Main Event and DLT Topics](../decisions/0004-use-event-and-dlt-topics.md)).
 
 ## Related
 

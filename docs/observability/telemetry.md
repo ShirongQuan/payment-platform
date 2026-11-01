@@ -13,9 +13,9 @@ This document defines the baseline telemetry standard for the payment platform.
 
 ## 1) Logging Standard
 
-Use structured JSON logs for all services (`auth-service`, `fraud-service`, `ledger-service`, shared libs).
+**Target standard (not yet implemented):** emit structured JSON logs for all services (`auth-service`, `fraud-service`, `ledger-service`). **Current MVP:** plain-text console logs carry trace/span and correlation identifiers. The JSON schema below is a proposed target, not a description of today’s console output. See [Section 6](#6-correlating-logs-metrics-and-traces).
 
-### Required JSON fields
+### Target JSON fields (planned)
 
 | Field             | Type              |    Required | Notes                                     |
 |-------------------|-------------------|------------:|-------------------------------------------|
@@ -78,7 +78,7 @@ Note: histogram families are queried via `_bucket` and often accompanied by `_co
 
 ### Dependency and workflow metrics
 
-- Fraud call latency and timeout rate.
+- Fraud call latency, failure rate and circuit-breaker state; a timeout-specific rate needs a dedicated metric/label.
 - Outbox backlog and publish lag.
 - Kafka publish outcomes/failures.
 - Idempotency hit rate.
@@ -95,24 +95,34 @@ Current dashboard metrics:
 Planned/next-phase metric candidates:
 
 - `auth_kafka_publish_failures_total` (dedicated failure-only counter, not currently in dashboard queries)
+- Oldest outstanding outbox-event age (gauge or query derived from pending rows), to detect stuck events that a successful-publish histogram cannot reveal
+- A dedicated fraud timeout counter, if timeout-specific alerting is required
 
 ### Derived indicators
 
-- Idempotency hit rate = `result="hit"` / (`hit` + `miss`).
-- Auth failure ratio = failed authorisations / total authorisations.
-- Outbox health = backlog size + max publish lag.
+- Idempotency cache hit rate = `result="hit"` / (`hit` + `miss`), within the same observation window; cache hits indicate safe replay/cache effectiveness, **not** duplicate side effects.
+- Auth failure ratio = failed authorisations / total authorisations, with the failure statuses and business-decline policy explicitly defined for each query.
+- Outbox health = current `NEW`/`PUBLISHING` backlog + p95 lag **among successfully published events** + a separate check of terminal `FAILED` rows and oldest outstanding-event age. The histogram does not measure the maximum age of unpublished events.
+- Idempotency conflicts indicate incompatible payload reuse; confirmed duplicate side effects require separate DB-invariant/reconciliation evidence. Concurrency-conflict metrics describe contention, not necessarily duplicate processing.
 
 ## 3) Trace Model
 
-Model traces around the main authorisation path:
+The synchronous request and asynchronous event pipeline are **separate execution phases**; Kafka publication is not part of the HTTP transaction. Recommended model:
 
-1. `POST /authorisations` (entry span)
-2. Validate request + idempotency lookup
-3. Fraud check call (`auth -> fraud-service` client/server spans)
-4. DB transaction spans (read/write + commit)
-5. Outbox write span
-6. Kafka publish span
-7. Response span completion
+**Request trace:**
+
+1. `POST /authorisations` entry span, validation and idempotency checks.
+2. Synchronous `auth-service → fraud-service` client/server spans.
+3. Database transaction, including the authorisation, domain-event and outbox writes; commit.
+4. HTTP response completes without waiting for Kafka publication.
+
+**Asynchronous publishing and consumption:**
+
+1. A later outbox scheduler tick claims the row and publishes to Kafka. The outbox-publish trace can use a **Span Link** to the original request context persisted with the outbox row.
+2. The ledger consumer processes the Kafka event in its own execution context, with trace context/correlation headers used where instrumented.
+3. Correlate by `eventId`, `correlationId` and trace context; do not assume one uninterrupted parent-child trace across the whole pipeline.
+
+Span names and links should be verified against the running instrumentation before treating them as guaranteed.
 
 ### Recommended span attributes
 
@@ -134,7 +144,7 @@ Model traces around the main authorisation path:
 ## Exporter
 
 - Use OTLP exporter from services to OTel Collector.
-- Prefer gRPC OTLP in internal networks.
+- Use the protocol configured by the deployment. The documented local endpoint `http://localhost:4318/v1/traces` is **OTLP/HTTP**; gRPC is an optional alternative, not the assumed local configuration.
 
 ## Collector Pipeline
 
@@ -154,7 +164,7 @@ Dashboard definitions live in `infra/grafana/dashboards/`. The panels previously
 Dependency, Outbox & Publishing, Kafka Health, Idempotency) are **rows/panels inside the
 single `Payment Platform Overview` dashboard**, not separate dashboards.
 
-**Planned enhancement:** add a screenshot for each dashboard and link it in a new table column.
+**Current documentation:** screenshots for critical panels are linked below. Keep the inventory and screenshots up to date when dashboards change.
 
 ### Dashboard inventory
 
@@ -185,13 +195,13 @@ All panels below live in the **Payment Platform Overview** dashboard (
 | Alert tie-in / runbook | Alert: "API 5xx ratio > 2% for 10m" / "API p99 latency > 1.5s for 10m" (see `alerts-slos.md`). Runbook: [Scenario 1](./runbook.md#top-5-failure-scenarios).                                                                                                                                                                                                                                                                                                                                                                                                       |
 | Screenshot             | <p><a href="https://raw.githubusercontent.com/ShirongQuan/payment-platform/main/docs/observability/screenshots/dashboard/auth-latency-and-error-rate.png"><img src="./screenshots/dashboard/auth-latency-and-error-rate.png" alt="Auth latency and error rate" width="100%" /></a></p><p><a href="https://raw.githubusercontent.com/ShirongQuan/payment-platform/main/docs/observability/screenshots/dashboard/auth-request-outcome.png"><img src="./screenshots/dashboard/auth-request-outcome.png" alt="Authorisation request outcomes" width="100%" /></a></p> |
 
-#### 2. Fraud timeout rate
+#### 2. Fraud dependency failures and circuit-breaker state
 
 |                        |                                                                                                                                                                                                                                                                                                                              |
 |------------------------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | Panel(s)               | `Circuit breaker call outcomes (fraudService)`, `Circuit state (fraudService)`, `Fraud check latency (as observed by auth-service)`                                                                                                                                                                                          |
-| Metric/query           | `sum(rate(resilience4j_circuitbreaker_calls_seconds_count{name="fraudService", kind="not_permitted"}[1m]))` (circuit open / fast-fail) <br> `sum(rate(resilience4j_circuitbreaker_calls_seconds_count{name="fraudService", kind="failed"}[1m]))` <br> `resilience4j_circuitbreaker_state{name="fraudService", state=~"closed |open|half_open"}` <br> `auth_fraud_check_duration_seconds_bucket` |
-| Why it matters         | Detects fraud dependency degradation before it causes broad authorisation failures; circuit breaker state indicates automatic protection is engaged.                                                                                                                                                                         |
+| Metric/query           | `sum(rate(resilience4j_circuitbreaker_calls_seconds_count{name="fraudService", kind="not_permitted"}[1m]))` (circuit open / fast-fail) <br> `sum(rate(resilience4j_circuitbreaker_calls_seconds_count{name="fraudService", kind="failed"}[1m]))` <br> `resilience4j_circuitbreaker_state{name="fraudService", state=~"closed|open|half_open"}` <br> `auth_fraud_check_duration_seconds_bucket` |
+| Why it matters         | Detects fraud dependency failures and circuit-breaker fast-fail behaviour. Failed or not-permitted calls are **not a timeout-specific ratio**; a timeout alert needs an explicit timeout numerator and request denominator.                                                                                                                                                                         |
 | Normal range           | `not_permitted` and `failed` rates ~0/min; circuit breaker state = closed; p95 fraud latency <= 200ms (see `alerts-slos.md`).                                                                                                                                                                                                |
 | Alert tie-in / runbook | Alert: "Fraud timeout ratio > 5% for 10m" / "Circuit breaker open for fraud dependency for > 5m" (see `alerts-slos.md`). Runbook: [Scenario 2](./runbook.md#top-5-failure-scenarios).                                                                                                                                        |
 | Screenshot             | <p><a href="https://raw.githubusercontent.com/ShirongQuan/payment-platform/main/docs/observability/screenshots/dashboard/fraud-check.png"><img src="./screenshots/dashboard/fraud-check.png" alt="Fraud check" width="100%" /></a></p>                                                                                       |
@@ -203,8 +213,8 @@ All panels below live in the **Payment Platform Overview** dashboard (
 | Panel(s)               | `Outbox publish lag`, `Outbox backlog`                                                                                                                                                                                                                                                                                                                                                                                                                                             |
 | Metric/query           | `histogram_quantile(0.95, sum by (le) (rate(auth_outbox_publish_lag_seconds_bucket{application="auth-service"}[5m])))` <br> `auth_outbox_backlog`                                                                                                                                                                                                                                                                                                                                  |
 | Why it matters         | Growing lag/backlog means downstream ledger events are delayed, risking stale account balances and reconciliation drift.                                                                                                                                                                                                                                                                                                                                                           |
-| Normal range           | Backlog near 0; max publish lag <= 120s (see `alerts-slos.md`).                                                                                                                                                                                                                                                                                                                                                                                                                    |
-| Alert tie-in / runbook | Alert: "Outbox backlog > 5,000 messages for 15m" / "Outbox max lag > 300s for 10m" (see `alerts-slos.md`). Runbook: [Scenario 3](./runbook.md#top-5-failure-scenarios).                                                                                                                                                                                                                                                                                                            |
+| Normal range           | Backlog near 0; published-event p95 lag should be low. The proposed 120s **maximum** target cannot be evaluated from this p95 query (see `alerts-slos.md`).                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| Alert tie-in / runbook | Draft alert: "Outbox backlog > 5,000 messages for 15m"; the proposed "oldest outstanding age > 300s" alert needs a separate pending-age signal (see `alerts-slos.md`). Runbook: [Scenario 3](./runbook.md#top-5-failure-scenarios).                                                                                                                                                                                                                                                                                                            |
 | Screenshot             | <p><a href="https://raw.githubusercontent.com/ShirongQuan/payment-platform/main/docs/observability/screenshots/dashboard/outbox-lag.png"><img src="./screenshots/dashboard/outbox-lag.png" alt="Outbox lag" width="100%" /></a></p><p><a href="https://raw.githubusercontent.com/ShirongQuan/payment-platform/main/docs/observability/screenshots/dashboard/outbox-backlog.png"><img src="./screenshots/dashboard/outbox-backlog.png" alt="Outbox backlog" width="100%" /></a></p> |
 
 #### 4. DLT increase rate
@@ -235,7 +245,7 @@ All panels below live in the **Payment Platform Overview** dashboard (
 |------------------------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | Panel(s)               | `Idempotency cache outcomes/min by result`, `Idempotency cache hit rate (%)`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
 | Metric/query           | `sum by (result) (rate(auth_idempotency_cache_total{application="auth-service"}[5m]) * 60)` <br> `100 * sum(rate(auth_idempotency_cache_total{application="auth-service", result="hit"}[5m])) / clamp_min(sum(rate(auth_idempotency_cache_total{application="auth-service"}[5m])), 1e-9)`                                                                                                                                                                                                                                                                              |
-| Why it matters         | A rising conflict/duplicate share indicates aggressive client retries or a broken idempotency key strategy, risking either duplicate side effects or unnecessary rejections.                                                                                                                                                                                                                                                                                                                                                                                           |
+| Why it matters         | Cache hits can reflect safe retries; conflicts indicate incompatible payload reuse, while misses indicate cache effectiveness. None of these metrics alone proves duplicate business side effects; check persistence invariants separately.                                                                                                                                                                                                                                                                                                                                                                                           |
 | Normal range           | Hit rate stable at baseline; `conflict`/`error` result share ~0% under normal load.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
 | Alert tie-in / runbook | Alert: "Idempotency conflict rate increase > 3x baseline for 30m" (see `alerts-slos.md`). Runbook: [Scenario 5](./runbook.md#top-5-failure-scenarios).                                                                                                                                                                                                                                                                                                                                                                                                                 |
 | Screenshot             | <p><a href="https://raw.githubusercontent.com/ShirongQuan/payment-platform/main/docs/observability/screenshots/dashboard/idempotency-cache-hit-rate.png"><img src="./screenshots/dashboard/idempotency-cache-hit-rate.png" alt="Idempotency cache hit rate" width="100%" /></a></p><p><a href="https://raw.githubusercontent.com/ShirongQuan/payment-platform/main/docs/observability/screenshots/dashboard/idempotency-cache-outcomes.png"><img src="./screenshots/dashboard/idempotency-cache-outcomes.png" alt="Idempotency cache outcomes" width="100%" /></a></p> |
@@ -260,8 +270,7 @@ All panels below live in the **Payment Platform Overview** dashboard (
 > [Payment Platform MVP Progress](../roadmap.md). The worked example below uses the log line as it actually
 > appears today, so it can be reproduced exactly.
 
-Every request-scoped log line already carries the two identifiers needed to jump straight from
-"something interesting in a log" to "the exact trace and metric data point it came from":
+Request-scoped logs can carry identifiers used to jump from a log line to its exact trace. **Prometheus dashboard series are aggregates**, not a per-request metric record:
 
 - `[traceId,spanId]` — populated by Micrometer Tracing/OpenTelemetry instrumentation.
 - `[correlationId]` — populated by `shared-spring-lib`'s `CorrelationIdFilter`/`CorrelationIdResolver`
@@ -298,7 +307,7 @@ Every request-scoped log line already carries the two identifiers needed to jump
    the `auth-service → fraud-service` fraud-check span and the DB transaction span.
 
 4. Note the trace's start time, then open the **Payment Platform Overview** dashboard and set the
-   time range to a narrow window around it. The request shows up as one data point in
+   time range to a narrow window around it. The request contributes to the aggregate trends shown in
    `HTTP p95 latency` / `Authorisation request outcomes (last 5m)` — a concrete example of one log line, one
    trace, and one metric sample all describing the same event.
 
@@ -339,7 +348,7 @@ worked example above:
 
 **8. Dashboard**
 
-<p><a href="https://raw.githubusercontent.com/ShirongQuan/payment-platform/main/docs/observability/screenshots/trace/dashboard-e567d636-51fe-414a-938e-93d675f23094.png"><img src="./screenshots/trace/dashboard-e567d636-51fe-414a-938e-93d675f23094.png" alt="Payment Platform Overview dashboard panel showing the same request's metric data point" width="100%" /></a></p>
+<p><a href="https://raw.githubusercontent.com/ShirongQuan/payment-platform/main/docs/observability/screenshots/trace/dashboard-e567d636-51fe-414a-938e-93d675f23094.png"><img src="./screenshots/trace/dashboard-e567d636-51fe-414a-938e-93d675f23094.png" alt="Payment Platform Overview dashboard showing aggregate metrics around the example request" width="100%" /></a></p>
 
 The step-by-step demo version of this walkthrough is in
 [Payment Platform Demo Guide § Correlate a Log Line to a Trace](../getting-started/demo-guide.md#correlate-a-log-line-to-a-trace).

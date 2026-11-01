@@ -28,8 +28,9 @@ This document describes the trust boundaries crossed by the Payment Platform acr
 communication, service-owned data, and asynchronous messaging.
 
 The current architecture establishes explicit application and data-ownership boundaries, request validation,
-payment-state controls, fraud evaluation, service isolation, reliable event delivery, and traceable cross-service
-communication. Identity and access management, transport security, infrastructure authentication, and network-policy
+payment-state controls, fraud evaluation, independently owned service data, reliable event propagation,
+and traceable cross-service communication. Identity and access management, transport security, infrastructure
+authentication, and network-policy
 controls are part of the planned next-phase and deployment architecture. Implementation sequencing and broader
 deployment controls are tracked in the [roadmap](../roadmap.md).
 
@@ -49,9 +50,10 @@ deployment controls are tracked in the [roadmap](../roadmap.md).
 ### 2) Internal service boundary (auth-service -> fraud-service)
 
 - **Surface:** `auth-service` calls `fraud-service` (`:9010`) over HTTP within the platform network.
-- **Current controls:** `fraud-service` is an internal service boundary called synchronously by `auth-service`. The
-  interaction is protected by a Resilience4j circuit breaker and time limiter, bounding the effect of fraud-service
-  latency or unavailability on the authorisation path.
+- **Current controls:** `auth-service` invokes `fraud-service` synchronously over HTTP. A Resilience4j circuit
+  breaker and time limiter bound the impact of downstream latency and unavailability on the authorisation path.
+  These are resilience controls; service identity and encrypted transport are addressed in the planned
+  deployment-security architecture.
   See [ADR 0008: Use Resilience4j for Circuit Breaker / Time Limiter (Fraud Gateway)](../decisions/0008-resilience4j-circuit-breaker-policy.md).
 - **Planned evolution:** service-to-service identity and transport protection, such as mTLS or signed internal-service
   credentials, form part of the deployment security architecture.

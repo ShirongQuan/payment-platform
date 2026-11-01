@@ -25,5 +25,5 @@ CREATE TABLE fraud_evaluation (
   )
 );
 
-CREATE UNIQUE INDEX uq_authorisation_event_account_idempotency
+CREATE UNIQUE INDEX uq_fraud_evaluation_account_idempotency
 ON fraud_evaluation (account_id, idempotency_key);

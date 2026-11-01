@@ -7,7 +7,9 @@
 - [Fraud DB (fraud-service)](#fraud-db-fraud-service)
 - [End-to-end event reliability](#end-to-end-event-reliability)
 
-This document summarises the core tables used by `auth-service`, `fraud-service`, and `ledger-service`.
+This document summarises the core tables used by `auth-service`, `fraud-service`, and `ledger-service`. Each service
+owns its persistence model; cross-service coordination takes place through explicit APIs and asynchronous events rather
+than shared database access.
 
 ## Auth DB (auth-service)
 
@@ -25,7 +27,9 @@ This document summarises the core tables used by `auth-service`, `fraud-service`
 
 - `account`
     - Source of truth for account balances and account status.
-    - `available_balance` and `reserved_balance` are updated by authorise/capture flows.
+    - `available_balance` and `reserved_balance` are updated through the authorise, capture, and reverse lifecycle.
+      Authorisation reserves funds, capture finalises the reservation, and reversal releases reserved funds back to the
+      available balance.
 
 - `authorisation`
     - Stores current business state of each authorisation (`AUTHORISED`, `CAPTURED`, `REVERSED`, `DECLINED`).
@@ -46,11 +50,16 @@ This document summarises the core tables used by `auth-service`, `fraud-service`
 
 ### Idempotency strategy
 
-- Request-level idempotency is enforced by checking existing `authorisation` rows and validating payload equality.
-- Event-level idempotency in `authorisation_event` is enforced with:
-    - `uq_authorisation_event_account_eventtype_idempotency` on `(account_id, event_type, idempotency_key)`.
-- Additional uniqueness `(account_id, idempotency_key, created_at)` supports replay/audit without globally locking the
-  key forever.
+- **Response cache:** Redis stores completed idempotent responses for a TTL-bounded fast path; the cache is not the
+  durable source of truth.
+- **Request-level checks:** existing `authorisation` state and request-payload equality are checked to recognise replays
+  and detect conflicting reuse of an idempotency key.
+- **Durable event-level guard:** `authorisation_event` has the unique constraint
+  `uq_authorisation_event_account_eventtype_idempotency` on `(account_id, event_type, idempotency_key)`, protecting
+  against duplicate lifecycle-event processing for the same scope and operation.
+- **Additional schema uniqueness:** `(account_id, idempotency_key, created_at)` is also documented in the schema.
+  Because `created_at` is part of this key, this constraint does not by itself prevent reuse of an idempotency key at a
+  different timestamp; replay and conflict behaviour relies on the request checks and operation-scoped guard above.
 
 ## Ledger DB (ledger-service)
 
@@ -80,10 +89,13 @@ relationships in `ledger_db`.*
 
 - `processed_event`
     - Consumer-side deduplication table keyed by `event_id`.
-    - Insert-once guard (`on conflict do nothing`) ensures each event id is projected at most once.
+    - An insert-once guard (`ON CONFLICT DO NOTHING`) identifies repeated deliveries of the same event ID.
 - Handler flow:
-    - First insert into `processed_event` succeeds -> persist into `ledger_event_log` and `ledger_entry`.
-    - Duplicate insert -> skip event processing safely.
+    - If the `processed_event` insert succeeds, persist the corresponding `ledger_event_log` and `ledger_entry` records.
+    - If the event ID has already been recorded, skip duplicate projection.
+- **Transaction boundary:** the deduplication marker and ledger writes should commit together to prevent a recorded
+  event from being skipped after a partial projection failure. Confirm this shared transaction boundary against the
+  consumer implementation.
 
 ## Fraud DB (fraud-service)
 
@@ -108,13 +120,22 @@ relationships in `ledger_db`.*
 ### Idempotency strategy
 
 - `fraud_evaluation`
-    - Unique index `uq_authorisation_event_account_idempotency` on `(account_id, idempotency_key)` ensures deduplication
+    - Unique index `uq_fraud_evaluation_account_idempotency` on `(account_id, idempotency_key)` ensures deduplication
       per account.
     - The service first claims a request with a `PENDING` row, then finalises the same row with score/decision to handle
       concurrent duplicates safely.
 
 ## End-to-end event reliability
 
-- Producer side: transactional outbox in auth DB guarantees events are not lost between DB commit and publish.
-- Consumer side: `processed_event` table in ledger DB guarantees idempotent projection under retries/rebalances.
+The platform combines a transactional outbox with consumer-side deduplication to support reliable, **at-least-once**
+event propagation.
 
+- **Producer side:** `auth-service` commits payment-state changes and the corresponding `outbox_event` record in the
+  same database transaction. A background publisher sends committed events to Kafka and uses retry and recovery
+  mechanisms when publication fails.
+- **Messaging:** Kafka decouples payment processing from downstream ledger updates. Duplicate publication or delivery
+  remains possible, including during retries and recovery.
+- **Consumer side:** `ledger-service` uses `processed_event`, keyed by `event_id`, to identify previously handled events
+  and avoid duplicate ledger projections. The transaction boundary described above is important to this guarantee.
+- **Consistency model:** payment state is committed locally in `auth_db`; ledger projections are updated asynchronously,
+  giving strong local transaction consistency and eventual consistency across service boundaries.

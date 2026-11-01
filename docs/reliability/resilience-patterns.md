@@ -29,9 +29,13 @@
 |------------------------------------------------------------------------------------------|------------------------------------------------------------------------------------------------|----------------------------------------------------------------------------------------|---------------------------------------------------------------------------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | **fraud-service call** (`ResilientFraudGateway.checkAsync`)                              | `250ms` (`@TimeLimiter(timeoutDuration=250ms, cancelRunningFuture=true)`)                      | **None** — no `@Retry` decorator is applied on top of the circuit breaker/time limiter | n/a                                                                             | n/a — a timeout, circuit-open, or deserialization failure all fall straight through to the fallback (see [Circuit Breaker Policy](#circuit-breaker-policy)) rather than being retried |
 | **fraud-service HTTP client** (connection-level)                                         | `connect-timeout: 500ms`, `read-timeout: 1000ms` (`auth-service` application.yml `fraud.http`) | n/a (bounded by the `@TimeLimiter` above at the call-site level)                       | n/a                                                                             | n/a                                                                                                                                                                                   |
-| **Kafka producer** (`auth-service` outbox publish)                                       | `delivery.timeout.ms: 20000`, `request.timeout.ms: 8000`                                       | `retries: 5` (Kafka client-level retry)                                                | Kafka client default (exponential, internal to the producer)                    | Transient broker-level send failures; bounded to stay under the outbox claim lease (30s) so a slow/retrying send is never reclaimed and re-published concurrently                     |
+| **Kafka producer** (`auth-service` outbox publish)                                       | `delivery.timeout.ms: 20000`, `request.timeout.ms: 8000`                                       | `retries: 5` (Kafka client-level retry)                                                | Kafka client default (exponential, internal to the producer)                    | Transient broker-level send failures; bounded to stay under the outbox claim lease (30s) which reduces lease-expiry risk but does not alone guarantee that concurrent reclamation is impossible                     |
 | **Outbox publish attempts** (application-level, `OutboxScheduler`/`OutboxBackoffPolicy`) | n/a (poll-driven)                                                                              | Up to 5 attempts before terminal `FAILED`                                              | `10s` (attempt 1) → `30s` (attempt 2) → `60s` (attempt 3) → `300s` (attempt 4+) | Any publish failure increments `retry_count`; see [Outbox Pattern](../eventing/outbox-pattern.md#retry-policy)                                                                        |
 | **Kafka consumer** (`ledger-service`, `KafkaConsumerConfig`)                             | n/a                                                                                            | **3 retries** (`FixedBackOff(2000L, 3L)`)                                              | Fixed `2000ms` (2s) between attempts                                            | All exceptions except `IllegalArgumentException` (malformed payload/missing headers, which go straight to the DLT since they will never succeed on retry)                             |
+
+Kafka client retries happen *within* an individual send, while application-level outbox retries
+occur on later scheduler attempts. One outbox attempt can therefore involve multiple Kafka
+client retries; these are not a single shared five-attempt budget.
 
 No jitter is applied anywhere today — both the outbox backoff schedule and the Kafka consumer's
 fixed backoff are deterministic, non-jittered delays. See
@@ -54,16 +58,18 @@ Configured for the `auth-service` → `fraud-service` call via Resilience4j
 | `permittedNumberOfCallsInHalfOpenState`        | `3`           | After 15s, allow 3 trial calls in **half-open** state.                                                                    |
 | `automaticTransitionFromOpenToHalfOpenEnabled` | `true`        | Automatically flips open → half-open after the wait duration, without needing an incoming call to trigger the transition. |
 
-- **Open → Half-open → Closed**: if the 3 half-open trial calls succeed (and aren't slow), the
-  circuit **closes** and normal traffic resumes. If they fail, the circuit re-opens for another
-  `15s` wait.
+- **Open → Half-open → Closed**: after the 15-second wait, up to three permitted trial calls
+  determine whether observed failure and slow-call rates remain below the configured thresholds.
+  The breaker closes if those conditions are met; otherwise it returns to `OPEN`.
 - On **timeout**, **circuit-open** (`CallNotPermittedException`), or **deserialization failure**
   (`HttpMessageConversionException`), `ResilientFraudGateway.fallback(...)` returns
   `FraudDecision.unavailable(reason)` instead of propagating the exception — the reason is tagged
   (`fraud_fallback:TIMEOUT`, `fraud_fallback:CIRCUIT_OPEN`, `fraud_fallback:DESERIALIZATION`, or the
   raw exception class name) for observability.
-- The fraud call runs on a dedicated MDC-propagating executor (`fraudMdcExecutor`) so
-  correlation-id/tracing context survives the async boundary introduced by `@TimeLimiter`.
+- The fraud call runs on a dedicated MDC-propagating executor (`fraudMdcExecutor`) to preserve
+  logging correlation across the async boundary introduced by `@TimeLimiter`. MDC propagation
+  alone does not prove OpenTelemetry span-context propagation; verify observation/tracing context
+  propagation separately before claiming continuous parent-child traces.
 
 See [ADR 0008: Resilience4j Circuit Breaker/Time Limiter Policy](../decisions/0008-resilience4j-circuit-breaker-policy.md)
 for the full design rationale, including why `@Retry` was deliberately not added on top (to avoid
@@ -97,7 +103,8 @@ Covered in full detail in [Outbox Pattern](../eventing/outbox-pattern.md) — su
 - `OutboxScheduler` polls every 10s, batches up to 10 due rows, and publishes via
   `OutboxKafkaPublisher`.
 - `OutboxBackoffPolicy` retries a failed publish with increasing backoff (10s/30s/60s/300s) up to
-  5 attempts before marking the row terminally `FAILED`.
+  5 attempts before marking the row terminally `FAILED`. These rows require explicit operator
+  investigation/requeue; Kafka recovery alone will not resume them.
 - There is **no separate dead-letter topic/table for producer-side (outbox) failures** — a `FAILED`
   row remains visible in `outbox_event` for manual operator triage/replay. See
   [Outbox Pattern § Runbook Links](../eventing/outbox-pattern.md#runbook-links).
@@ -107,12 +114,14 @@ Covered in full detail in [Outbox Pattern](../eventing/outbox-pattern.md) — su
 Configured in `ledger-service/src/main/java/org/example/ledger/KafkaConsumerConfig.java`:
 
 - `DefaultErrorHandler` wraps a `DeadLetterPublishingRecoverer` with `FixedBackOff(2000L, 3L)` —
-  **3 retries, fixed 2-second backoff**.
+  **3 retries after the initial failure (up to 4 delivery attempts total), fixed 2-second backoff**.
 - **Non-retryable**: `IllegalArgumentException` (malformed payload / missing headers) is added via
   `addNotRetryableExceptions(...)` and routed straight to the DLT, since these are deterministic
   failures that will never succeed on retry.
 - **Retryable**: all other exceptions are retried up to 3 times before the recoverer routes the
   record to the DLT.
+- Routing to the DLT means normal processing was abandoned, **not** that the event was projected
+  into the ledger. Investigation and controlled replay may still be required.
 - The `DeadLetterPublishingRecoverer` republishes the failed record to `auth.events.ledger.dlt` on
   **the same partition number** as the source topic, so per-partition ordering is loosely preserved
   and the failure can be traced back to its origin.
@@ -158,8 +167,8 @@ rather than a post-hoc saga/compensation rollback:
 | Dependency down   | What still works                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
 |-------------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | **fraud-service** | `auth-service`'s authorise endpoint still responds — the circuit breaker fails fast after sustained failures, and the fallback path returns a deterministic `unavailable` decision. By default (`fail-open.enabled: false`) this results in a `DECLINED` authorisation (fail-closed); if fail-open is enabled, small transactions from trusted accounts are approved instead. Capture and reverse are unaffected (they don't call fraud-service).                                                                                                                                                                   |
-| **Kafka**         | `auth-service`'s authorise/capture/reverse APIs still work synchronously — the domain state change and outbox row commit to Postgres regardless of Kafka's availability. The outbox publisher simply accumulates backlog (`auth_outbox_backlog` rises) and retries per `OutboxBackoffPolicy` once Kafka recovers. `ledger-service` projections stall during the outage but catch up once Kafka is back.                                                                                                                                                                                                             |
-| **Redis**         | `auth-service`'s idempotency response cache falls through to normal DB-level execution and the durable unique-constraint/event-lookup conflict path — described as "best-effort, not a hard failure" (higher latency/load, not an outage) in [ADR 0007: Idempotency store and key policy](../decisions/0007-idempotency-store-and-key-policy.md). `fraud-service`'s velocity-based rules have a harder dependency on Redis for the sliding-window rate check (see [ADR 0006: Use Redis for Sliding-Window Rate Limiting (Fraud Service)](../decisions/0006-use-redis-for-sliding-window-fraud-velocity-checks.md)). |
+| **Kafka**         | `auth-service`'s authorise/capture/reverse APIs still work synchronously — the domain state change and outbox row commit to Postgres regardless of Kafka's availability. The outbox publisher accumulates backlog and retries according to `OutboxBackoffPolicy`. Rows that exhaust five attempts become terminally `FAILED` and **do not automatically retry** when Kafka recovers; operators must investigate and requeue them using [Outbox Backlog Recovery](../flows/outbox-backlog-recovery.md). Ledger projections catch up only after all missing events are published and consumed.                                                                                                                                                                                                             |
+| **Redis**         | `auth-service`'s idempotency response cache falls through to normal DB-level execution and the durable unique-constraint/event-lookup conflict path — described as "best-effort, not a hard failure" (higher latency/load, not an outage) in [ADR 0007: Idempotency store and key policy](../decisions/0007-idempotency-store-and-key-policy.md). `fraud-service`'s velocity rules depend more directly on Redis. If Redis errors cause fraud checks to fail, `auth-service` may enter its fraud fallback/circuit-breaker path and decline by default; the precise behaviour depends on velocity-rule exception handling and should be verified in code. See [ADR 0006](../decisions/0006-use-redis-for-sliding-window-fraud-velocity-checks.md). |
 | **Postgres**      | Hard dependency for all three services — no degradation path exists; requests to the owning service fail directly.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
 
 ## Observability Tie-In

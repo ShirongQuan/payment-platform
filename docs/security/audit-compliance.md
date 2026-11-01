@@ -62,9 +62,9 @@ Every `authorisation_event` row captures:
 | **Timestamp**                            | ✅ `created_at`                                                                    |                                                                                                                                                                                                                           |
 | **Correlation id**                       | ✅ `correlation_id`                                                                | Ties the event back to the originating HTTP request and, via Kafka headers/`traceparent`, to the full distributed trace                                                                                                   |
 | **Reason / context**                     | ✅ `reason_code` (e.g. `INSUFFICIENT_FUNDS`, `FRAUD_DECLINED`, `CUSTOMER_REQUEST`) |                                                                                                                                                                                                                           |
-| **Amount / currency**                    | ✅ `amount`, `currency_code`                                                       | Financial "before/after" is reconstructable from the sequence of events per authorisation (e.g. `AUTHORISED` → `CAPTURED` implies reserved-balance debited) rather than an explicit before/after snapshot column          |
+| **Amount / currency**                    | ✅ `amount`, `currency_code`                                                       | An individual authorisation's lifecycle can be reconstructed; full account balances require initial balances and **all** balance-affecting operations, including deposits          |
 | **Actor**                                | ➖ **planned (future scope)**                                                      | Authenticated caller identity is planned as part of upcoming auth work — every event is currently attributed to "the system", since the auth layer is planned but not yet built                                           |
-| **Explicit before/after value snapshot** | ➖ **derived, not stored**                                                         | The event log is transition-based (event type implies the state change) rather than storing explicit before/after balance snapshots on each row — state is deterministically reconstructable from the full event sequence |
+| **Explicit before/after value snapshot** | ➖ **derived, not stored**                                                         | The event log records lifecycle transitions, not explicit balance snapshots. It does **not** by itself guarantee complete account-balance reconstruction |
 
 ### Next step
 
@@ -72,22 +72,25 @@ Every `authorisation_event` row captures:
   authentication lands) to `authorisation_event` and any future admin-action audit table — see
   [roadmap Next Steps #1](../roadmap.md#5-next-steps-prioritised). This is the top-priority
   addition for attributing events to a specific authenticated caller.
-- Consider adding explicit before/after balance snapshots to `authorisation_event` if a stricter
-  audit/compliance standard requires it (currently deferred since the event-type + amount is
-  sufficient to reconstruct state deterministically given the full event sequence).
+- Evaluate before/after balance snapshots or a complete balance-mutation journal if audit or
+  reconciliation requirements demand full account-balance reconstruction. `authorisation_event`
+  alone does not capture every balance-affecting operation (for example, deposits and initial
+  balances).
 
 ## Log Integrity/Tamper Considerations
 
 ### Current
 
-- Structured logs across all three services share a common pattern including `traceId`, `spanId`,
+- Current plain-text console logs across all three services share a common pattern including `traceId`, `spanId`,
   and `correlationId` (`CorrelationIdFilter` in `shared-spring-lib`), giving a consistent,
   cross-service audit trail for request tracing.
-- The `authorisation_event` table is **application-level append-only** — no `UPDATE`/`DELETE` code
-  path exists against it in the codebase; rows are only ever inserted.
-- Distributed traces (OpenTelemetry → Tempo) provide an independent, out-of-band corroboration of
-  the request flow, correlated by the same `traceparent`/`correlationId`, which raises the bar for
-  tampering with the primary log/DB record alone.
+- The `authorisation_event` table is **append-only by application convention**, not immutable:
+  application code inserts rows without updating/deleting them, but a sufficiently privileged
+  database user could still change or remove records. Database-level enforcement and tamper-evidence
+  are not implemented.
+- Distributed traces (OpenTelemetry → Tempo) can support request investigation and corroborate
+  parts of a workflow. Sampling, exporter failures, retention and access controls may limit their
+  completeness and integrity; traces are **not** a durable or tamper-proof audit record.
 
 ### Next step
 
@@ -107,16 +110,18 @@ Every `authorisation_event` row captures:
 
 ## Compliance Posture Statement
 
-**Not certified yet.** This platform is a personal MVP/demonstration project and has **not**
-undergone, and does not currently claim, any formal compliance certification (e.g. PCI-DSS,
-SOC 2, ISO 27001). This statement is intentionally explicit rather than left ambiguous.
+**Not certified or independently assessed.** This platform is a personal MVP/demonstration
+project and has **not** undergone, and does not claim, formal PCI DSS validation, SOC 2
+attestation or ISO 27001 certification. The applicability of any particular framework depends on
+the deployment, data handled, contractual obligations and services offered; this documentation
+makes no determination of regulatory compliance.
 
 **What is already in place** and contributes toward a future compliance posture:
 
 - An append-only financial event log (`authorisation_event`) with correlation ids and reason codes.
 - Idempotency and optimistic-locking controls preventing duplicate financial side effects (relevant
   to data-integrity controls in most compliance frameworks).
-- Distributed tracing giving independent corroboration of request flows.
+- Distributed tracing supporting request investigation (not an immutable audit control).
 - Documented, versioned architectural decisions (ADRs) covering the reasoning behind each control
   that does exist today.
 

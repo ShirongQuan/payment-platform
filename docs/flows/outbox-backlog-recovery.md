@@ -31,11 +31,15 @@ action.
   crashed/stalled), the next `OutboxScheduler` cycle automatically reclaims it back to `NEW` via
   `reclaimStalePublishing()` — no operator action needed for this case.
 - `auth_outbox_backlog` (gauge) counts `NEW` + `PUBLISHING` rows. A `FAILED` row drops out of
-  this gauge, so also watch `auth_outbox_publish_attempts_total{result="failed"}` or query the
-  outbox table directly to see terminal rows.
+  this gauge. `auth_outbox_publish_attempts_total{result="failed"}` is a monotonically increasing
+  **counter** of failed publish attempts over time, not a live count of currently-`FAILED` rows —
+  it's useful as an alerting/trend signal (e.g. via `rate()`/`increase()`), but it cannot tell you
+  how many rows are terminally `FAILED` right now, nor does it decrease when a row is manually
+  requeued. The outbox table itself (see the direct query in [Detect](#detect)) is the
+  authoritative source for current `FAILED` row counts.
 - There is a distinct concept here from ledger-service's *consumer-side* Kafka DLT topic
   (`auth.events.ledger.dlt`), which handles Kafka-consumption failures, not publish failures — see
-  [Event Consuming Sequence](./README.md#event-consuming-sequence). Producer-side (outbox) recovery today
+  [Event Consuming Sequence](README.md#event-consuming-sequence). Producer-side (outbox) recovery today
   means resetting a terminal `FAILED` row back to `NEW` (the "DLQ / manual replay" section below);
   a dedicated dead-letter table/topic for outbox failures is tracked on the roadmap.
 
@@ -60,7 +64,7 @@ For any row not progressing to `PUBLISHED`, inspect `status`, `retry_count`, `la
 
 | status       | condition                         | meaning                                                     |
 |--------------|-----------------------------------|-------------------------------------------------------------|
-| `PUBLISHING` | `claim_until < now`               | stale claim — will self-heal on the next scheduler cycle    |
+| `PUBLISHING` | `claim_until < now()`             | stale claim — will self-heal on the next scheduler cycle    |
 | `NEW`        | `next_attempt_at` in the future   | waiting on backoff — normal, no action needed               |
 | `NEW`        | `next_attempt_at` far in the past | scheduler not running, or batch size too small for backlog  |
 | `FAILED`     | `retry_count >= 5`                | exhausted automatic retries — needs a triage decision below |
@@ -93,15 +97,25 @@ is a **manual operation**:
    ```sql
    update outbox_event
    set status = 'NEW', retry_count = 0, next_attempt_at = now(), last_error = null
-   where id = :eventId;
+   where event_id = :event_id
+     and status = 'FAILED';
    ```
-3. The row re-enters the normal scheduler loop on the next poll cycle and is retried like any
+   `:event_id` is a parameter placeholder; bind the UUID using your SQL client (or replace it with a properly quoted
+   UUID literal in `psql`). Check the affected-row count before considering the operation successful.
+
+   The `event_id` column is the table's primary key (see
+   `auth-service/src/main/resources/db/migration/V1__init.sql`). The `status = 'FAILED'` guard
+   prevents accidentally resetting a row that has since been published or reclaimed by the
+   scheduler.
+3. Check the number of affected rows. If zero rows were updated, verify the `event_id` and current status rather than
+   assuming recovery succeeded.
+4. The row re-enters the normal scheduler loop on the next poll cycle and is retried like any
    other `NEW` event.
-4. If the root cause cannot be fixed (e.g. permanently invalid payload), leave the row `FAILED`
+5. If the root cause cannot be fixed (e.g. permanently invalid payload), leave the row `FAILED`
    for audit/investigation rather than requeuing it blindly.
 
 See the decision flow in
-[Outbox Backlog Recovery Flow](./README.md#outbox-backlog-recovery-flow) for the full
+[Outbox Backlog Recovery Flow](README.md#outbox-backlog-recovery-flow) for the full
 detect → triage → retry → manual-replay path.
 
 ## Metrics & dashboards
@@ -109,7 +123,9 @@ detect → triage → retry → manual-replay path.
 - `auth_outbox_backlog` — gauge, live count of `NEW`/`PUBLISHING` rows.
 - `auth_outbox_publish_lag_seconds` — histogram, time from event creation to successful publish.
 - `auth_outbox_publish_attempts_total{result="success"|"retry"|"failed"}` — counter, per-attempt
-  outcome.
+  outcome. Monotonically increasing; reflects cumulative attempts, not current row state. Use
+  `rate()`/`increase()` for trend/alerting, and the direct SQL query in [Detect](#detect) as the
+  authoritative count of currently-`FAILED` rows.
 - Grafana: `payment-platform-overview.json` (`infra/grafana/dashboards/`).
 
 ## Current scope & suggested improvement
@@ -123,11 +139,11 @@ detect → triage → retry → manual-replay path.
 
 ## Related
 
-- [Outbox Backlog Recovery Flow](./README.md#outbox-backlog-recovery-flow) — decision-logic
+- [Outbox Backlog Recovery Flow](README.md#outbox-backlog-recovery-flow) — decision-logic
   flowchart for this doc.
-- [Event Publishing Sequence](./README.md#event-publishing-sequence) — sequence diagram for the normal
+- [Event Publishing Sequence](README.md#event-publishing-sequence) — sequence diagram for the normal
   publish/retry/fail path.
-- [Failure Scenarios](./failure-scenarios.md) — scenario 3 (outbox publish transient
+- [Failure Scenarios](failure-scenarios.md) — scenario 3 (outbox publish transient
   failure).
 - [Payment Platform MVP Progress](../roadmap.md) — Reliability patterns (outbox lag/backlog metrics).
 

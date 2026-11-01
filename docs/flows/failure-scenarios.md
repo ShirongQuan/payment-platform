@@ -84,12 +84,14 @@ Kafka temporarily unavailable or publish attempt fails.
 ### Expected behaviour
 
 - Outbox row remains/retries according to publisher policy.
-- Event is retried and eventually published.
-- No event loss; duplicates are acceptable if consumer is dedupe-safe.
+- Publish attempts follow the configured backoff policy. Transient failures may recover automatically; after retry
+  exhaustion, the outbox row becomes `FAILED` and requires operator intervention.
+- Committed outbox intent remains durable, but terminally `FAILED` rows need operator recovery. A republished logical
+  event may be duplicated; the consumer must deduplicate by `eventId`.
 
 ### Where to inspect
 
-- [Event Publishing Sequence](./README.md#event-publishing-sequence)
+- [Event Publishing Sequence](README.md#event-publishing-sequence)
 - Outbox table status transitions
 - Publisher retry/failure metrics and logs
 
@@ -100,8 +102,8 @@ Kafka temporarily unavailable or publish attempt fails.
 3. Confirm retry loop is active.
 4. Reprocess stuck records if manual command/tooling exists.
 
-See [Outbox Backlog Recovery](./outbox-backlog-recovery.md) and its companion flowchart
-[Outbox Backlog Recovery Flow](./README.md#outbox-backlog-recovery-flow) for the full
+See [Outbox Backlog Recovery](outbox-backlog-recovery.md) and its companion flowchart
+[Outbox Backlog Recovery Flow](README.md#outbox-backlog-recovery-flow) for the full
 detect → triage → retry → DLQ/manual-replay decision logic, including exactly how to manually
 requeue a terminally `FAILED` outbox row.
 
@@ -115,12 +117,13 @@ At-least-once delivery causes re-delivery of same message.
 
 ### Expected behaviour
 
-- Consumer deduplicates by event/message key.
+- The ledger consumer deduplicates by `eventId` using the `processed_event` table. The Kafka message key (`aggregateId`)
+  is used for partitioning and per-authorisation ordering, not duplicate detection.
 - Projection/ledger writes remain idempotent.
 
 ### Where to inspect
 
-- [Event Consuming Sequence](./README.md#event-consuming-sequence)
+- [Event Consuming Sequence](README.md#event-consuming-sequence)
 - Dedup store/table entries
 - Consumer logs for duplicate detection path
 
@@ -141,7 +144,8 @@ requested on a `CAPTURED` or `DECLINED` authorisation).
 - No balance/ledger side effects.
 - No outbox event emitted.
 - Note: if the *same* idempotency key that completed the original capture/reverse is retried, this
-  is **not** an invalid-state error — it's a safe replay (see scenario 1/[Idempotency Generic Sequence](./README.md#idempotency-generic-sequence)).
+  is **not** an invalid-state error — it's a safe replay (see scenario
+  1/[Idempotency Generic Sequence](README.md#idempotency-generic-sequence)).
   Only a *different* key against an already-terminal authorisation hits this path.
 
 ### What to verify
@@ -152,7 +156,7 @@ requested on a `CAPTURED` or `DECLINED` authorisation).
 
 ### Where to inspect
 
-- [Capture Sequence](./README.md#capture-sequence), [Reverse Sequence](./README.md#reverse-sequence)
+- [Capture Sequence](README.md#capture-sequence), [Reverse Sequence](README.md#reverse-sequence)
 - `AuthorisationIllegalStateException` in logs/traces
 
 ---
@@ -168,8 +172,8 @@ One component succeeds but follow-on action fails (e.g., event publish deferred)
 - Atomic boundary respected for core DB changes (authorisation/account/event rows commit together
   in one transaction; the outbox row is written in that same transaction).
 - Deferred side effects (the actual Kafka publish) recovered via outbox retry — see
-  [Event Publishing Sequence](./README.md#event-publishing-sequence) and
-  [Outbox Backlog Recovery](./outbox-backlog-recovery.md).
+  [Event Publishing Sequence](README.md#event-publishing-sequence) and
+  [Outbox Backlog Recovery](outbox-backlog-recovery.md).
 - System converges automatically in the common (transient) case; a terminally `FAILED` outbox row
   follows the manual replay procedure documented there.
 
@@ -181,7 +185,8 @@ One component succeeds but follow-on action fails (e.g., event publish deferred)
 
 `POST /authorisations` is evaluated by fraud-service's synchronous risk check and comes back
 `DECLINE`, either because the computed risk score crossed the decline threshold, or because
-fraud-service was unreachable/timed out and no fail-open policy applied.
+fraud-service was unreachable/timed out and the configured fallback declined the request. An unavailable dependency does
+not itself constitute a fraud-service lock recommendation.
 
 ### Expected behaviour
 
@@ -193,7 +198,7 @@ fraud-service was unreachable/timed out and no fail-open policy applied.
   auth-service flips the account to `LOCKED` in the *same* transaction as the decline.
 - Once `LOCKED`, subsequent authorise attempts short-circuit with `reasonCode=ACCOUNT_LOCKED`
   before any fraud-service call is made (see the account-active gate in
-  [Authorise Sequence](./README.md#authorise-sequence)).
+  [Authorise Sequence](README.md#authorise-sequence)).
 - Unlocking a `LOCKED` account back to `ACTIVE` is a manual, operator-driven action today; an
   automated/API-driven unlock flow is tracked on the roadmap.
 
@@ -206,7 +211,7 @@ fraud-service was unreachable/timed out and no fail-open policy applied.
 
 ### Where to inspect
 
-- [Authorise Sequence](./README.md#authorise-sequence)
+- [Authorise Sequence](README.md#authorise-sequence)
 - fraud-service's `fraud_decisions_total{outcome}` / `fraud_check_duration_seconds{outcome}`
 - [Fraud Service API](../api/fraud-api.md)
 
@@ -214,14 +219,14 @@ fraud-service was unreachable/timed out and no fail-open policy applied.
 
 ## Scenario-to-diagram map
 
-| Scenario                          | Primary diagram(s)                                                          |
-|-----------------------------------|-----------------------------------------------------------------------------|
-| Duplicate API request             | [Authorise Sequence](./README.md#authorise-sequence), [Capture Sequence](./README.md#capture-sequence), [Idempotency Generic Sequence](./README.md#idempotency-generic-sequence) |
-| Timeout after commit              | [Authorise Sequence](./README.md#authorise-sequence), [Capture Sequence](./README.md#capture-sequence) |
-| Publish retry/failure             | [Event Publishing Sequence](./README.md#event-publishing-sequence), [Outbox Backlog Recovery Flow](./README.md#outbox-backlog-recovery-flow) |
-| Duplicate consume                 | [Event Consuming Sequence](./README.md#event-consuming-sequence)                    |
-| Invalid transition                | [Capture Sequence](./README.md#capture-sequence), [Reverse Sequence](./README.md#reverse-sequence) |
-| Fraud decline / account auto-lock | [Authorise Sequence](./README.md#authorise-sequence)              |
+| Scenario                          | Primary diagram(s)                                                                                                                                                         |
+|-----------------------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| Duplicate API request             | [Authorise Sequence](README.md#authorise-sequence), [Capture Sequence](README.md#capture-sequence), [Idempotency Generic Sequence](README.md#idempotency-generic-sequence) |
+| Timeout after commit              | [Authorise Sequence](README.md#authorise-sequence), [Capture Sequence](README.md#capture-sequence)                                                                         |
+| Publish retry/failure             | [Event Publishing Sequence](README.md#event-publishing-sequence), [Outbox Backlog Recovery Flow](README.md#outbox-backlog-recovery-flow)                                   |
+| Duplicate consume                 | [Event Consuming Sequence](README.md#event-consuming-sequence)                                                                                                             |
+| Invalid transition                | [Capture Sequence](README.md#capture-sequence), [Reverse Sequence](README.md#reverse-sequence)                                                                             |
+| Fraud decline / account auto-lock | [Authorise Sequence](README.md#authorise-sequence)                                                                                                                         |
 
 ---
 
@@ -238,7 +243,7 @@ fraud-service was unreachable/timed out and no fail-open policy applied.
 ## Current scope notes
 
 - Reverse and capture are both fully implemented (not placeholders) — see
-  [Capture Sequence](./README.md#capture-sequence) / [Reverse Sequence](./README.md#reverse-sequence)
+  [Capture Sequence](README.md#capture-sequence) / [Reverse Sequence](README.md#reverse-sequence)
   for the actual persisted flow.
 - Idempotency is implemented on the payment-critical path (authorise/capture/reverse/fraud
   check). See [Payment Platform MVP Progress](../roadmap.md) for planned enhancements beyond this MVP scope

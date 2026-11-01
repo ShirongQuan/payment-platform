@@ -3,6 +3,11 @@
 > Last updated: 2026-09-18
 > Scope: current MVP load/traffic evidence from `load-tests/` scripts
 
+> **Evidence boundary:** these scripts exercise functional and reliability signals under scripted
+> traffic; they are not a controlled capacity benchmark. Script availability and metric names do
+> not independently establish that a recorded run passed. Quantitative throughput, latency SLO
+> and long-duration stability claims require measured runs under a documented environment.
+
 ## Table of Contents
 
 - [1) Objectives and Current Focus](#1-objectives-and-current-focus)
@@ -34,9 +39,9 @@ This report answers three practical questions for the MVP:
 
 ### Current focus
 
-- This report captures **signal-level, demo-scale evidence**: deterministic, easy-to-read traffic
-  generation that proves the reliability behaviours work, run locally without a fixed, documented
-  hardware profile.
+- This report describes **signal-level, demo-scale verification**: deterministic, easy-to-read
+  traffic generation intended to exercise reliability behaviours locally, without a fixed,
+  documented hardware profile. Results must be confirmed against an actual run.
 - Runs are minutes-long by design today, optimised for fast, repeatable local demos; extending to
   hours-long sustained/soak runs is a planned next step (see [§13](#13-conclusions-and-follow-up-work)).
 - Percentile-accurate throughput testing with k6/Gatling is the natural next evolution once this
@@ -70,7 +75,8 @@ For **how** to actually run these scripts, see **[Load Tests](../../load-tests/R
 - phase 7 fraud-recovery flow: resets fraud-service to `OFF`, actively drives the fraudService
   circuit breaker back to a confirmed `CLOSED` state, then sends a few fresh authorisations that
   each perform a real, successful fraud-service check
-- default runtime: about 6-7 minutes per full run (phase 1: 50×2s ≈ 100s; phase 2 adds a
+- default automated runtime: approximately 6–7 minutes per full run, excluding interactive
+  confirmation, environment preparation and dependency recovery (phase 1: 50×2s ≈ 100s; phase 2 adds a
   25s hold plus 10×2s recovery ≈ 55s; phase 3 is quick; phase 4 delegates to
   `generate-dedup-events.sh` with 10 rounds ≈ 60s+; phase 5 delegates to
   `generate-concurrency-conflicts.sh` with 5 rounds ≈ 10s+; phase 6 adds a 2s DELAY_2S timeout;
@@ -165,9 +171,9 @@ distinguished by the `type` tag:
 
 - **`type=idempotency_race`** — two (or more) requests share the same idempotency key and race on
   the unique DB constraint (`account_id`/`authorisation_id`, `event_type`, `idempotency_key`).
-  Exactly one insert wins; the rest are caught as `ConcurrentIdempotencyRaceException` and safely
-  resolved by re-reading and replaying the winner's response (HTTP 200, identical body for every
-  racer).
+  The uniqueness constraint permits one committed winner. Competing requests are intended to
+  recover by reading and replaying the winner's committed response. Identical HTTP 200 responses
+  for all racers are an assertion to verify, not a guarantee before recovery completes.
 - **`type=optimistic_lock`** — two *distinct*, legitimately different requests (different
   idempotency keys) both try to mutate the *same account's* balance at the same instant. Every
   authorise/capture/reverse that changes the account's balance bumps its optimistic-lock `version`
@@ -175,7 +181,8 @@ distinguished by the `type` tag:
   `ObjectOptimisticLockingFailureException`, wrapped as `AccountConcurrencyConflictException` and
   mapped to HTTP 409 (`errorCode=ACCOUNT_CONCURRENCY_CONFLICT`) — benign infra contention between
   two legitimate requests, not a duplicate, so there is no safe replay to fall back to (the client
-  is expected to retry).
+  may retry with the same key and unchanged payload using bounded backoff; the latest state
+  determines whether a retry can succeed).
 
 So, per round, the script fires several *truly concurrent* requests (backgrounded with `&`, then
 `wait`): an optimistic-lock race each for authorise, capture (on a freshly-seeded `AUTHORISED`
@@ -226,7 +233,10 @@ between these two conflict types and why account provisioning matters here.
 
 ## 7) Success Criteria
 
-A run is considered successful when, for every phase:
+A run is considered successful when the relevant assertions are observed and recorded for every
+phase. Exact metric deltas assume an isolated test with a known starting counter value; background
+traffic and at-least-once delivery may affect raw counts. Database state must also be checked
+for duplicate financial effects and ledger projections:
 
 - no unexpected `5xx` responses occur outside of the deliberately-induced phase 2 window;
 - every duplicate request (same idempotency key + payload) replays the original response instead
@@ -259,21 +269,25 @@ as follow-up work (see [§13](#13-conclusions-and-follow-up-work)).
 
 ## 9) Baseline Results
 
-### 9.1 Current MVP evidence (observed signal-level)
+### 9.1 Current MVP verification checkpoints (scripted/instrumented)
 
-| Checkpoint                          | Current status | Evidence source                                             |
-|-------------------------------------|----------------|-------------------------------------------------------------|
-| Mixed traffic generation completes  | Yes            | `load-tests/generate-traffic.sh` scripted phases            |
-| Idempotent replay path exercised    | Yes            | duplicate request behaviour + `auth_idempotency_cache_total` |
-| Circuit breaker transitions visible | Yes            | auth actuator + fraud forced `503` mode                     |
-| DLT publish path visible            | Yes            | `ledger_kafka_dlt_published_total`                          |
-| Ledger duplicate-event skip visible | Yes            | `ledger_event_duplicate_skipped_total`                      |
-| Concurrency conflict path visible   | Yes            | `auth_concurrency_conflict_total{type=...}`                 |
-| Fraud-service TimeLimiter timeout + recovery visible | Yes | fraud forced `DELAY_2S` mode + circuit breaker `CLOSED` confirmation |
+| Checkpoint                          | Verification status | Evidence source                                             |
+|-------------------------------------|---------------------|-------------------------------------------------------------|
+| Mixed traffic generation completes  | Scripted check      | `load-tests/generate-traffic.sh` scripted phases            |
+| Idempotent replay path exercised    | Scripted check      | duplicate request behaviour + `auth_idempotency_cache_total` |
+| Circuit breaker transitions visible | Scripted check      | auth actuator + fraud forced `503` mode                     |
+| DLT publish path visible            | Scripted check      | `ledger_kafka_dlt_published_total`                          |
+| Ledger duplicate-event skip visible | Scripted check      | `ledger_event_duplicate_skipped_total`                      |
+| Concurrency conflict path visible   | Scripted check      | `auth_concurrency_conflict_total{type=...}`                 |
+| Fraud-service TimeLimiter timeout + recovery visible | Scripted check | fraud forced `DELAY_2S` mode + circuit breaker `CLOSED` confirmation |
+
+The checkpoints above identify executable scenarios and the signals to inspect. They do not
+constitute a dated, independently verifiable pass report; attach execution logs, counter deltas
+and relevant database assertions to record a verified run.
 
 ### 9.2 Quantitative baseline table
 
-The repository currently proves reliability/business signals qualitatively (§9.1); committing a
+The repository provides scripts and instrumentation for qualitative reliability verification (§9.1); committing a
 numeric benchmark snapshot for p50/p95/p99 latency, throughput, and resource utilisation under a
 fixed hardware profile is the explicit next step, tracked in `docs/roadmap.md`.
 
@@ -315,15 +329,18 @@ Observed from existing scripts/docs (qualitative, ahead of a fixed benchmark pro
 - **fraud-service dependency** is a deliberately protected part of the authorisation path (250ms
   time limiter + circuit breaker), so its latency contribution is bounded and well-understood
   rather than a bottleneck under normal conditions.
-- **Outbox publish lag and consumer retry paths** are the mechanism that keeps ledger convergence
-  reliable even under backlog; `auth_outbox_publish_lag_seconds` gives direct visibility into this
-  today (see [Outbox Backlog Recovery](../flows/outbox-backlog-recovery.md)).
+- **Outbox publish lag and consumer retry paths** support ledger convergence after recoverable
+  failures. Terminal `FAILED` outbox rows and consumer DLT records require investigation and
+  recovery; convergence is not automatic in those cases.
+  `auth_outbox_publish_lag_seconds` measures lag for observed publish attempts/successes, not
+  necessarily the age of the oldest still-pending event. Monitor backlog and pending age
+  separately where instrumentation permits (see [Outbox Backlog Recovery](../flows/outbox-backlog-recovery.md)).
 
 ## 12) Current Coverage and Next Steps
 
-- Signal-level reliability evidence (idempotency replay, circuit breaker transitions, DLT routing,
-  duplicate-event dedup, and both concurrency-conflict types) is fully captured and reproducible
-  today. A committed numeric benchmark snapshot (p50/p95/p99 latency, throughput, resource
+- Signal-level reliability scenarios (idempotency replay, circuit breaker transitions, DLT
+  routing, duplicate-event dedup, and concurrency conflicts) are scripted and instrumented.
+  Reproducibility and successful outcomes should be confirmed with recorded run evidence. A committed numeric benchmark snapshot (p50/p95/p99 latency, throughput, resource
   utilisation) under a fixed hardware profile is the natural next addition (see
   [§13](#13-conclusions-and-follow-up-work)).
 - Runs are minutes-long today by design for fast, repeatable local demos; extending to hours-long
@@ -339,10 +356,11 @@ Observed from existing scripts/docs (qualitative, ahead of a fixed benchmark pro
 
 ## 13) Conclusions and Follow-Up Work
 
-The current scripted traffic generation successfully demonstrates every reliability/business
-signal this platform's observability stack is designed to surface (idempotency replay, circuit
-breaker transitions, DLT routing, consumer dedup, and both concurrency-conflict types), and is
-fully reproducible by another engineer with no manual setup beyond three funded accounts.
+The current scripted traffic generator is designed to exercise the platform's key
+reliability/business signals (idempotency replay, circuit-breaker transitions, DLT routing,
+consumer deduplication and concurrency conflicts). A successful run requires the documented
+services, tooling and test data, plus verification of the observed results; some phases may
+require interactive input or fault-mode recovery.
 
 Follow-up work, in rough priority order (see also
 [Payment Platform MVP Progress](../roadmap.md#5-next-steps-prioritised)):

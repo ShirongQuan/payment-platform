@@ -21,29 +21,47 @@ ADR 0005 defines the correctness rules that idempotency must satisfy (safe repla
 boundaries). This ADR covers the implementation policy: where idempotency state is stored, how keys are scoped,
 what TTL applies, and how replay/conflict is resolved at the storage layer for `auth-service` and `fraud-service`.
 
-Builds on correctness constraints from 0005.
-
 ## Decision
 
 ### Storage choice: Redis (auth-service), DB unique constraint (fraud-service)
 
-- `auth-service` (`IdempotencyService`) stores the **computed response payload** in Redis via
-  `StringRedisTemplate`, keyed per operation, and returns it verbatim on replay.
+- `auth-service` (`IdempotencyService`) stores the **computed response together with a versioned request
+  fingerprint** in Redis via `StringRedisTemplate`, keyed per operation. On a cache hit, the fingerprint is
+  validated before the stored response is returned.
 - `fraud-service` (`FraudEvaluationEntity` / `FraudEvaluationRepository`) does not use a Redis idempotency cache.
   Instead it relies on a **DB unique constraint** on `(accountId, idempotencyKey)` plus a `tryInsertPending`-style
   atomic insert to claim the key, then updates the row with the final decision once evaluation completes.
 
 Rationale for using service-specific mechanisms:
 
-- `auth-service` uses Redis as the low-latency replay path for bounded-lifetime response payloads, while persisted domain state and database constraints remain the durable correctness boundary described in ADR 0005.
-- `fraud-service` owns durable fraud-evaluation rows, so the same service-owned table stores the decision and enforces the idempotency claim boundary without introducing a second store for that responsibility.
+- `auth-service` uses Redis as the low-latency replay path for bounded-lifetime response payloads, while persisted
+  domain state and database constraints remain the durable correctness boundary described in ADR 0005.
+- `fraud-service` owns durable fraud-evaluation rows, so the same service-owned table stores the decision and enforces
+  the idempotency claim boundary without introducing a second store for that responsibility.
 
 ### Key scope
 
 - `auth-service`: `{operationType}:idempotency:{scopeId}:{idempotencyKey}`
     - `operationType` — `AUTHORISE` / `CAPTURE` / `REVERSE` (lower-cased)
     - `scopeId` — `accountId` for authorise, `authorisationId` for capture/reverse
-    - this mirrors the DB uniqueness boundary from ADR 0005 (`account_id + event_type + idempotency_key`)
+    - this is **not an exact mirror** of the DB uniqueness boundary from ADR 0005
+      (`account_id + event_type + idempotency_key`), which always scopes on `account_id`:
+        - for `authorise`, `scopeId == accountId`, so the Redis key and the DB tuple scope on the
+          same identifier — the two boundaries coincide
+        - for `capture`/`reverse`, the Redis key scopes on `authorisationId` (finer-grained — one
+          authorisation), while the DB tuple scopes on `accountId` (coarser-grained — every
+          authorisation under that account). This is an intentional divergence, not a bug: Redis is
+          keyed by `authorisationId` because that is the natural scope of a capture/reverse request
+          (the authorisation being acted on), while the DB boundary is account-wide because
+          `authorisation_event` only carries `account_id`, not `authorisation_id`, in its unique
+          index
+        - the practical consequence: Redis cannot by itself catch a same-`idempotencyKey` reuse
+          across two *different* `authorisationId`s under the same account (each gets its own Redis
+          cache entry, so both look like independent cache misses) — but the DB unique constraint
+          still catches that case as the durable, authoritative guard once the request falls
+          through to the database. The finer-grained Redis scope supports safe replay within an individual
+          authorisation, while database constraints enforce the broader account-level uniqueness
+          boundary for capture/reverse
 - `fraud-service`: unique index on `(account_id, idempotency_key)` — one fraud evaluation per account per key
 
 ### TTL
@@ -56,12 +74,22 @@ Rationale for using service-specific mechanisms:
 ### Replay / conflict semantics
 
 - `auth-service`:
-    - cache hit on `(operationType, scopeId, idempotencyKey)` -> deserialize and return the stored response
-      (safe replay, no re-execution)
-    - cache miss -> execute the operation, then `store(...)` the response with the configured TTL
-    - a **different payload** under the same key is detected at the domain/DB layer (unique constraint /
-      `IdempotencyConflictException`), not by the Redis cache itself — Redis only caches the *result*, it does not
-      validate payload equality
+    - each cached entry (`CachedAuthorisationResponse` / `CachedCaptureResponse` / `CachedReverseResponse`,
+      all implementing `CachedIdempotentResponse`) stores a **request fingerprint** alongside the response —
+      a versioned SHA-256 hash (`buildAuthoriseRequestFingerprint` / `buildCaptureRequestFingerprint` /
+      `buildReverseRequestFingerprint`, via `RequestHashing`) of the fields that define the logical request
+      (e.g. for authorise: `accountId`, `amount`, `normalizedCurrency`, `merchantReference`)
+    - cache hit on `(operationType, scopeId, idempotencyKey)` -> the stored fingerprint is compared against the
+      fingerprint of the incoming request (`getCachedResponse`):
+        - fingerprints match -> deserialize and return the stored response (safe replay, no re-execution)
+        - fingerprints differ -> the Redis cache itself raises `IdempotencyConflictException` — the **same
+          key reused with a different payload is detected directly at the cache layer**, before any DB call
+    - cache miss -> execute the operation, then `store(...)` the response (wrapped with its fingerprint) with
+      the configured TTL
+    - the DB unique constraint / `IdempotencyConflictException` from ADR 0005 remains the authoritative guard
+      for requests that bypass or outlive the Redis entry (cache miss, TTL expiry, Redis unavailable, or the
+      finer-grained key-scope gap described below) — Redis fingerprint checking is a fast-path optimization on
+      top of that durable boundary, not a replacement for it
 - `fraud-service`:
     - `tryInsertPending` performs an atomic claim insert; if the unique constraint is violated, another
       request already owns that key
@@ -79,9 +107,12 @@ Positive:
 
 Trade-offs:
 
-- the two services use different storage mechanisms, so their idempotency implementation details need to remain clearly documented even though they implement the same replay/conflict principles
-- the Redis replay entry in `auth-service` has a bounded lifetime; after expiry, a later request is evaluated against persisted state and the database-level guards from ADR 0005 continue to protect the correctness boundary
-- if Redis is unavailable, `auth-service` loses the low-latency replay path and falls through to normal execution and database-level conflict handling, increasing database work without making Redis the sole correctness mechanism
+- the two services use different storage mechanisms, so their idempotency implementation details need to remain clearly
+  documented even though they implement the same replay/conflict principles
+- the Redis replay entry in `auth-service` has a bounded lifetime; after expiry, a later request is evaluated against
+  persisted state and the database-level guards from ADR 0005 continue to protect the correctness boundary
+- if Redis is unavailable, `auth-service` loses the low-latency replay path and falls through to normal execution and
+  database-level conflict handling, increasing database work without making Redis the sole correctness mechanism
 
 ## Alternatives Considered
 
@@ -97,6 +128,9 @@ Trade-offs:
   also 0005 for correctness rules this policy implements
 - [ADR 0006: Use Redis for Sliding-Window Fraud Velocity Checks](0006-use-redis-for-sliding-window-fraud-velocity-checks.md)
 - `auth-service/src/main/java/org/example/auth/idempotency/IdempotencyService.java`
+- `auth-service/src/main/java/org/example/auth/idempotency/CachedIdempotentResponse.java`
+- `auth-service/src/main/java/org/example/auth/authorisation/application/AuthorisationServiceImpl.java`
+  (`getCachedResponse`, `isSameIdempotentRequest`, `build*RequestFingerprint`)
 - `fraud-service/src/main/java/org/example/fraud/infrastructure/FraudEvaluationEntity.java`
 - `shared-spring-lib/src/main/java/org/example/shared/idempotency/RequestHashing.java`
 

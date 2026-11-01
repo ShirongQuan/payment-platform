@@ -38,7 +38,8 @@
   </a>
 </p>
 
-*Figure 2: Account lock state machine — `ACTIVE` ↔ `LOCKED` transitions triggered by fraud-service signals.*
+*Figure 2: Account lock state machine — fraud-service signals can trigger `ACTIVE` → `LOCKED`; returning to `ACTIVE`
+currently requires manual intervention.*
 
 ## Aggregates
 
@@ -69,10 +70,10 @@ as its own state machine.
 
 ### Account states (implemented)
 
-| State    | Meaning                                                                                                     |
-|----------|-------------------------------------------------------------------------------------------------------------|
-| `ACTIVE` | Normal operation; deposits, reservations, captures, reversals permitted                                     |
-| `LOCKED` | Fraud-triggered lock; new authorisations rejected with `ACCOUNT_LOCKED` before fraud-service is even called |
+| State    | Meaning                                                                                                                                                                                                                                           |
+|----------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `ACTIVE` | Normal operation; deposits, reservations, captures, reversals permitted                                                                                                                                                                           |
+| `LOCKED` | Fraud-triggered lock; new authorisation requests are declined (persisted as `DECLINED`, reason `ACCOUNT_LOCKED`) before fraud-service is even called — the request is not rejected outright, but the account is never debited or reserved against |
 
 An automated or API-driven path back from `LOCKED` to `ACTIVE` is planned; unlocking is a manual DB
 operation today (tracked on the roadmap, not silently omitted).
@@ -94,8 +95,8 @@ future work has a documented target, and are tracked in [Payment Platform MVP Pr
 |--------------|-------------------------------------------------------------------------------------------------------------------------------|--------------|-----------------------------------------------------------------------------------------------|
 | *(none)*     | `POST /authorisations` — fraud approved, sufficient funds                                                                     | `AUTHORISED` | Funds reserved: `availableBalance -= amount`, `reservedBalance += amount`                     |
 | *(none)*     | `POST /authorisations` — fraud declined, insufficient funds, account not `ACTIVE`, or fraud-service unavailable (fail-closed) | `DECLINED`   | No balance effect; account itself is untouched                                                |
-| `AUTHORISED` | `POST /authorisations/{id}/capture`                                                                                           | `CAPTURED`   | Full amount only: `reservedBalance -= amount` (funds do **not** return to `availableBalance`) |
-| `AUTHORISED` | `POST /authorisations/{id}/reverse`                                                                                           | `REVERSED`   | Full amount only: `reservedBalance -= amount`, `availableBalance += amount`                   |
+| `AUTHORISED` | `POST /authorisations/{id}/captures`                                                                                          | `CAPTURED`   | Full amount only: `reservedBalance -= amount` (funds do **not** return to `availableBalance`) |
+| `AUTHORISED` | `POST /authorisations/{id}/reversals`                                                                                         | `REVERSED`   | Full amount only: `reservedBalance -= amount`, `availableBalance += amount`                   |
 | `CAPTURED`   | *(any)*                                                                                                                       | —            | Terminal; no further transitions possible                                                     |
 | `REVERSED`   | *(any)*                                                                                                                       | —            | Terminal; no further transitions possible                                                     |
 | `DECLINED`   | *(any)*                                                                                                                       | —            | Terminal; no further transitions possible                                                     |
@@ -114,15 +115,15 @@ Concurrency/Idempotency Behaviour below).
 
 These conditions are evaluated before a transition is allowed to proceed:
 
-| Guard                                                  | Applies to                  | Effect if failed                                                                                                                                                                                   |
-|--------------------------------------------------------|-----------------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| Account is `ACTIVE`                                    | Authorise                   | Declined immediately (`ACCOUNT_LOCKED` / `ACCOUNT_INACTIVE`) — fraud-service is not even called                                                                                                    |
-| Fraud decision is `APPROVE`                            | Authorise                   | Declined (`FRAUD_DECLINED`) — no balance effect                                                                                                                                                    |
-| Sufficient `availableBalance`                          | Authorise                   | Declined (`INSUFFICIENT_FUNDS`) — authorisation is still persisted as `DECLINED`, account untouched                                                                                                |
-| Currency of request matches account currency           | Authorise                   | Rejected with `CurrencyMismatchException` before any reservation is attempted                                                                                                                      |
-| Authorisation currently `AUTHORISED`                   | Capture, Reverse            | Rejected as `INVALID_AUTHORISATION_STATE` (`409`), unless it's a same-key replay of a completed operation                                                                                          |
-| Idempotency key consistency (same key -> same payload) | Authorise, Capture, Reverse | Same key + same payload replays prior response; same key + different payload rejected as `IDEMPOTENCY_CONFLICT` (`409`)                                                                            |
-| Timeout window                                         | Fraud-service call          | A 250ms time limiter + circuit breaker guards the fraud-service dependency; a timeout or open circuit is treated as fraud-service unavailable and falls back to the configured decline/fail policy |
+| Guard                                                  | Applies to                  | Effect if failed                                                                                                                                                                                               |
+|--------------------------------------------------------|-----------------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| Account is `ACTIVE`                                    | Authorise                   | Declined immediately (`ACCOUNT_LOCKED` / `ACCOUNT_INACTIVE`) — fraud-service is not even called                                                                                                                |
+| Fraud decision is `APPROVE`                            | Authorise                   | Declined (`FRAUD_DECLINED`) — no balance effect                                                                                                                                                                |
+| Sufficient `availableBalance`                          | Authorise                   | Declined (`INSUFFICIENT_FUNDS`) — authorisation is still persisted as `DECLINED`, account untouched                                                                                                            |
+| Currency of request matches account currency           | Authorise                   | Rejected with `CurrencyMismatchException` before any reservation is attempted                                                                                                                                  |
+| Authorisation currently `AUTHORISED`                   | Capture, Reverse            | Rejected as `INVALID_AUTHORISATION_STATE` (`409`), unless it's a same-key replay of a completed operation                                                                                                      |
+| Idempotency key consistency (same key -> same payload) | Authorise, Capture, Reverse | Same key + same payload replays prior response; same key + different payload rejected as `IDEMPOTENCY_CONFLICT` (`409`)                                                                                        |
+| Timeout window                                         | Fraud-service call          | A 500 ms Resilience4j TimeLimiter and circuit breaker protect the synchronous fraud-service dependency. If fraud evaluation becomes unavailable, the authorisation flow applies its configured fallback policy |
 
 An `AUTHORISED` hold has no time-boxed expiry today — it stays open until captured or reversed, which keeps the state
 machine simple and predictable for this platform's scope.
@@ -138,17 +139,22 @@ machine simple and predictable for this platform's scope.
 
 ## Concurrency / Idempotency Behaviour
 
-- **Scope of uniqueness:** idempotency is scoped per operation, not globally —
-  `account_id + event_type + idempotency_key` for authorise, and `authorisation_id + event_type + idempotency_key` for
-  capture/reverse (
-  see [ADR 0005: Idempotency and Concurrency Rules for Authorisation Flows](../decisions/0005-idempotency-and-concurrency.md)).
+- **Idempotency scope:** The database enforces uniqueness on `(account_id, event_type, idempotency_key)` for
+  authorisation events — for authorise, capture, and reverse alike. Redis response-cache keys additionally scope
+  capture and reverse operations by `authorisationId` (
+  see [ADR 0005: Idempotency and Concurrency Rules for Authorisation Flows](../decisions/0005-idempotency-and-concurrency.md)
+  and [ADR 0007: Idempotency Store Strategy and Key Policy (Auth/Fraud)](../decisions/0007-idempotency-store-and-key-policy.md)
+  for the distinction).
 - **Duplicate request, same payload:** returns the previously computed response; no new side effect (no second
   reservation, capture, or reversal).
 - **Duplicate request, different payload, same key:** rejected with `409 IDEMPOTENCY_CONFLICT`.
-- **Race (two concurrent requests, same key):** both may pass initial checks, but a DB unique constraint (
-  `uq_authorisation_event_account_eventtype_idempotency`) or optimistic-locking version conflict on the account row
-  decides the winner; the losing request is recovered by re-reading committed state and either replaying the winner's
-  result or returning a conflict — never left in an inconsistent state (
+- **Same-key race:** concurrent requests using the same idempotency key may encounter a database uniqueness conflict (
+  `uq_authorisation_event_account_eventtype_idempotency`). The losing request can recover by checking the committed
+  operation and replaying its response if the semantic payload matches; otherwise, it returns an idempotency conflict
+  (`409 IDEMPOTENCY_CONFLICT`).
+- **Different-key race:** concurrent operations using different idempotency keys may conflict when updating the same
+  account. Optimistic locking detects conflicting writes, and the losing request receives an account concurrency
+  conflict (`409 ACCOUNT_CONCURRENCY_CONFLICT`) rather than another operation's response (
   see [ADR 0010: Database Concurrency Approach (Optimistic vs Pessimistic Locking)](../decisions/0010-database-concurrency-approach.md)).
 - **Kafka delivery (ledger-service side):** at-least-once delivery is handled by deduplicating on `eventId` via
   `processed_event` (atomic `INSERT ... ON CONFLICT DO NOTHING`); a duplicate event is skipped, not reprocessed.

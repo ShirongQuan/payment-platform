@@ -138,8 +138,10 @@ account; it is `false`/`null` for every `APPROVE`.
 Not part of fraud-service itself, but relevant to how the endpoint is consumed:
 
 - auth-service wraps calls to this endpoint with a resilience4j circuit breaker (10-call sliding
-  window, opens at ≥50% failure/slow-call rate, calls >100ms count as slow) and a 250ms time limiter.
-- HTTP client timeouts: 500ms connect / 1000ms read.
+  window, opens at ≥50% failure/slow-call rate, calls >100ms count as slow) and a 500ms time limiter
+  (see [ADR 0008: Resilience4j circuit breaker policy](../decisions/0008-resilience4j-circuit-breaker-policy.md)
+  — originally 250ms, raised to 500ms to leave slack over the HTTP client's own timeouts).
+- HTTP client timeouts: 150ms connect / 150ms read.
 - If the call fails, times out, or the circuit is open, auth-service treats the authorisation as
   declined (`FRAUD_SERVICE_UNAVAILABLE`, risk score `100`) unless an (off-by-default) fail-open policy
   allows a small allow-list of trusted accounts at/below a configured amount ceiling to proceed as

@@ -55,8 +55,8 @@ As one system, the platform is responsible for:
   predictable outcomes
   ([ADR 0005: Idempotency and Concurrency Rules for Authorisation Flows](../decisions/0005-idempotency-and-concurrency.md) /
   [ADR 0007: Idempotency store and key policy](../decisions/0007-idempotency-store-and-key-policy.md))
-- propagating payment state changes asynchronously through a transactional outbox and Kafka, allowing downstream
-  ledger processing to remain independently coupled
+- propagating payment state changes asynchronously through a transactional outbox and Kafka, decoupling downstream
+  ledger processing from the originating payment request.
   ([ADR 0001: Use Kafka + Transactional Outbox](../decisions/0001-use-kafka-outbox.md))
 - maintaining an independent, queryable ledger projection from payment events, including read-only
   authorisation/account-event history

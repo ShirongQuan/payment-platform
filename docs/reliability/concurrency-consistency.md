@@ -72,14 +72,16 @@ deliberate choice given the current contention profile (short-lived, low-frequen
     - `AuthorisationEntity.version` — guards authorisation state transitions.
     - `OutboxEventEntity.version` — guards the outbox publish/claim lifecycle (see
       [Outbox Pattern](../eventing/outbox-pattern.md)).
-- The write pattern used consistently across all three entities: **read current state → attempt
-  write → on `ObjectOptimisticLockingFailureException`, catch it and resolve deterministically**
-  (either re-read and replay a winning equivalent request, or surface a conflict).
-- In `auth-service`, `AuthorisationTransactionalExecutorImpl` catches
-  `ObjectOptimisticLockingFailureException` around the balance-mutating `account.reserve(...)` call
-  and translates it to `AccountConcurrencyConflictException` — this covers two *different*,
-  legitimately-keyed requests racing on the same account's version, as opposed to the same
-  idempotency key racing with itself (see [Idempotency Points](#idempotency-points) below).
+- The intended write pattern is **read current state → mutate → flush/commit versioned changes →
+  resolve a detected conflict**. Hibernate generally detects an optimistic-lock conflict when
+  flushing or committing an update, not when a domain method such as `account.reserve(...)`
+  changes an in-memory object.
+- `AccountConcurrencyConflictException` represents contention between distinct, legitimately keyed
+  requests. Exception translation and any winner-result recovery must occur at a persistence or
+  transaction boundary where the failure is observable. A catch placed only around the domain
+  mutation cannot reliably intercept a commit-time version conflict. Verify the actual exception
+  mapping and transaction boundary in `AuthorisationTransactionalExecutorImpl` before treating
+  this behaviour as an implementation guarantee (see [Idempotency Points](#idempotency-points)).
 
 ## Idempotency Points
 
@@ -102,15 +104,17 @@ Three distinct idempotency/dedup points exist across the request→event pipelin
     - A unique DB index on `(aggregate_id, event_type, idempotency_key)` prevents a duplicate
       outbox row from ever being created for the same logical domain event.
     - The Kafka producer additionally runs with `enable.idempotence: true` and `acks: all`,
-      preventing the producer itself from creating duplicate broker-side writes on retry — see
+      reducing duplicate broker-side writes from eligible retries within a producer session; it does **not** prevent duplicates after an application crash and subsequent outbox replay — see
       [Outbox Pattern](../eventing/outbox-pattern.md#deduplication).
 
 3. **Consumer-side dedupe key** (`ledger-service`)
     - Every consumed event's `event_id` is inserted into a `processed_event` table via
       `INSERT ... ON CONFLICT DO NOTHING`. The first delivery projects the event; any redelivery
       of the same `event_id` is a no-op.
-    - Combined with manual offset commits (`enable-auto-commit: false`, `ack-mode: record`), this
-      gives effectively-once ledger projections on top of Kafka's at-least-once delivery — see
+    - When the deduplication insert and projection are committed atomically, this supports
+      effectively-once ledger projections on top of Kafka's at-least-once delivery. Kafka offsets
+      (`enable-auto-commit: false`, `ack-mode: record`) are acknowledged separately; replay is
+      therefore expected and must remain safe — see
       [Kafka Topics](../eventing/kafka-topics.md#consumer-contract).
 
 ## Invariants Under Concurrency
@@ -137,10 +141,10 @@ Three distinct idempotency/dedup points exist across the request→event pipelin
 
 | Scenario                                                                                            | Outcome                                                                                                                                                                                                                                                                                                                                                                                                                                           |
 |-----------------------------------------------------------------------------------------------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| **Double authorise, same idempotency key**                                                          | Both requests target the same `(account_id, event_type, idempotency_key)` tuple. One commits first; the loser hits the unique constraint, is recovered via `ConcurrentIdempotencyRaceException`, re-reads the committed event, and replays the winner's response with `200 OK`. No double reservation occurs.                                                                                                                                     |
-| **Double authorise, different idempotency keys, same account**                                      | Both are legitimate distinct requests racing on `AccountEntity.version`. The loser's `account.reserve(...)` throws `ObjectOptimisticLockingFailureException`, wrapped as `AccountConcurrencyConflictException` → `409 Conflict` with a retry hint. The client is expected to retry the request (it will succeed once the winner's transaction has committed and the account version has advanced), assuming sufficient available balance remains. |
+| **Double authorise, same idempotency key**                                                          | Both requests target the same `(account_id, event_type, idempotency_key)` tuple. One may commit first; a competing request can encounter the unique constraint and enter `ConcurrentIdempotencyRaceException` recovery. For an equivalent payload, replay the committed winner's result when available; a mismatched payload must return `409 IDEMPOTENCY_CONFLICT`. If the winner has not committed or cannot yet be read, bounded retry/recovery is needed rather than a guarantee that every racer immediately receives `200 OK`. No double reservation should occur.                                                                                                                                     |
+| **Double authorise, different idempotency keys, same account**                                      | Both are legitimate distinct requests racing on `AccountEntity.version`. The loser's `account.reserve(...)` throws `ObjectOptimisticLockingFailureException`, wrapped as `AccountConcurrencyConflictException` → `409 Conflict` with a retry hint. The client may retry using the **same idempotency key and unchanged payload**, with bounded backoff. The latest balance and state must be re-evaluated; success is not guaranteed. |
 | **Concurrent capture (two capture requests on the same authorisation, different idempotency keys)** | The first to commit transitions `AUTHORISED → CAPTURED`. The second either loses on `AccountEntity.version` (`409` retry) or, if it reads after the first commit, fails the pre-mutation state check and receives `409 INVALID_AUTHORISATION_STATE` (`AuthorisationIllegalStateException`) since the authorisation is no longer `AUTHORISED`. Either way, funds are captured at most once.                                                        |
-| **Capture + reverse race (concurrent capture and reverse requests on the same authorisation)**      | Only one of `AUTHORISED → CAPTURED` or `AUTHORISED → REVERSED` can win, since both require the authorisation to be in the `AUTHORISED` state. The loser's state-check fails (state has already transitioned) and it receives `409 INVALID_AUTHORISATION_STATE`. No scenario results in both a capture and a reverse being applied to the same authorisation.                                                                                      |
+| **Capture + reverse race (concurrent capture and reverse requests on the same authorisation)**      | Only one of `AUTHORISED → CAPTURED` or `AUTHORISED → REVERSED` can win, since both require the authorisation to be in the `AUTHORISED` state. The losing request may encounter an optimistic-lock conflict if both transactions read the original state, or `409 INVALID_AUTHORISATION_STATE` if it reads after the winning transition. Only one terminal transition may commit; capture and reverse must not both apply.                                                                                      |
 
 Retrying the *same* idempotency key against an authorisation that has already completed a terminal
 transition (e.g. retrying the exact request that succeeded) is **not** treated as an invalid-state
@@ -155,7 +159,7 @@ for the full walkthrough.
 |---------------------------------------------------------------|-------------|-------------------------------------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | `IdempotencyConflictException`                                | 409         | `IDEMPOTENCY_CONFLICT`                          | Do not retry as-is — the same key was reused with a different payload; use a new key for a genuinely new request.                                                    |
 | `AuthorisationIllegalStateException`                          | 409         | `INVALID_AUTHORISATION_STATE`                   | Do not retry — the authorisation has already completed a different terminal transition.                                                                              |
-| `AccountConcurrencyConflictException`                         | 409         | `ACCOUNT_CONCURRENCY_CONFLICT`                  | **Retry** — this is benign infra-level contention between two legitimate requests; the operation should succeed on retry once the winning transaction has committed. |
+| `AccountConcurrencyConflictException`                         | 409         | `ACCOUNT_CONCURRENCY_CONFLICT`                  | **Retry conditionally** with the same idempotency key and payload, using bounded backoff; re-evaluate balance/state. A subsequent request may still fail for insufficient funds, invalid state or further contention. |
 | `InsufficientFundException`                                   | 400         | `INSUFFICIENT_FUNDS`                            | Do not retry as-is — the account does not have enough available/reserved balance for the requested operation.                                                        |
 | `AccountNotFoundException` / `AuthorisationNotFoundException` | 404         | `ACCOUNT_NOT_FOUND` / `AUTHORISATION_NOT_FOUND` | Do not retry — the referenced resource does not exist.                                                                                                               |
 
@@ -168,8 +172,8 @@ carrying a stable `errorCode` field for programmatic handling in addition to the
 - **`load-tests/generate-concurrency-conflicts.sh`** fires `N` concurrent `POST /authorisations`
   requests sharing the *same* idempotency key and an amount guaranteed to exceed the account's
   available balance (so the account row itself is never mutated, isolating the
-  `idempotency_race` conflict type). It asserts all `N` requests receive an identical `200 OK`
-  `DECLINED` response body, and verifies conflict counts via
+  `idempotency_race` conflict type). It is intended to assert identical `200 OK` `DECLINED` responses for equivalent concurrent
+  requests, and verifies conflict counts via
   `auth_concurrency_conflict_total{operation,type}` (Prometheus).
 - **`load-tests/generate-traffic.sh`** includes a dedicated "concurrency conflicts" traffic phase
   that exercises the same script as part of a broader load-generation run, to surface
@@ -178,6 +182,10 @@ carrying a stable `errorCode` field for programmatic handling in addition to the
   responses, response-body equality for the idempotency-race case, and post-run inspection of
   `auth_concurrency_conflict_total{operation,type}` via
   `curl .../actuator/prometheus | grep auth_concurrency_conflict_total`.
+- This same-key/insufficient-funds scenario isolates idempotency replay; it **does not** test
+  competing successful account-balance mutations. Separate coverage should exercise distinct
+  keys with sufficient funds, capture-versus-reverse races, and same-key/different-payload
+  conflicts. Treat those as test requirements unless verified in the current suite.
 - See [Load Testing Report](../testing/load-testing.md) for the full test procedure and
   expected metric deltas.
 

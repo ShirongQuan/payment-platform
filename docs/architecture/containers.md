@@ -45,7 +45,7 @@ forms a separate supporting boundary around the payment-processing path.
 
 ### Shared cross-cutting library
 
-| Container             | Responsibility                                                                                                                                                                                                                                                                                                                       | Tech stack                                            |
+| Module                | Responsibility                                                                                                                                                                                                                                                                                                                       | Tech stack                                            |
 |-----------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|-------------------------------------------------------|
 | **shared-spring-lib** | Common cross-cutting concerns compiled into all three services: RFC 7807 error model, correlation-id propagation (filter + `RestClient` interceptor), idempotency request hashing, currency-code validation. See [ADR 0009: Shared Spring Lib for Cross-Cutting Concerns](../decisions/0009-shared-spring-lib-for-cross-cutting.md). | Java 21 library (Maven module), no standalone runtime |
 
@@ -88,7 +88,7 @@ independent processing and eventual consistency are appropriate.
 
 - `Client -> auth-service`: `POST /accounts`, `POST /authorisations`, `POST /authorisations/{id}/captures`,
   `POST /authorisations/{id}/reversals`, account/authorisation reads.
-- `auth-service -> fraud-service`: `POST /fraud/check`, wrapped in a Resilience4j circuit breaker + 250ms time
+- `auth-service -> fraud-service`: `POST /fraud/check`, wrapped in a Resilience4j circuit breaker + 500ms time
   limiter (`ResilientFraudGateway`); on timeout/circuit-open, auth-service falls back to an `unavailable`
   decision rather than blocking indefinitely.
 - `Client -> ledger-service`: read-only `GET /authorisations/{id}`, `GET /accounts/{id}/events` — no writes.
@@ -100,8 +100,9 @@ independent processing and eventual consistency are appropriate.
 - `auth-service -> Kafka (auth.events)`: outbox rows (`AUTHORISED` / `CAPTURED` / `REVERSED`) are polled and
   published by `OutboxScheduler` / `OutboxKafkaPublisher`, with `eventId`, `correlationId`, and `traceparent`
   headers for downstream dedup/tracing.
-- `Kafka (auth.events) -> ledger-service`: `LedgerKafkaConsumer` consumes and routes by event type; non-retryable
-  failures are redirected to `auth.events.ledger.dlt` (dead-letter topic) after 3 retries with 2s backoff (see
+- `Kafka (auth.events) -> ledger-service`: `LedgerKafkaConsumer` consumes and routes by event type.
+  Retryable failures are retried up to 3 times with a 2s backoff before routing to
+  `auth.events.ledger.dlt` (dead-letter topic); non-retryable failures are routed directly to the DLT (see
   [ADR 0004: Use Separate Main Event and DLT Topics](../decisions/0004-use-event-and-dlt-topics.md)).
 
 ### Data access
@@ -125,8 +126,8 @@ Traces and application metrics follow two independent telemetry paths:
   HTTP server timers, and hand-written business counters/timers such as `auth_authorisations_total`) at
   `/actuator/prometheus`. Prometheus scrapes this endpoint **directly on each service** — this path never goes
   through the OTel Collector.
-- Prometheus therefore has two scrape targets per environment: every service's `/actuator/prometheus`, and the
-  OTel Collector's `:8889` span-metrics endpoint. Both are pull-based and independent of each other; losing the
+- Prometheus therefore uses two categories of scrape targets: each service's `/actuator/prometheus` endpoint
+  and the OTel Collector's `:8889` span-metrics endpoint. Both are pull-based and independent of each other; losing the
   Collector does not stop app-metric scraping, and vice versa.
 
 ## Next Phase (Planned)
@@ -142,14 +143,14 @@ Traces and application metrics follow two independent telemetry paths:
 The next phase extends the existing distributed-system foundation with the following capabilities:
 
 - **API Gateway** — single ingress for routing, scope enforcement, and infra-level rate limiting in front of
-  `auth-service`/`ledger-service` ([roadmap item 4](../roadmap.md#5-next-steps-prioritised))
+  `auth-service`/`ledger-service` ([roadmap item 4](../roadmap.md#4-next-steps-prioritised))
 - **Identity Provider (OIDC)** — centralised authn/authz (customer vs. admin scopes), validated by the gateway
-  and `auth-service` ([roadmap item 1](../roadmap.md#5-next-steps-prioritised))
+  and `auth-service` ([roadmap item 1](../roadmap.md#4-next-steps-prioritised))
 - **Customer Web App / Admin Operations App** — user-facing applications authenticating through the Identity
   Provider and accessing platform APIs through the API Gateway
-  ([roadmap item 3](../roadmap.md#5-next-steps-prioritised))
+  ([roadmap item 3](../roadmap.md#4-next-steps-prioritised))
 - **reconciliation-service** — scheduled cross-check of ledger projections against account state (and
-  eventually an external processor) to detect and flag drift ([roadmap item 2](../roadmap.md#5-next-steps-prioritised))
+  eventually an external processor) to detect and flag drift ([roadmap item 2](../roadmap.md#4-next-steps-prioritised))
 - **notification-service** — consumes `auth.events` to deliver email/SMS/webhook notifications on payment
   lifecycle changes
 - **External Payment Processor / Card Network (simulated)** — settlement target for authorise/capture, and
@@ -158,4 +159,4 @@ The next phase extends the existing distributed-system foundation with the follo
   receipt/statement/document storage
 
 This diagram presents the planned architectural direction. Implementation sequencing and priorities are
-maintained in the [Roadmap § Next Steps](../roadmap.md#5-next-steps-prioritised).
+maintained in the [Roadmap § Next Steps](../roadmap.md#4-next-steps-prioritised).

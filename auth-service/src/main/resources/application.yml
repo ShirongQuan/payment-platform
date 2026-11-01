@@ -156,7 +156,7 @@ resilience4j:
   timelimiter:
     instances:
       fraudService:
-        timeoutDuration: 500ms       # abort the async call if not done in 250ms
+        timeoutDuration: 500ms       # abort the async call if not done in 500ms (see ADR 0008 update: 250ms -> 500ms)
         cancelRunningFuture: true    # also cancel/interrupt the in-flight future on timeout
   circuitbreaker:
     instances:

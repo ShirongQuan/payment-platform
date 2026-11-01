@@ -19,16 +19,16 @@
 | Topic                    | Producer                                                                   | Consumer(s)                                                      | Payload schema                                                                                                                                                                                                                                                     | Retention                                                                                                                                         |
 |--------------------------|----------------------------------------------------------------------------|------------------------------------------------------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|---------------------------------------------------------------------------------------------------------------------------------------------------|
 | `auth.events`            | `auth-service` (`OutboxKafkaPublisher`)                                    | `ledger-service` (`LedgerKafkaConsumer`, group `ledger-service`) | JSON body per `event_type`: `AuthorisationAuthorisedPayload`, `AuthorisationCapturedPayload`, `AuthorisationReversedPayload`, plus headers (`eventId`, `aggregateType`, `aggregateId`, `eventType`, `occurredAt`, `correlationId`, `schemaVersion`, `traceparent`) | 6 partitions, replication factor 3 (`infra/kafka/create-topics.sh`); default broker retention (no topic-level `retention.ms` override configured) |
-| `auth.events.ledger.dlt` | `ledger-service` (`DeadLetterPublishingRecoverer`, on consumer exhaustion) | none today (operator inspection only)                            | Same JSON payload/headers as the originating `auth.events` record, republished as-is after retry exhaustion                                                                                                                                                        | 6 partitions, replication factor 3 (`infra/kafka/create-topics.sh`); default broker retention                                                     |
+| `auth.events.ledger.dlt` | `ledger-service` (`DeadLetterPublishingRecoverer`, on consumer exhaustion) | none today (operator inspection only)                            | Original record key, value and relevant headers, with additional dead-letter diagnostic headers supplied by Spring Kafka after retry exhaustion                                                                                                                    | 6 partitions, replication factor 3 (`infra/kafka/create-topics.sh`); default broker retention                                                     |
 
 Both topics are created by `infra/kafka/create-topics.sh` at environment bring-up.
 
 ## Message Keys
 
-| Topic                    | Key                                                                                  | Why                                                                                                                                                                                                    |
-|--------------------------|--------------------------------------------------------------------------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| `auth.events`            | `aggregateId` (the authorisation id, `UUID`)                                         | Guarantees all events for the same authorisation (e.g. `AUTHORISED` → `CAPTURED`/`REVERSED`) land on the same partition, preserving per-aggregate ordering for the ledger consumer's projection logic. |
-| `auth.events.ledger.dlt` | Same key as the original record, republished to the same partition number on the DLT | Preserves the same per-aggregate ordering property on the DLT so replay/inspection tooling can reason about ordering the same way as the main topic.                                                   |
+| Topic                    | Key                                                                                  | Why                                                                                                                                                                     |
+|--------------------------|--------------------------------------------------------------------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `auth.events`            | `aggregateId` (the authorisation id, `UUID`)                                         | Routes events for the same authorisation to the same partition while the partition count and partitioning strategy remain unchanged, supporting per-aggregate ordering. |
+| `auth.events.ledger.dlt` | Same key as the original record, republished to the same partition number on the DLT | Preserves the original partition number for inspection; DLT arrival order is not a substitute for the original processing order, especially when replaying records.     |
 
 Producer key type is `UUID` (`UUIDSerializer`); consumer key type is correspondingly `UUID`
 (`UUIDDeserializer`).
@@ -38,21 +38,21 @@ Producer key type is `UUID` (`UUIDSerializer`); consumer key type is correspondi
 - `auth.events` and `auth.events.ledger.dlt` are both provisioned with **6 partitions** and
   **replication factor 3** (`infra/kafka/create-topics.sh`), sized for the current MVP/demo
   throughput and the local 3-broker Kafka cluster.
-- Because the key is `aggregateId`, partition count is the practical upper bound on **consumer
-  parallelism per aggregate stream**: increasing partitions lets more `ledger-service` consumer
-  instances (within the same consumer group) process different aggregates concurrently, while
-  still guaranteeing all events for any single authorisation stay in order on one partition.
-- Partition count is set at topic-creation time; changing it later only affects the partitioning of
-  new keys going forward (existing keys are not automatically rebalanced across the new partition
-  count), so it is chosen up front based on expected consumer group size rather than adjusted
-  reactively.
+- The partition count limits the number of active consumers in one consumer group that can process
+  this topic in parallel. Events for a single authorisation are assigned to one partition and
+  processed sequentially within that partition, assuming a stable partitioning strategy.
+- Partition count is set at topic creation but can be increased later. Increasing it can change the
+  partition chosen for **existing keys on subsequent sends**, while older records stay on their
+  original partitions. This can break per-authorisation ordering, so changes require a migration
+  plan rather than reactive scaling.
 
 ## Ordering Contracts
 
-- **Ordered**: events sharing the same key (`aggregateId`) are ordered relative to each other,
-  because they are always routed to the same partition and a partition preserves write order.
-  Consumers can therefore rely on an authorisation's own event sequence (e.g. `AUTHORISED` observed
-  before a later `CAPTURED`/`REVERSED` for that same authorisation) arriving in order.
+- **Ordered within a stable partitioning configuration**: events sharing the same key
+  (`aggregateId`) are routed to the same partition while the partition count and key partitioner
+  remain unchanged. Kafka preserves append order within that partition. The application relies on
+  this for per-authorisation sequencing; partition-count or partitioner changes require a migration
+  plan. This does not independently guarantee ordering across concurrent producer sends.
 - **Not guaranteed**: there is no ordering guarantee **across different aggregates** (different
   authorisation ids), since they may land on different partitions and be consumed independently. No
   global, cross-topic, or cross-partition ordering is provided or relied upon.
@@ -84,16 +84,17 @@ Producer key type is `UUID` (`UUIDSerializer`); consumer key type is correspondi
   routed to the DLT after retry exhaustion), so a mid-processing crash results in redelivery rather
   than silent message loss.
 - **Retry/DLT behaviour**: on a processing failure, `ledger-service`'s Kafka error handler retries
-  the record **3 times with a fixed 2-second backoff**
+  the record **3 times after the initial delivery attempt, with a fixed 2-second backoff**
   (`ledger-service/src/main/java/org/example/ledger/KafkaConsumerConfig.java`). Non-retryable
   failures (e.g. malformed JSON, missing required headers) are **not retried** and go straight to
   the DLT. Once retries are exhausted, the record is republished to `auth.events.ledger.dlt` on the
   same partition number via `DeadLetterPublishingRecoverer`, and
   `ledger_kafka_dlt_published_total{topic,dltTopic,exceptionClass}` is incremented so the DLT rate
   is directly observable in Grafana.
-- **Transactional isolation**: the consumer runs with `isolation.level: read_committed`, so it only
-  ever observes committed producer records — consistent with the producer's `enable.idempotence:
-  true` configuration on the `auth-service` side.
+- **Transactional isolation**: the consumer uses `isolation.level: read_committed`, which excludes
+  aborted Kafka transactional records. This is independent of the producer's
+  `enable.idempotence=true` setting; the current outbox publisher does not use Kafka transactions
+  to achieve atomicity with PostgreSQL.
 
 ## Delivery Semantics
 
@@ -109,11 +110,12 @@ Producer key type is `UUID` (`UUIDSerializer`); consumer key type is correspondi
 
 ## Reprocessing/Replay Guidance
 
-- **When allowed**: replaying a record from `auth.events.ledger.dlt` (or reprocessing an
-  already-delivered `auth.events` record) is safe by design, because `ledger-service`'s
-  `processed_event` dedup guard makes redelivery of an already-projected `event_id` a no-op.
-  Replay is therefore appropriate once the root cause of a DLT-routed failure (e.g. a bug that
-  rejected a previously-valid payload) has been fixed.
+- **When allowed**: reprocessing an already committed event is idempotent while its
+  `processed_event` marker is retained; the same `eventId` does not create another projection.
+  Replaying a DLT record requires diagnosing and fixing the original failure first. Preserve its
+  original event ID, key and relevant headers, and assess whether later events for the same
+  authorisation have already been processed before republishing. Deduplication alone does not
+  make an out-of-order replay safe.
 - **Safeguards already in place**:
     - The `processed_event` unique constraint on `event_id` prevents a replay from double-applying
       a ledger projection.
@@ -140,8 +142,9 @@ Producer key type is `UUID` (`UUIDSerializer`); consumer key type is correspondi
   standard transport within the trusted docker-compose network.
 - **Recommended production posture** (tracked in the roadmap as planned future work):
     - SASL/mTLS authentication and encrypted transport for all broker connections.
-    - Topic-level Kafka ACLs so only `auth-service` can produce to `auth.events` and only
-      `ledger-service` (and its DLT recoverer) can produce/consume the DLT topic.
+    - Topic-level Kafka ACLs granting `auth-service` write access to `auth.events`,
+      `ledger-service` read access to `auth.events`, and the ledger DLT recoverer write access
+      to `auth.events.ledger.dlt`; restrict DLT reads to authorised operators or replay tooling.
     - A field-level review before adding any customer-identifying data to event payloads, plus
       encryption-at-rest guidance if that ever becomes necessary.
 

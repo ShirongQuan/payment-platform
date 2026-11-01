@@ -698,7 +698,7 @@ run_fraud_latency_baseline_step() {
 run_fraud_latency_timeout_step() {
   echo
   echo "### Phase 7b: setting fraud-service mode to DELAY_2S (every /fraud/check call now sleeps 2s) ###"
-  echo "    (auth-service's fraudService TimeLimiter is 250ms, so this call times out and is"
+  echo "    (auth-service's fraudService TimeLimiter is 500ms, so this call times out and is"
   echo "     treated as UNAVAILABLE - expect DECLINE, since this account is not in"
   echo "     fraud.fail-open.trusted-account-ids)"
   set_fraud_mode "DELAY_2S"

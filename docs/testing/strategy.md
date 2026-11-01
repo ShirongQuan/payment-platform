@@ -3,6 +3,10 @@
 > Last updated: 2026-09-15
 > Scope: payment-platform MVP with production-oriented test policy
 
+> **Evidence convention:** this document defines test responsibilities and target quality gates.
+> A documented requirement does not establish that a corresponding test exists or has passed;
+> confirm implemented coverage against the test classes, scripts and recorded CI results.
+
 ## Table of Contents
 
 - [1) Testing goals](#1-testing-goals)
@@ -72,7 +76,7 @@
 
 - **Frameworks:** JUnit 5 via `spring-boot-starter-test`, AssertJ/Mockito from Spring test stack
 - **Spring test slices:** `@WebMvcTest`, JPA tests, and `@SpringBootTest` for full wiring
-- **Datastores:** H2 for fast repository checks where appropriate; Postgres Testcontainers for production-like persistence behaviour
+- **Datastores:** H2 for fast repository checks where appropriate; PostgreSQL Testcontainers for production-like persistence behaviour. PostgreSQL-specific SQL (`ON CONFLICT`), uniqueness, transaction boundaries and optimistic-lock behaviour must be verified against PostgreSQL, not inferred from H2 tests.
 - **Messaging/cache:** Kafka and Redis behaviour validated in integration tests; mock/stub only where interaction is not the subject of the test
 - **Containerised infra:** `spring-boot-testcontainers` + `org.testcontainers:junit-jupiter`
 - **Traffic/load scripts:** `load-tests/generate-traffic.sh`, `load-tests/generate-dedup-events.sh`, `load-tests/generate-concurrency-conflicts.sh`
@@ -88,7 +92,7 @@
 ### Current MVP gate
 
 - hosted CI workflow exists at `.github/workflows/ci.yml` and runs `mvn -B -ntp clean verify` on push/PR
-- local gate remains useful for fast feedback before pushing: run `mvn test`
+- local gate remains useful for fast feedback before pushing: run `mvn test`; this is not necessarily equivalent to `mvn verify` where later Maven lifecycle phases or additional checks are configured
 - merge blocking still depends on GitHub branch protection/rulesets requiring the CI status check
 
 ### Target merge gate (next step)
@@ -99,6 +103,10 @@
 - load-regression check should block merge when latency/error thresholds regress beyond agreed tolerance
 
 ## 5) Coverage philosophy
+
+**Coverage status:** the items below are risk-based expectations, not a claim that each test is
+currently implemented or passing. Track actual evidence using test names, CI results and
+recorded E2E runs; see [Test Scenarios Catalogue](./scenarios.md).
 
 Coverage percentage is a lagging indicator. We optimise for risk-first confidence:
 
