@@ -51,6 +51,9 @@ payment flow and controlled failure demonstrations.
 
 Each video includes chapters so you can jump directly to a topic or demonstration.
 
+Presentation slides and accompanying scripts for all three videos are available in
+[docs/presentation/](docs/presentation/).
+
 ## What the Platform Implements
 
 The platform is composed of three independently deployed Spring Boot services — **auth-service**,
@@ -343,6 +346,7 @@ detailed C4 next-phase container diagram</a>, and
 | Load-testing methodology (why, scenarios, results)          | [Load Testing Report](docs/testing/load-testing.md)              |
 | Architecture Decision Records                               | [docs/decisions/](docs/decisions/README.md)                      |
 | Roadmap (current status and planned evolution)              | [Project Roadmap](docs/roadmap.md)                               |
+| Presentation slides & video scripts                         | [docs/presentation/](docs/presentation/)                         |
 
 ---
 
