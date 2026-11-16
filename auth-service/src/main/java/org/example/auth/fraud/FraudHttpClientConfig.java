@@ -3,12 +3,14 @@ package org.example.auth.fraud;
 import io.opentelemetry.context.Context;
 import java.util.Map;
 import java.util.concurrent.Executor;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import org.example.shared.correlation.CorrelationIdInterceptor;
 import org.slf4j.MDC;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.client.SimpleClientHttpRequestFactory;
-import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 import org.springframework.web.client.RestClient;
 
 /** Configures the HTTP client and dedicated executor used to call the external fraud service. */
@@ -39,74 +41,56 @@ public class FraudHttpClientConfig {
 
   /**
    * Dedicated executor for async fraud calls (used by {@code @TimeLimiter}/{@code
-   * @CircuitBreaker}). Wraps {@link #fraudMdcThreadPoolTaskExecutor} with {@link
-   * Context#taskWrapping} so the OpenTelemetry trace context (not just MDC) is propagated onto
-   * the pooled thread. Without this, the RestClient call to fraud-service - which runs on this
-   * executor - finds no current span and starts a brand-new, disconnected root trace instead of
-   * a child span of the incoming /authorisations request.
+   * @CircuitBreaker}). Wraps {@link #fraudMdcVirtualThreadExecutor} with an MDC-propagating
+   * decorator, then with {@link Context#taskWrapping} so the OpenTelemetry trace context (not
+   * just MDC) is propagated onto the virtual thread running the task. Without this, the
+   * RestClient call to fraud-service - which runs on this executor - finds no current span and
+   * starts a brand-new, disconnected root trace instead of a child span of the incoming
+   * /authorisations request.
    *
-   * <p>Deliberately a thin wrapper around a separate {@link #fraudMdcThreadPoolTaskExecutor} bean
-   * rather than wrapping a freshly-constructed executor inline: {@code Context.taskWrapping(...)}
-   * returns a plain lambda-backed {@link Executor}, not a {@link ThreadPoolTaskExecutor}, so
-   * Spring can't recognise it as a {@code DisposableBean}/{@code InitializingBean}. If the
-   * underlying pool were created and wrapped in the same method, Spring would never call {@code
-   * initialize()}/{@code shutdown()} on it, leaking the pool's threads across context restarts.
-   * Registering the raw {@link ThreadPoolTaskExecutor} as its own bean keeps it under normal
-   * Spring lifecycle management (auto-initialized, auto-shut-down on context close), while this
-   * bean only adds the context-propagating wrapper on top.
+   * <p>Unlike a pooled {@code ThreadPoolTaskExecutor}, a plain {@link ExecutorService} backed by
+   * virtual threads has no {@code TaskDecorator} hook, so the MDC capture/restore logic
+   * previously configured via {@code setTaskDecorator} is applied manually here as a one-off
+   * wrapping {@link Executor}, before layering the OpenTelemetry context wrapper on top.
    */
   @Bean(name = "fraudMdcExecutor")
-  Executor fraudMdcExecutor(ThreadPoolTaskExecutor fraudMdcThreadPoolTaskExecutor) {
-    return Context.taskWrapping(fraudMdcThreadPoolTaskExecutor);
-  }
-
-  /**
-   * Raw thread pool backing {@link #fraudMdcExecutor}, propagating the calling thread's MDC
-   * (notably the correlation id) onto the executor thread so log lines from the async call can
-   * still be correlated back to the request.
-   *
-   * <p>Registered as its own {@code @Bean} (rather than built as a plain object inside {@link
-   * #fraudMdcExecutor}) so Spring manages its lifecycle directly: {@code initialize()} is called
-   * automatically via {@code InitializingBean} on startup, and {@code shutdown()} via {@code
-   * DisposableBean} when the application context closes.
-   */
-  @Bean(name = "fraudMdcThreadPoolTaskExecutor")
-  ThreadPoolTaskExecutor fraudMdcThreadPoolTaskExecutor() {
-    ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
-    executor.setThreadNamePrefix("fraud-mdc-");
-    executor.setCorePoolSize(4);
-    executor.setMaxPoolSize(16);
-    executor.setQueueCapacity(1000);
-    executor.setTaskDecorator(
+  Executor fraudMdcExecutor(
+      @Qualifier("fraudMdcVirtualThreadExecutor") ExecutorService fraudMdcVirtualThreadExecutor) {
+    Executor mdcPropagatingExecutor =
         runnable -> {
           // Capture the submitting thread's MDC context (e.g. correlationId) at submission time.
           Map<String, String> callerMdc = MDC.getCopyOfContextMap();
-          return () -> {
-            // Swap in the caller's MDC for the duration of task execution, then restore
-            // whatever MDC this pooled thread had before (since threads are reused).
-            Map<String, String> previous = MDC.getCopyOfContextMap();
-            try {
-              if (callerMdc == null || callerMdc.isEmpty()) {
-                MDC.clear();
-              } else {
-                MDC.setContextMap(callerMdc);
-              }
-              runnable.run();
-            } finally {
-              if (previous == null || previous.isEmpty()) {
-                MDC.clear();
-              } else {
-                MDC.setContextMap(previous);
-              }
-            }
-          };
-        });
-    // No explicit initialize()/shutdown() calls here - Spring calls both automatically since
-    // this ThreadPoolTaskExecutor is registered as its own bean (InitializingBean/DisposableBean).
-    // Note: ThreadPoolTaskExecutor does NOT pre-start core threads by default, so the first async
-    // fraud check submitted after startup pays JVM thread-creation cost. FraudServiceWarmup
-    // pre-starts this pool's threads once Spring has finished initializing it (can't be done here
-    // - initialize() hasn't run yet at this point in the bean lifecycle).
-    return executor;
+          fraudMdcVirtualThreadExecutor.execute(
+              () -> {
+                // Swap in the caller's MDC for the duration of task execution. Virtual threads
+                // are never reused across tasks, so there's no "previous" MDC state to restore
+                // afterwards (unlike a pooled platform thread).
+                if (callerMdc == null || callerMdc.isEmpty()) {
+                  MDC.clear();
+                } else {
+                  MDC.setContextMap(callerMdc);
+                }
+                runnable.run();
+              });
+        };
+    return Context.taskWrapping(mdcPropagatingExecutor);
+  }
+
+  /**
+   * Raw executor backing {@link #fraudMdcExecutor}: an unbounded, thread-per-task {@link
+   * ExecutorService} backed by JDK virtual threads rather than a fixed/bounded platform thread
+   * pool. Since the only work submitted here is a blocking HTTP call to fraud-service, virtual
+   * threads let each in-flight fraud check park cheaply on I/O without consuming a dedicated OS
+   * thread - removing the need to size core/max pool/queue capacity (previously 4/16/1000) and
+   * the pre-start warm-up workaround in {@link FraudServiceWarmup} (virtual thread creation is
+   * cheap, so there is no pool to pre-start).
+   *
+   * <p>Registered as its own {@code @Bean} (rather than inlined into {@link #fraudMdcExecutor})
+   * so Spring manages its lifecycle directly: {@code ExecutorService#shutdown()} is inferred and
+   * invoked automatically when the application context closes.
+   */
+  @Bean(name = "fraudMdcVirtualThreadExecutor")
+  ExecutorService fraudMdcVirtualThreadExecutor() {
+    return Executors.newThreadPerTaskExecutor(Thread.ofVirtual().name("fraud-mdc-", 0).factory());
   }
 }

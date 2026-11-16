@@ -1,11 +1,11 @@
 package org.example.auth.fraud;
 
 import java.time.Duration;
+import java.util.concurrent.ExecutorService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.event.EventListener;
-import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 
@@ -15,12 +15,11 @@ import org.springframework.web.client.RestClient;
  * {@code resilience4j.timelimiter.instances.fraudService.timeoutDuration} (250ms) budget.
  *
  * <p>Without this, the first fraud check after a (re)start commonly spends 150-250ms just on:
- * spinning up the {@code fraudMdcExecutor}'s pool threads (never pre-started by default), JIT
- * compiling/class-loading the {@link RestClient}/{@code SimpleClientHttpRequestFactory}/Resilience4j
- * proxy machinery, and establishing the first TCP connection to fraud-service - on top of
- * fraud-service's own cold-start latency (first Hibernate/Redis queries, first Tomcat request).
- * That easily blows through 250ms and produces a spurious {@code FRAUD_SERVICE_UNAVAILABLE}
- * decline for what would otherwise be a perfectly healthy call.
+ * JIT compiling/class-loading the {@link RestClient}/{@code SimpleClientHttpRequestFactory}/
+ * Resilience4j proxy machinery, and establishing the first TCP connection to fraud-service - on
+ * top of fraud-service's own cold-start latency (first Hibernate/Redis queries, first Tomcat
+ * request). That easily blows through 250ms and produces a spurious {@code
+ * FRAUD_SERVICE_UNAVAILABLE} decline for what would otherwise be a perfectly healthy call.
  *
  * <p>The warm-up call deliberately goes straight through {@link #fraudRestClient} to fraud-service's
  * {@code /actuator/health} endpoint - NOT through {@link ResilientFraudGateway#checkAsync}, so it
@@ -43,14 +42,13 @@ public class FraudServiceWarmup {
   private static final Duration RETRY_DELAY = Duration.ofSeconds(3);
 
   private final RestClient fraudRestClient;
-  private final ThreadPoolTaskExecutor fraudMdcThreadPoolTaskExecutor;
+  private final ExecutorService fraudMdcVirtualThreadExecutor;
 
   public FraudServiceWarmup(
       RestClient fraudRestClient,
-      @Qualifier("fraudMdcThreadPoolTaskExecutor")
-          ThreadPoolTaskExecutor fraudMdcThreadPoolTaskExecutor) {
+      @Qualifier("fraudMdcVirtualThreadExecutor") ExecutorService fraudMdcVirtualThreadExecutor) {
     this.fraudRestClient = fraudRestClient;
-    this.fraudMdcThreadPoolTaskExecutor = fraudMdcThreadPoolTaskExecutor;
+    this.fraudMdcVirtualThreadExecutor = fraudMdcVirtualThreadExecutor;
   }
 
   /**
@@ -60,12 +58,10 @@ public class FraudServiceWarmup {
    */
   @EventListener(ApplicationReadyEvent.class)
   public void warmUp() {
-    // Spring calls ThreadPoolTaskExecutor#initialize() during normal bean creation, before this
-    // listener runs, so the underlying java.util.concurrent.ThreadPoolExecutor is guaranteed to
-    // exist by now.
-    fraudMdcThreadPoolTaskExecutor.getThreadPoolExecutor().prestartAllCoreThreads();
-
-    fraudMdcThreadPoolTaskExecutor.execute(this::warmUpWithRetry);
+    // No pre-start step needed here (unlike the old ThreadPoolTaskExecutor-backed pool): this
+    // executor spins up a fresh, cheap virtual thread per submitted task rather than maintaining
+    // a pool of pre-created platform threads.
+    fraudMdcVirtualThreadExecutor.execute(this::warmUpWithRetry);
   }
 
   /**

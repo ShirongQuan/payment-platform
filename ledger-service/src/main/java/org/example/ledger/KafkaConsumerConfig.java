@@ -17,6 +17,16 @@ import org.springframework.util.backoff.FixedBackOff;
  *
  * <p>Retryable failures are retried with a fixed delay. Non-retryable failures are published
  * directly to the DLT.
+ *
+ * <p>Listener container threading is not configured here: with {@code
+ * spring.threads.virtual.enabled=true} set in this service's {@code application.yml}, Spring
+ * Boot's auto-configured default {@code kafkaListenerContainerFactory} bean (built by {@code
+ * KafkaAnnotationDrivenConfiguration}) already wires a virtual-thread-backed {@code
+ * SimpleAsyncTaskExecutor} as the listener task executor on its own (see {@code
+ * kafkaListenerContainerFactoryConfigurerVirtualThreads()}, active via {@code
+ * @ConditionalOnThreading(Threading.VIRTUAL)}), so {@link
+ * org.example.ledger.infrastructure.messaging.LedgerKafkaConsumer#onMessage} already runs on a
+ * virtual thread without any custom factory bean needed.
  */
 @Slf4j
 @Configuration

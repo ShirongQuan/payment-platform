@@ -21,6 +21,10 @@ spring:
       port: ${SPRING_DATA_REDIS_PORT:6379}
       database: ${SPRING_DATA_REDIS_DATABASE:0}
 
+  threads:
+    virtual:
+      enabled: true
+
 server:
   port: ${SERVER_PORT:9010}
 

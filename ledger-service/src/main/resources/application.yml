@@ -42,6 +42,11 @@ spring:
       missing-topics-fatal: false
       observation-enabled: true
 
+
+  threads:
+    virtual:
+      enabled: true
+
 server:
   port: ${SERVER_PORT:9020}
 

@@ -41,6 +41,10 @@ spring:
     template:
       observation-enabled: true
 
+  threads:
+    virtual:
+      enabled: true
+
 outbox:
   kafka:
     topic:

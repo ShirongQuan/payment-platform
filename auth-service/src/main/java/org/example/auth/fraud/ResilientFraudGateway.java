@@ -71,6 +71,23 @@ public class ResilientFraudGateway {
         fraudMdcExecutor);
   }
 
+  /**
+   * Fallback wired up declaratively via {@code @CircuitBreaker(fallbackMethod = "fallback")} on
+   * {@link #checkAsync}, not called directly anywhere in this codebase. Resilience4j's aspect
+   * invokes it reflectively (matching by method name and a signature compatible with the original
+   * method's params plus a trailing {@link Throwable}) whenever {@code checkAsync}'s returned
+   * future completes exceptionally or the circuit breaker is open, e.g.:
+   *
+   * <ul>
+   *   <li>the fraud-service HTTP call times out ({@code @TimeLimiter} budget exceeded)
+   *   <li>the circuit breaker is OPEN and rejects the call ({@link CallNotPermittedException})
+   *   <li>the response body fails to deserialize ({@link HttpMessageConversionException})
+   *   <li>any other exception thrown while dispatching/executing the call
+   * </ul>
+   *
+   * In all cases it degrades gracefully to {@link FraudDecision#unavailable(String)} rather than
+   * propagating the failure, so callers can decide how to handle an unavailable fraud service.
+   */
   @SuppressWarnings("unused")
   private CompletableFuture<FraudDecision> fallback(FraudCheckRequest req, Throwable t) {
     String reason = unavailableReasonFromThrowable(t);
