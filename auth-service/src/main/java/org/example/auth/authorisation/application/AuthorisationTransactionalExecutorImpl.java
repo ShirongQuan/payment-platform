@@ -385,7 +385,12 @@ public class AuthorisationTransactionalExecutorImpl implements AuthorisationTran
         "Loaded account for capture, accountId={}, reservedBalance={}",
         accountEntity.getId(),
         accountEntity.getReservedBalance());
-    account.capture(authorisationEntity.getAmount(), authorisationEntity.getCurrencyCode());
+    try {
+      account.capture(authorisationEntity.getAmount(), authorisationEntity.getCurrencyCode());
+    } catch (InsufficientFundException e) {
+      throwIfAuthorisationChanged(authorisationEntity, e);
+      throw e;
+    }
     accountEntity.setReservedBalance(account.getReservedBalance());
     log.debug(
         "Captured reserved amount, accountId={}, newReservedBalance={}",
@@ -512,7 +517,12 @@ public class AuthorisationTransactionalExecutorImpl implements AuthorisationTran
         accountEntity.getId(),
         accountEntity.getAvailableBalance(),
         accountEntity.getReservedBalance());
-    account.reverse(authorisationEntity.getAmount(), authorisationEntity.getCurrencyCode());
+    try {
+      account.reverse(authorisationEntity.getAmount(), authorisationEntity.getCurrencyCode());
+    } catch (InsufficientFundException e) {
+      throwIfAuthorisationChanged(authorisationEntity, e);
+      throw e;
+    }
     accountEntity.setAvailableBalance(account.getAvailableBalance());
     accountEntity.setReservedBalance(account.getReservedBalance());
     log.debug(
@@ -573,5 +583,17 @@ public class AuthorisationTransactionalExecutorImpl implements AuthorisationTran
         AuthorisationStatus.REVERSED,
         reverseRequest.reasonCode(),
         OffsetDateTime.now());
+  }
+
+  private void throwIfAuthorisationChanged(
+      AuthorisationEntity authorisationEntity, InsufficientFundException cause) {
+    // The account may have been read after a concurrent transition committed, while the
+    // authorisation in this persistence context still reflects its earlier version.
+    if (!authorisationRepository
+        .findVersionById(authorisationEntity.getId())
+        .filter(version -> Objects.equals(version, authorisationEntity.getVersion()))
+        .isPresent()) {
+      throw new AccountConcurrencyConflictException(cause);
+    }
   }
 }

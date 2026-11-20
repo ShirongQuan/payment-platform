@@ -11,6 +11,9 @@ import org.springframework.stereotype.Repository;
 @Repository
 public interface AuthorisationRepository extends JpaRepository<AuthorisationEntity, UUID> {
 
+  @Query("select a.version from AuthorisationEntity a where a.id = :id")
+  Optional<Long> findVersionById(@Param("id") UUID id);
+
   /**
    * Finds the most recent authorisation created for an {@code (accountId, idempotencyKey)} pair,
    * used to detect and replay duplicate authorise requests. Only considers the initial
