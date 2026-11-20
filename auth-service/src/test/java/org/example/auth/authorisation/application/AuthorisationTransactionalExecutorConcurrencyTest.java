@@ -1,7 +1,11 @@
 package org.example.auth.authorisation.application;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doAnswer;
 
+import jakarta.persistence.EntityManager;
 import java.lang.reflect.Constructor;
 import java.math.BigDecimal;
 import java.time.OffsetDateTime;
@@ -14,8 +18,10 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
 import org.example.auth.account.domain.AccountStatus;
 import org.example.auth.account.infrastructure.AccountEntity;
+import org.example.auth.account.infrastructure.AccountMapper;
 import org.example.auth.account.infrastructure.AccountRepository;
 import org.example.auth.authorisation.api.AuthorisationRequest;
 import org.example.auth.authorisation.api.AuthorisationResponse;
@@ -29,16 +35,20 @@ import org.example.auth.authorisation.infrastructure.AuthorisationEntity;
 import org.example.auth.authorisation.infrastructure.AuthorisationEventRepository;
 import org.example.auth.authorisation.infrastructure.AuthorisationRepository;
 import org.example.auth.common.exception.AccountConcurrencyConflictException;
+import org.example.auth.common.exception.InsufficientFundException;
 import org.example.auth.fraud.FraudDecision;
 import org.example.auth.outbox.application.OutboxEventService;
 import org.example.auth.outbox.domain.EventType;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.test.context.jdbc.Sql;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 
 @SpringBootTest(
     properties = {
@@ -54,6 +64,8 @@ class AuthorisationTransactionalExecutorConcurrencyTest {
   @Autowired private AccountRepository accountRepository;
   @Autowired private AuthorisationRepository authorisationRepository;
   @Autowired private AuthorisationEventRepository authorisationEventRepository;
+  @Autowired private EntityManager entityManager;
+  @MockitoSpyBean private AccountMapper accountMapper;
   @MockitoBean private OutboxEventService outboxEventService;
 
   @Test
@@ -302,6 +314,96 @@ class AuthorisationTransactionalExecutorConcurrencyTest {
     assertThat(reverseEvents).isEqualTo(1);
   }
 
+  @ParameterizedTest
+  @ValueSource(booleans = {false, true})
+  void shouldDetectStaleAuthorisationBeforeReportingInsufficientFunds(boolean reverse)
+      throws Exception {
+    UUID accountId = UUID.randomUUID();
+    setupAccount(accountId, new BigDecimal("100.00"), BigDecimal.ZERO);
+    UUID authorisationId =
+        authoriseInTransaction(
+                new AuthorisationRequest(
+                    accountId, "stale-seed", new BigDecimal("10.00"), "USD", "merchant"),
+                "USD")
+            .id();
+    CountDownLatch loaded = new CountDownLatch(1);
+    CountDownLatch resume = new CountDownLatch(1);
+    AtomicReference<Thread> delayedThread = new AtomicReference<>();
+    doAnswer(
+            invocation -> {
+              if (Thread.currentThread() == delayedThread.get()) {
+                loaded.countDown();
+                if (!resume.await(10, TimeUnit.SECONDS)) {
+                  throw new IllegalStateException("Timed out waiting for concurrent transition");
+                }
+                entityManager.refresh(invocation.getArgument(0));
+              }
+              return invocation.callRealMethod();
+            })
+        .when(accountMapper)
+        .toAccount(any(AccountEntity.class));
+
+    ExecutorService pool = Executors.newSingleThreadExecutor();
+    try {
+      Future<?> delayed =
+          pool.submit(
+              () -> {
+                delayedThread.set(Thread.currentThread());
+                assertThatThrownBy(() -> release(authorisationId, reverse))
+                    .isInstanceOf(AccountConcurrencyConflictException.class)
+                    .hasCauseInstanceOf(InsufficientFundException.class);
+              });
+      assertThat(loaded.await(5, TimeUnit.SECONDS)).isTrue();
+      release(authorisationId, reverse);
+      resume.countDown();
+      delayed.get(10, TimeUnit.SECONDS);
+    } finally {
+      resume.countDown();
+      pool.shutdownNow();
+    }
+
+    EventType eventType =
+        reverse ? EventType.AUTHORISATION_REVERSED : EventType.AUTHORISATION_CAPTURED;
+    assertThat(countEventsByAuthorisationAndEventTypeAndIdempotencyKey(
+            authorisationId, eventType, "stale-key"))
+        .isEqualTo(1);
+    assertThat(accountRepository.findById(accountId).orElseThrow().getReservedBalance())
+        .isEqualByComparingTo("0.00");
+  }
+
+  @ParameterizedTest
+  @ValueSource(booleans = {false, true})
+  void shouldPreserveInsufficientFundsForUnchangedAuthorisation(boolean reverse) {
+    UUID accountId = UUID.randomUUID();
+    setupAccount(accountId, new BigDecimal("100.00"), BigDecimal.ZERO);
+    UUID authorisationId =
+        authoriseInTransaction(
+                new AuthorisationRequest(
+                    accountId, "insufficient-seed", new BigDecimal("10.00"), "USD", "merchant"),
+                "USD")
+            .id();
+    AccountEntity account = accountRepository.findById(accountId).orElseThrow();
+    account.setReservedBalance(BigDecimal.ZERO);
+    accountRepository.saveAndFlush(account);
+
+    assertThatThrownBy(() -> release(authorisationId, reverse))
+        .isInstanceOf(InsufficientFundException.class);
+    assertThat(authorisationRepository.findById(authorisationId).orElseThrow().getStatus())
+        .isEqualTo(AuthorisationStatus.AUTHORISED);
+  }
+
+  private void release(UUID authorisationId, boolean reverse) {
+    if (reverse) {
+      executor.reverseInTransaction(
+          authorisationId,
+          new ReverseRequest("stale-key", AuthorisationEventReason.CUSTOMER_REQUEST),
+          UUID.randomUUID());
+    } else {
+      executor.captureInTransaction(
+          authorisationId, new CaptureRequest("stale-key"), UUID.randomUUID());
+    }
+  }
+
   private <T> void assertOnlyExpectedErrors(List<InvocationResult<T>> results) {
     assertThat(results.stream().filter(result -> !result.isSuccess()))
         .allMatch(
@@ -414,6 +516,3 @@ class AuthorisationTransactionalExecutorConcurrencyTest {
     }
   }
 }
-
-
-
