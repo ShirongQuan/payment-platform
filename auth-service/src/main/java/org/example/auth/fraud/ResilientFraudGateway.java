@@ -9,8 +9,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
 import java.util.concurrent.TimeoutException;
 import lombok.extern.slf4j.Slf4j;
-import org.example.shared.correlation.CorrelationIdConstants;
-import org.slf4j.MDC;
+import org.example.shared.correlation.CorrelationIdScope;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.http.converter.HttpMessageConversionException;
 import org.springframework.stereotype.Component;
@@ -36,14 +35,14 @@ public class ResilientFraudGateway {
         "Dispatching async fraud call, accountId={}, idempotencyKey={}, correlationId={}",
         request.accountId(),
         request.idempotencyKey(),
-        MDC.get(CorrelationIdConstants.CORRELATION_ID_MDC_KEY));
+        currentCorrelationId());
     return CompletableFuture.supplyAsync(
         () -> {
           log.debug(
               "Executing fraud HTTP call on async executor, accountId={}, idempotencyKey={}, correlationId={}",
               request.accountId(),
               request.idempotencyKey(),
-              MDC.get(CorrelationIdConstants.CORRELATION_ID_MDC_KEY));
+              currentCorrelationId());
           FraudCheckResponse resp =
               fraudRestClient
                   .post()
@@ -125,5 +124,17 @@ public class ResilientFraudGateway {
       current = current.getCause();
     }
     return false;
+  }
+
+  /**
+   * {@link ScopedValue#orElse} requires a non-null argument even when the value is bound (it
+   * throws {@link NullPointerException} eagerly), so it cannot be used to mean "or null if
+   * unbound". Use {@link ScopedValue#isBound()} instead to safely read the current value, or
+   * {@code null} if it isn't bound (e.g. logging outside the fraud executor's bound scope).
+   */
+  private static String currentCorrelationId() {
+    return CorrelationIdScope.CORRELATION_ID.isBound()
+        ? CorrelationIdScope.CORRELATION_ID.get()
+        : null;
   }
 }
